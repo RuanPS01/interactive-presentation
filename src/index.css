@@ -1,0 +1,18 @@
+@import 'tailwindcss';
+
+/* Tema escuro controlado por classe `.dark` no <html> (em vez do padrão
+   do Tailwind v4 que segue o prefers-color-scheme). O apresentador
+   controla o tema, e ele é propagado a todos via Firestore. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+  }
+}
