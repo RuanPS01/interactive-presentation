@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, Copy, FileText, LogOut } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
@@ -23,6 +23,29 @@ export function PresentPage() {
 
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // Navegação por teclado e passador de slides (clicker):
+  // avança com →, PageDown, Espaço; volta com ←, PageUp.
+  useEffect(() => {
+    if (!room || !code) return
+    const slideCount = room.slides.length
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
+      const idx = room!.currentSlideIndex
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault()
+        const next = Math.min(idx + 1, slideCount - 1)
+        if (next !== idx) void setCurrentSlide(code!, next)
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault()
+        const prev = Math.max(idx - 1, 0)
+        if (prev !== idx) void setCurrentSlide(code!, prev)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [room, code])
 
   if (loading) {
     return <FullScreenMessage>Carregando sala…</FullScreenMessage>
@@ -126,8 +149,11 @@ export function PresentPage() {
         <Button variant="secondary" onClick={() => goTo(index - 1)} disabled={index <= 0}>
           <ChevronLeft size={16} /> Anterior
         </Button>
-        <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          {total > 0 ? `Slide ${index + 1} de ${total}` : 'Sem slides'}
+        <span className="flex flex-col items-center text-sm text-neutral-500 dark:text-neutral-400">
+          <span>{total > 0 ? `Slide ${index + 1} de ${total}` : 'Sem slides'}</span>
+          <span className="text-xs text-neutral-400 dark:text-neutral-500">
+            Use as setas do teclado para navegar
+          </span>
         </span>
         <Button
           variant="secondary"

@@ -72,6 +72,16 @@ firestore.rules   Regras de segurança do Firestore
    - Cole o conteúdo em **Firestore → Regras → Publicar**, ou
    - use a Firebase CLI: `firebase deploy --only firestore:rules`.
 
+### Solução de problemas
+
+- **`auth/configuration-not-found` ao iniciar a apresentação**: a Autenticação Anônima
+  não está ativada. Vá em **Authentication → Sign-in method → Anônimo → Ativar**
+  (passo 3 acima). O app usa login anônimo para identificar o criador da sala.
+- **`permission-denied` ao criar sala ou votar**: as regras do `firestore.rules` não
+  foram publicadas (o modo produção nega tudo por padrão). Publique-as (passo 5).
+- **`Missing or insufficient permissions` / base indisponível**: confirme que o
+  Firestore Database foi criado (passo 2).
+
 ## Rodando localmente
 
 Pré-requisitos: **Node.js 18+**.

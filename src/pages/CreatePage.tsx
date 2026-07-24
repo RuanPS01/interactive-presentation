@@ -18,7 +18,7 @@ import { Input } from '../components/ui/Input'
 
 export function CreatePage() {
   const navigate = useNavigate()
-  const { uid } = useParticipant()
+  const { uid, error: authError } = useParticipant()
 
   const theme = useEditorStore((s) => s.theme)
   const toggleTheme = useEditorStore((s) => s.toggleTheme)
@@ -39,7 +39,11 @@ export function CreatePage() {
 
   async function startPresentation() {
     if (!uid) {
-      setError('Conectando… aguarde um instante e tente novamente.')
+      setError(
+        authError
+          ? `Não foi possível autenticar no Firebase: ${authError}. Verifique se a Autenticação Anônima está ativada no projeto (veja o README).`
+          : 'Conectando ao Firebase… aguarde um instante e tente novamente.',
+      )
       return
     }
     if (slides.length === 0) {
@@ -113,6 +117,12 @@ export function CreatePage() {
         <Banner tone="warning">
           Firebase não configurado. Copie <code>.env.example</code> para <code>.env</code> e
           preencha as chaves <code>VITE_FIREBASE_*</code> para iniciar salas (veja o README).
+        </Banner>
+      )}
+      {isFirebaseConfigured && authError && (
+        <Banner tone="error">
+          Falha na autenticação anônima do Firebase: {authError}. Ative{' '}
+          <strong>Authentication → Sign-in method → Anônimo</strong> no console do Firebase.
         </Banner>
       )}
       {error && <Banner tone="error">{error}</Banner>}
