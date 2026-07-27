@@ -110,13 +110,6 @@ export function BarChartView({ data }: BarChartViewProps) {
         <YAxis hide domain={[0, 'dataMax']} />
         <Tooltip
           cursor={{ fill: 'rgba(37, 99, 235, 0.12)' }}
-          contentStyle={{
-            borderRadius: 12,
-            border: 'none',
-            background: '#171717',
-            color: '#f5f5f5',
-          }}
-          labelStyle={{ color: '#f5f5f5' }}
           formatter={(value: unknown) => [`${value as number} voto(s)`, 'Votos']}
         />
         <Bar dataKey="votes" radius={[8, 8, 0, 0]} isAnimationActive={false}>

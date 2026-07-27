@@ -36,14 +36,16 @@ export function PieChartView({ data }: PieChartViewProps) {
           nameKey="label"
           cx="50%"
           cy="50%"
-          outerRadius="75%"
+          outerRadius="62%"
           isAnimationActive={false}
-          // Recharts injeta os campos do dado (label, votes) no render de label.
+          // Rótulo curto na fatia (nunca corta, mesmo em tela cheia); o nome
+          // completo de cada opção aparece na legenda abaixo.
+          // Recharts injeta os campos do dado (votes) no render de label.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           label={(entry: any) => {
             const votes = entry.votes as number
             const pct = (votes / total) * 100
-            return `${entry.label as string}: ${pct.toFixed(0)}% (${votes} voto${votes === 1 ? '' : 's'})`
+            return `${pct.toFixed(0)}% (${votes} voto${votes === 1 ? '' : 's'})`
           }}
           labelLine={false}
         >
@@ -53,12 +55,6 @@ export function PieChartView({ data }: PieChartViewProps) {
           })}
         </Pie>
         <Tooltip
-          contentStyle={{
-            borderRadius: 12,
-            border: 'none',
-            background: '#171717',
-            color: '#f5f5f5',
-          }}
           formatter={(value: unknown, name: unknown) => [`${value as number} voto(s)`, name as string]}
         />
         <Legend
