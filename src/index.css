@@ -1,0 +1,41 @@
+@import 'tailwindcss';
+
+/* Tema escuro controlado por classe `.dark` no <html> (em vez do padrão
+   do Tailwind v4 que segue o prefers-color-scheme). O apresentador
+   controla o tema, e ele é propagado a todos via Firestore. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
+  }
+}
+
+/* Nuvem de palavras: crescimento suave do tamanho ao ganhar votos e
+   animação de entrada apenas para palavras novas (as existentes não se movem). */
+.wc-word {
+  transition: font-size 0.4s ease;
+}
+
+.wc-word-new {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wc-pop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+
+@keyframes wc-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
