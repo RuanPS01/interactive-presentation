@@ -65,3 +65,27 @@
 .dark .chart-legend-label {
   color: #f5f5f5;
 }
+
+/* Tooltip (hover) dos gráficos: segue o tema — claro por padrão, escuro no
+   `.dark` — com o texto sempre legível. O Recharts injeta cor/fundo inline
+   (fundo escuro fixo e cor da série no item), por isso o `!important`. */
+.recharts-default-tooltip {
+  border-radius: 12px !important;
+  border: 1px solid #e5e5e5 !important;
+  background-color: #ffffff !important;
+  color: #171717 !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12) !important;
+}
+.recharts-default-tooltip .recharts-tooltip-label,
+.recharts-default-tooltip .recharts-tooltip-item {
+  color: #171717 !important;
+}
+.dark .recharts-default-tooltip {
+  border-color: #404040 !important;
+  background-color: #171717 !important;
+  color: #f5f5f5 !important;
+}
+.dark .recharts-default-tooltip .recharts-tooltip-label,
+.dark .recharts-default-tooltip .recharts-tooltip-item {
+  color: #f5f5f5 !important;
+}
