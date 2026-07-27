@@ -1,6 +1,18 @@
-import { Check, ChevronLeft, ChevronRight, Copy, FileText, LogOut } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  FileText,
+  LogOut,
+  Maximize2,
+  Minimize2,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useFullscreen } from '../hooks/useFullscreen'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
@@ -23,6 +35,11 @@ export function PresentPage() {
   const { uid } = useParticipant()
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
+  const { isFullscreen, toggle: toggleFullscreen } = useFullscreen()
+
+  // Cabeçalho pode ser ocultado para aproveitar a tela; reaparece pelo botão
+  // flutuante ou quando o mouse encosta no topo.
+  const [headerHidden, setHeaderHidden] = useState(false)
 
   // Controle de acesso do apresentador. Só quem é dono (mesmo uid) ou tem o
   // token secreto (na URL) apresenta; a plateia (só com o código) não entra.
@@ -205,7 +222,29 @@ export function PresentPage() {
 
   return (
     <div className="flex h-full min-h-screen flex-col">
+      {/* Cabeçalho oculto: faixa no topo (revela ao passar o mouse) + botão
+          flutuante para reexibir. */}
+      {headerHidden && (
+        <>
+          <div
+            className="fixed inset-x-0 top-0 z-40 h-3"
+            onMouseEnter={() => setHeaderHidden(false)}
+            aria-hidden="true"
+          />
+          <button
+            type="button"
+            onClick={() => setHeaderHidden(false)}
+            className="fixed right-3 top-3 z-40 inline-flex items-center gap-1 rounded-lg border border-neutral-200 bg-white/90 px-2 py-1 text-xs text-neutral-600 shadow-sm backdrop-blur transition hover:bg-white dark:border-neutral-700 dark:bg-neutral-900/90 dark:text-neutral-300 dark:hover:bg-neutral-900"
+            title="Mostrar cabeçalho"
+            aria-label="Mostrar cabeçalho"
+          >
+            <ChevronDown size={16} /> Cabeçalho
+          </button>
+        </>
+      )}
+
       {/* Barra superior */}
+      {!headerHidden && (
       <header className="flex flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
         <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
           <LogOut size={16} /> Sair
@@ -234,6 +273,15 @@ export function PresentPage() {
             disabled={exporting}
           >
             <FileText size={16} /> {exporting ? 'Gerando…' : 'Exportar PDF'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void toggleFullscreen()}
+            title={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+            aria-label={isFullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </Button>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
           {/* Navegação de slides no canto superior direito (sem barra inferior,
@@ -264,8 +312,19 @@ export function PresentPage() {
               <ChevronRight size={16} />
             </Button>
           </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setHeaderHidden(true)}
+            title="Ocultar cabeçalho"
+            aria-label="Ocultar cabeçalho"
+            className="border-l border-neutral-200 pl-2 dark:border-neutral-800"
+          >
+            <ChevronUp size={16} />
+          </Button>
         </div>
       </header>
+      )}
 
       {/* Área do slide */}
       <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
