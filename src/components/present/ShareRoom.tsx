@@ -66,7 +66,7 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-2xl dark:bg-neutral-900"
+            className="relative flex max-h-[95vh] w-full max-w-3xl flex-col items-center overflow-auto rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-neutral-900 md:p-10"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -75,43 +75,46 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
               className="absolute right-4 top-4 rounded-lg p-1 text-neutral-500 transition hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
               aria-label="Fechar"
             >
-              <X size={20} />
+              <X size={24} />
             </button>
 
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="text-base text-neutral-500 dark:text-neutral-400 md:text-lg">
               Aponte a câmera do celular para entrar
             </p>
 
-            <div className="mx-auto my-6 w-64 max-w-full rounded-xl bg-white p-4">
+            {/* QR o maior possível dentro da tela (limitado por largura e altura). */}
+            <div className="my-6 w-[min(88vw,60vh,32rem)] rounded-xl bg-white p-4">
               <QRCode
                 value={joinUrl}
-                size={256}
+                size={512}
                 bgColor={QR_BG}
                 fgColor={QR_FG}
                 style={{ height: 'auto', maxWidth: '100%', width: '100%' }}
               />
             </div>
 
-            <div className="mb-5">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+            <div className="mb-6">
+              <p className="text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                 Código da sala
               </p>
-              <p className="text-4xl font-extrabold tracking-[0.3em] text-neutral-900 dark:text-neutral-50">
+              <p className="text-6xl font-extrabold tracking-[0.25em] text-neutral-900 dark:text-neutral-50 md:text-7xl">
                 {code}
               </p>
             </div>
 
-            <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-2 dark:border-neutral-700 dark:bg-neutral-800">
-              <span
-                className="flex-1 truncate text-left text-sm text-neutral-600 dark:text-neutral-300"
-                title={joinUrl}
-              >
-                {joinUrl}
-              </span>
-              <Button size="sm" variant="secondary" onClick={() => void copyLink()}>
-                {copied ? <Check size={16} /> : <Copy size={16} />}
-                {copied ? 'Copiado' : 'Copiar'}
-              </Button>
+            <div className="w-full max-w-2xl">
+              <p className="mb-1 text-left text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                Link de entrada
+              </p>
+              <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800">
+                <span className="flex-1 break-all text-left text-base text-neutral-700 dark:text-neutral-200 md:text-lg">
+                  {joinUrl}
+                </span>
+                <Button variant="secondary" onClick={() => void copyLink()}>
+                  {copied ? <Check size={18} /> : <Copy size={18} />}
+                  {copied ? 'Copiado' : 'Copiar'}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
