@@ -15,7 +15,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
   2. **Gráfico de barras** — opções definidas pelo apresentador; voto único ou **múltipla escolha** (padrão: único).
   3. **Gráfico de pizza** — mesma configuração das barras; a visualização vira pizza proporcional ao total de votos.
   4. **Texto simples** — alinhamento (esquerda/centro/direita) e tamanho da fonte.
-- **Tema claro/escuro** alternável pelo apresentador **a qualquer momento** (propaga para todos em tempo real).
+- **Tema claro/escuro** como **preferência de cada usuário**, salva no navegador (localStorage). Apresentador e participantes escolhem o seu de forma independente; não é sincronizado pela sala.
 - **Importar/Exportar** a apresentação completa em **JSON**.
 - **Exportar resultados em PDF** (relatório com os dados enviados pelos participantes, gerado no navegador).
 - **Sem limite de participantes** por sala; sincronização em tempo real via Firestore.

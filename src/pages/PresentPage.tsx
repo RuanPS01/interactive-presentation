@@ -3,11 +3,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
-import { useApplyTheme } from '../hooks/useApplyTheme'
-import { setCurrentSlide, setTheme } from '../lib/rooms'
+import { useThemeStore } from '../store/themeStore'
+import { setCurrentSlide } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
+import { ShareRoom } from '../components/present/ShareRoom'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
 
@@ -15,7 +16,8 @@ export function PresentPage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
   const { room, loading, error } = useRoom(code)
-  useApplyTheme(room?.theme)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   const currentSlide =
     room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
@@ -118,6 +120,7 @@ export function PresentPage() {
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? 'Link copiado' : 'Copiar link de entrada'}
         </button>
+        <ShareRoom code={code} joinUrl={joinUrl} />
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="secondary"
@@ -127,7 +130,7 @@ export function PresentPage() {
           >
             <FileText size={16} /> {exporting ? 'Gerando…' : 'Exportar PDF'}
           </Button>
-          <ThemeToggle theme={room.theme} onToggle={() => void setTheme(code, room.theme === 'dark' ? 'light' : 'dark')} />
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
         </div>
       </header>
 

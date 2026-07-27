@@ -1,8 +1,7 @@
 import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useApplyTheme } from '../hooks/useApplyTheme'
-import { useEditorStore } from '../store/editorStore'
+import { useThemeStore } from '../store/themeStore'
 import { normalizeRoomCode } from '../lib/roomCode'
 import { PageShell } from '../components/layout/PageShell'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
@@ -12,9 +11,8 @@ import { Input } from '../components/ui/Input'
 
 export function JoinPage() {
   const navigate = useNavigate()
-  const theme = useEditorStore((s) => s.theme)
-  const toggleTheme = useEditorStore((s) => s.toggleTheme)
-  useApplyTheme(theme)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   const [code, setCode] = useState('')
 

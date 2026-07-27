@@ -12,7 +12,6 @@ import type {
   Room,
   RoomStatus,
   Slide,
-  ThemeMode,
 } from '../types/presentation'
 
 const ROOMS = 'rooms'
@@ -70,10 +69,6 @@ export function subscribeRoom(
 
 export async function setCurrentSlide(code: string, index: number): Promise<void> {
   await updateDoc(roomRef(code), { currentSlideIndex: index, updatedAt: Date.now() })
-}
-
-export async function setTheme(code: string, theme: ThemeMode): Promise<void> {
-  await updateDoc(roomRef(code), { theme, updatedAt: Date.now() })
 }
 
 export async function setStatus(code: string, status: RoomStatus): Promise<void> {

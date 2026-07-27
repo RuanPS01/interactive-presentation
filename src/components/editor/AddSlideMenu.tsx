@@ -18,7 +18,7 @@ export function AddSlideMenu() {
             key={type}
             type="button"
             onClick={() => addSlide(type)}
-            className="flex flex-col items-center gap-1.5 rounded-xl border border-neutral-300 bg-white p-3 text-center text-xs font-medium text-neutral-700 transition hover:border-indigo-400 hover:bg-indigo-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+            className="flex flex-col items-center gap-1.5 rounded-xl border border-neutral-300 bg-white p-3 text-center text-xs font-medium text-neutral-700 transition hover:border-blue-400 hover:bg-blue-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
           >
             <Icon size={24} strokeWidth={1.75} />
             {SLIDE_TYPE_LABELS[type]}

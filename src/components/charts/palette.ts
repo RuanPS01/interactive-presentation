@@ -1,6 +1,6 @@
 /** Paleta categórica usada nos gráficos e na nuvem de palavras. */
 export const CHART_COLORS = [
-  '#6366f1', // indigo
+  '#2563eb', // blue (cor primária)
   '#22c55e', // green
   '#f59e0b', // amber
   '#ef4444', // red

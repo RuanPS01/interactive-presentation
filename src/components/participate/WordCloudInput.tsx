@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { saveResponse } from '../../lib/responses'
 import type { WordCloudSlide } from '../../types/presentation'
 import { Button } from '../ui/Button'
@@ -21,6 +21,7 @@ function maxAllowed(slide: WordCloudSlide): number {
 export function WordCloudInput({ code, slide, participantUid, current }: WordCloudInputProps) {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
   const max = maxAllowed(slide)
   const reachedLimit = current.length >= max
 
@@ -35,9 +36,15 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
 
   async function addWord() {
     const word = draft.trim()
-    if (!word || reachedLimit) return
+    if (!word || reachedLimit || busy) return
     setDraft('')
-    await persist([...current, word])
+    try {
+      await persist([...current, word])
+    } finally {
+      // Devolve o foco ao input para que o participante continue digitando
+      // palavras sem precisar clicar no campo novamente.
+      inputRef.current?.focus()
+    }
   }
 
   async function removeWord(index: number) {
@@ -63,10 +70,11 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
         }}
       >
         <Input
+          ref={inputRef}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={reachedLimit ? 'Limite atingido' : 'Digite uma palavra'}
-          disabled={reachedLimit || busy}
+          disabled={reachedLimit}
           maxLength={40}
           autoFocus
         />
@@ -84,14 +92,14 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
             {current.map((word, index) => (
               <li
                 key={`${word}-${index}`}
-                className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-3 py-1 text-sm text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200"
+                className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-3 py-1 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200"
               >
                 {word}
                 <button
                   type="button"
                   onClick={() => void removeWord(index)}
                   disabled={busy}
-                  className="inline-flex text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-100"
+                  className="inline-flex text-blue-500 hover:text-blue-700 dark:hover:text-blue-100"
                   aria-label={`Remover ${word}`}
                 >
                   <X size={14} />

@@ -41,7 +41,6 @@ export const slideSchema = z.discriminatedUnion('type', [
 
 export const presentationSchema = z.object({
   title: z.string(),
-  theme: z.enum(['light', 'dark']),
   slides: z.array(slideSchema),
 })
 

@@ -57,7 +57,6 @@ export function isChoiceSlide(slide: Slide): slide is ChoiceSlide {
 /** Estrutura serializável (import/export JSON). */
 export interface Presentation {
   title: string
-  theme: ThemeMode
   slides: Slide[]
 }
 

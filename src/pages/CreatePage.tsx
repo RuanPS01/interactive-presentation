@@ -1,9 +1,9 @@
 import { ChevronLeft, FileDown, FileUp, Play } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useApplyTheme } from '../hooks/useApplyTheme'
 import { useParticipant } from '../hooks/useParticipant'
 import { useEditorStore } from '../store/editorStore'
+import { useThemeStore } from '../store/themeStore'
 import { createRoom } from '../lib/rooms'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { exportPresentation, importPresentationFromFile } from '../utils/importExport'
@@ -20,16 +20,14 @@ export function CreatePage() {
   const navigate = useNavigate()
   const { uid, error: authError } = useParticipant()
 
-  const theme = useEditorStore((s) => s.theme)
-  const toggleTheme = useEditorStore((s) => s.toggleTheme)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const title = useEditorStore((s) => s.title)
   const setTitle = useEditorStore((s) => s.setTitle)
   const slides = useEditorStore((s) => s.slides)
   const selectedIndex = useEditorStore((s) => s.selectedIndex)
   const getPresentation = useEditorStore((s) => s.getPresentation)
   const loadPresentation = useEditorStore((s) => s.loadPresentation)
-
-  useApplyTheme(theme)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [starting, setStarting] = useState(false)
