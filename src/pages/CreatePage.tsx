@@ -5,6 +5,7 @@ import { useParticipant } from '../hooks/useParticipant'
 import { useEditorStore } from '../store/editorStore'
 import { useThemeStore } from '../store/themeStore'
 import { createRoom } from '../lib/rooms'
+import { savePresenterSession } from '../lib/presenterSessions'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { exportPresentation, importPresentationFromFile } from '../utils/importExport'
 import { AddSlideMenu } from '../components/editor/AddSlideMenu'
@@ -51,8 +52,11 @@ export function CreatePage() {
     setStarting(true)
     setError(null)
     try {
-      const code = await createRoom(uid, getPresentation())
-      navigate(`/present/${code}`)
+      const presentation = getPresentation()
+      const { code, token } = await createRoom(uid, presentation)
+      // Lembra a sessão neste dispositivo (retomar/reexportar pela tela inicial).
+      savePresenterSession({ code, token, title: presentation.title })
+      navigate(`/present/${code}/${token}`)
     } catch (e) {
       setError((e as Error).message)
     } finally {

@@ -16,8 +16,13 @@ export function RoomPage() {
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
+  const total = room?.slides.length ?? 0
+  // O apresentador passou do último slide: apresentação encerrada (slide final).
+  const finished = !!room && total > 0 && room.currentSlideIndex >= total
   const currentSlide =
-    room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
+    room && total > 0 && room.currentSlideIndex < total
+      ? room.slides[room.currentSlideIndex]
+      : undefined
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-6">
@@ -63,13 +68,25 @@ export function RoomPage() {
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Conectando…</p>
             )}
 
-            {uid && !currentSlide && (
+            {uid && !finished && !currentSlide && (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Aguardando o apresentador iniciar…
               </p>
             )}
 
-            {uid && currentSlide && code && (
+            {uid && finished && (
+              <div className="py-4 text-center">
+                <p className="text-3xl">🎉</p>
+                <p className="mt-2 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+                  Obrigado por participar!
+                </p>
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                  A apresentação foi encerrada.
+                </p>
+              </div>
+            )}
+
+            {uid && !finished && currentSlide && code && (
               // A `key` reinicia os controles quando o apresentador troca de slide.
               <ParticipateView
                 key={currentSlide.id}

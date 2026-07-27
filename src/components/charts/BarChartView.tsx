@@ -15,8 +15,6 @@ interface BarChartViewProps {
   data: ChoiceTally[]
 }
 
-const AXIS_COLOR = '#a3a3a3' // neutral-400: legível em tema claro e escuro
-
 /** Quebra um rótulo longo em várias linhas (com hard-break e reticências). */
 function wrapLabel(text: string, maxChars = 15, maxLines = 4): string[] {
   const tokens = text
@@ -69,7 +67,7 @@ function WrappedTick({ x, y, payload }: any) {
           dy={14 + i * 13}
           textAnchor="middle"
           fontSize={12}
-          fill={AXIS_COLOR}
+          className="chart-axis-label"
         >
           {line}
         </text>
@@ -111,7 +109,7 @@ export function BarChartView({ data }: BarChartViewProps) {
         {/* Eixo de valores oculto: mantém a escala das barras, sem exibir. */}
         <YAxis hide domain={[0, 'dataMax']} />
         <Tooltip
-          cursor={{ fill: 'rgba(99, 102, 241, 0.12)' }}
+          cursor={{ fill: 'rgba(37, 99, 235, 0.12)' }}
           contentStyle={{
             borderRadius: 12,
             border: 'none',

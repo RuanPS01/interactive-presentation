@@ -59,7 +59,7 @@ export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Pr
 }
 
 function drawCover(doc: jsPDF, room: Room, responses: ResponseDoc[], W: number): void {
-  doc.setFillColor(99, 102, 241)
+  doc.setFillColor(37, 99, 235) // blue-600, cor primária
   doc.rect(0, 0, W, 130, 'F')
 
   doc.setTextColor(255, 255, 255)
