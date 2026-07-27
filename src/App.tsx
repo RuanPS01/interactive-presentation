@@ -16,6 +16,7 @@ export default function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/present/:code" element={<PresentPage />} />
+      <Route path="/present/:code/:token" element={<PresentPage />} />
       <Route path="/join" element={<JoinPage />} />
       <Route path="/room/:code" element={<RoomPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

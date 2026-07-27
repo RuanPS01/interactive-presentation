@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 /* Tema escuro controlado por classe `.dark` no <html> (em vez do padrão
-   do Tailwind v4 que segue o prefers-color-scheme). O apresentador
-   controla o tema, e ele é propagado a todos via Firestore. */
+   do Tailwind v4 que segue o prefers-color-scheme). O tema é preferência
+   de cada usuário, salva no localStorage (ver store/themeStore). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
@@ -38,4 +38,30 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+/* Texto de eixos, rótulos e legendas dos gráficos: preto no tema claro
+   (padrão do apresentador) e quase branco no escuro, em negrito para boa
+   legibilidade. Substitui o cinza (neutral-400) usado antes. O `!important`
+   nos rótulos de pizza vence o `fill` que o Recharts injeta no elemento. */
+.chart-axis-label,
+.bar-count,
+.recharts-pie-label-text {
+  fill: #171717 !important; /* neutral-900 ≈ preto */
+  font-weight: 700;
+}
+
+.dark .chart-axis-label,
+.dark .bar-count,
+.dark .recharts-pie-label-text {
+  fill: #f5f5f5 !important; /* neutral-100 */
+}
+
+.chart-legend-label {
+  color: #171717; /* preto; vence a cor da série herdada da legenda */
+  font-weight: 700;
+}
+
+.dark .chart-legend-label {
+  color: #f5f5f5;
 }

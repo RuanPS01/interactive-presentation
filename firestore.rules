@@ -5,7 +5,11 @@ rules_version = '2';
 // Modelo de acesso (sem contas; cada dispositivo usa Auth Anônima):
 //  - Qualquer pessoa com o CÓDIGO da sala pode ler a sala e as respostas
 //    (o código funciona como uma "chave" de acesso).
-//  - Só o criador da sala (mesmo uid anônimo) pode alterar/excluir a sala.
+//  - Apresentar exige o TOKEN secreto (na URL): fica num doc privado que os
+//    clientes NÃO podem ler. Quem tem o token pode "reivindicar" a sala
+//    (recarregar a página / trocar de navegador) e vira o dono; a plateia,
+//    que só tem o código, não consegue apresentar.
+//  - Só o dono atual da sala altera/exclui a sala.
 //  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -14,12 +18,32 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Uid dono registrado no doc privado da sala (fonte da verdade do controle).
+    function presenterOwner(code) {
+      return get(/databases/$(database)/documents/rooms/$(code)/private/presenter).data.ownerUid;
+    }
+
     match /rooms/{code} {
       allow read: if true;
       allow create: if isSignedIn()
         && request.resource.data.creatorUid == request.auth.uid;
+      // Dono atual (uid) OU quem acabou de reivindicar via token (doc privado).
       allow update, delete: if isSignedIn()
-        && resource.data.creatorUid == request.auth.uid;
+        && (resource.data.creatorUid == request.auth.uid
+            || presenterOwner(code) == request.auth.uid);
+
+      // Doc privado com o token do apresentador. Ninguém lê (o token é segredo).
+      // Para "reivindicar" o controle é preciso reenviar o MESMO token (que só
+      // quem tem a URL conhece), o que autoriza definir ownerUid = próprio uid.
+      match /private/{doc} {
+        allow read: if false;
+        allow create: if isSignedIn()
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow update: if isSignedIn()
+          && request.resource.data.token == resource.data.token
+          && request.resource.data.ownerUid == request.auth.uid;
+        allow delete: if false;
+      }
 
       match /responses/{responseId} {
         allow read: if true;

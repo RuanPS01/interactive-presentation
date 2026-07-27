@@ -41,8 +41,9 @@ export function PieChartView({ data }: PieChartViewProps) {
           // Recharts injeta os campos do dado (label, votes) no render de label.
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           label={(entry: any) => {
-            const pct = ((entry.votes as number) / total) * 100
-            return `${entry.label as string}: ${pct.toFixed(0)}%`
+            const votes = entry.votes as number
+            const pct = (votes / total) * 100
+            return `${entry.label as string}: ${pct.toFixed(0)}% (${votes} voto${votes === 1 ? '' : 's'})`
           }}
           labelLine={false}
         >
@@ -60,7 +61,11 @@ export function PieChartView({ data }: PieChartViewProps) {
           }}
           formatter={(value: unknown, name: unknown) => [`${value as number} voto(s)`, name as string]}
         />
-        <Legend />
+        <Legend
+          formatter={(value: unknown) => (
+            <span className="chart-legend-label">{value as string}</span>
+          )}
+        />
       </PieChart>
     </ResponsiveContainer>
   )

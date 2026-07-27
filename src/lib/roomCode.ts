@@ -16,3 +16,22 @@ export function generateRoomCode(length = 6): string {
 export function normalizeRoomCode(input: string): string {
   return input.trim().toUpperCase().replace(/\s+/g, '')
 }
+
+// Alfabeto amplo (URL-safe) para o token secreto do apresentador.
+const TOKEN_ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+
+/**
+ * Gera um token secreto de apresentador (padrão: 24 caracteres).
+ * Vai na URL de apresentação e funciona como credencial: quem o tem controla
+ * a sala; quem só tem o código (participantes) não consegue apresentar.
+ */
+export function generatePresenterToken(length = 24): string {
+  const values = new Uint32Array(length)
+  crypto.getRandomValues(values)
+  let token = ''
+  for (let i = 0; i < length; i++) {
+    token += TOKEN_ALPHABET[values[i] % TOKEN_ALPHABET.length]
+  }
+  return token
+}

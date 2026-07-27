@@ -1,6 +1,15 @@
-import { BarChart3, Presentation, Users } from 'lucide-react'
+import { BarChart3, FileText, Play, Presentation, Users, X } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore'
+import {
+  listPresenterSessions,
+  removePresenterSession,
+  type PresenterSession,
+} from '../lib/presenterSessions'
+import { getRoom } from '../lib/rooms'
+import { getAllResponses } from '../lib/responses'
+import { exportResultsPdf } from '../utils/exportPdf'
 import { PageShell } from '../components/layout/PageShell'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
@@ -10,6 +19,34 @@ export function HomePage() {
   const navigate = useNavigate()
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
+
+  // Sessões de apresentador salvas neste dispositivo (retomar / reexportar).
+  const [sessions, setSessions] = useState<PresenterSession[]>(listPresenterSessions)
+  const [exportingCode, setExportingCode] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+
+  async function exportSession(s: PresenterSession) {
+    setExportingCode(s.code)
+    setExportError(null)
+    try {
+      const room = await getRoom(s.code)
+      if (!room) {
+        setExportError(`A sala ${s.code} não existe mais.`)
+        return
+      }
+      const all = await getAllResponses(s.code)
+      await exportResultsPdf(room, all)
+    } catch (e) {
+      setExportError((e as Error).message)
+    } finally {
+      setExportingCode(null)
+    }
+  }
+
+  function dismissSession(code: string) {
+    removePresenterSession(code)
+    setSessions(listPresenterSessions())
+  }
 
   return (
     <PageShell>
@@ -66,6 +103,52 @@ export function HomePage() {
           </Button>
         </Card>
       </div>
+
+      {sessions.length > 0 && (
+        <div className="mx-auto mt-10 max-w-3xl">
+          <h2 className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+            Continuar como apresentador (neste dispositivo)
+          </h2>
+          {exportError && (
+            <p className="mb-2 text-sm text-red-600 dark:text-red-400">{exportError}</p>
+          )}
+          <ul className="space-y-2">
+            {sessions.map((s) => (
+              <li key={s.code}>
+                <Card className="flex flex-wrap items-center gap-3 p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-neutral-900 dark:text-neutral-50">
+                      {s.title || 'Apresentação'}
+                    </p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                      Sala <strong className="tracking-widest">{s.code}</strong>
+                    </p>
+                  </div>
+                  <Button size="sm" onClick={() => navigate(`/present/${s.code}/${s.token}`)}>
+                    <Play size={16} /> Retomar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={exportingCode === s.code}
+                    onClick={() => void exportSession(s)}
+                  >
+                    <FileText size={16} /> {exportingCode === s.code ? 'Gerando…' : 'Exportar PDF'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => dismissSession(s.code)}
+                    aria-label={`Remover sala ${s.code} da lista`}
+                    className="inline-flex rounded-md p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                  >
+                    <X size={16} />
+                  </button>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </PageShell>
   )
 }

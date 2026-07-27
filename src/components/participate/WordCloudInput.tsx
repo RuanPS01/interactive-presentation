@@ -21,6 +21,7 @@ function maxAllowed(slide: WordCloudSlide): number {
 export function WordCloudInput({ code, slide, participantUid, current }: WordCloudInputProps) {
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const max = maxAllowed(slide)
   const reachedLimit = current.length >= max
@@ -37,6 +38,16 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
   async function addWord() {
     const word = draft.trim()
     if (!word || reachedLimit || busy) return
+    // Impede palavras repetidas (comparação sem diferenciar maiúsc./minúsc.,
+    // como na contagem da nuvem), evitando que o participante infle o voto de
+    // uma mesma palavra quando pode enviar mais de uma.
+    const isDuplicate = current.some((w) => w.toLowerCase() === word.toLowerCase())
+    if (isDuplicate) {
+      setNotice('Você já enviou essa palavra.')
+      inputRef.current?.select()
+      return
+    }
+    setNotice(null)
     setDraft('')
     try {
       await persist([...current, word])
@@ -72,7 +83,10 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
         <Input
           ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (notice) setNotice(null)
+          }}
           placeholder={reachedLimit ? 'Limite atingido' : 'Digite uma palavra'}
           disabled={reachedLimit}
           maxLength={40}
@@ -82,6 +96,10 @@ export function WordCloudInput({ code, slide, participantUid, current }: WordClo
           Enviar
         </Button>
       </form>
+
+      {notice && (
+        <p className="text-sm text-amber-600 dark:text-amber-400">{notice}</p>
+      )}
 
       {current.length > 0 && (
         <div className="space-y-2">

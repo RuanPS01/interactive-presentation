@@ -1,23 +1,33 @@
 import { Check, ChevronLeft, ChevronRight, Copy, FileText, LogOut } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
 import { useThemeStore } from '../store/themeStore'
-import { setCurrentSlide } from '../lib/rooms'
+import { claimPresenter, setCurrentSlide } from '../lib/rooms'
+import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
+import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
+import { SummarySlide } from '../components/present/SummarySlide'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
 
 export function PresentPage() {
-  const { code } = useParams<{ code: string }>()
+  const { code, token } = useParams<{ code: string; token?: string }>()
   const navigate = useNavigate()
   const { room, loading, error } = useRoom(code)
+  const { uid } = useParticipant()
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
+
+  // Controle de acesso do apresentador. Só quem é dono (mesmo uid) ou tem o
+  // token secreto (na URL) apresenta; a plateia (só com o código) não entra.
+  const [access, setAccess] = useState<'checking' | 'granted' | 'denied'>('checking')
+  const claimTriedRef = useRef(false)
 
   const currentSlide =
     room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
@@ -26,18 +36,30 @@ export function PresentPage() {
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Estado do slide final automático (grade de miniaturas + download do PDF).
+  const [allResponses, setAllResponses] = useState<ResponseDoc[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  // Baixa o PDF só uma vez por sessão, mesmo que se volte ao slide final.
+  const pdfDownloadedRef = useRef(false)
+  // Referência sempre atual da sala, para o efeito não depender da identidade
+  // do objeto (que muda a cada atualização do Firestore).
+  const roomRef = useRef(room)
+  roomRef.current = room
+
   // Navegação por teclado e passador de slides (clicker):
-  // avança com →, PageDown, Espaço; volta com ←, PageUp.
+  // avança com →, PageDown, Espaço; volta com ←, PageUp. O último passo
+  // (índice === nº de slides) é o slide de agradecimento automático.
   useEffect(() => {
     if (!room || !code) return
     const slideCount = room.slides.length
+    const maxIndex = slideCount > 0 ? slideCount : 0
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
       const idx = room!.currentSlideIndex
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault()
-        const next = Math.min(idx + 1, slideCount - 1)
+        const next = Math.min(idx + 1, maxIndex)
         if (next !== idx) void setCurrentSlide(code!, next)
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault()
@@ -48,6 +70,64 @@ export function PresentPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [room, code])
+
+  // Ao chegar no slide final: busca todas as respostas (para a grade) e,
+  // no apresentador, dispara o download do PDF de resultados automaticamente.
+  const slideCount = room?.slides.length ?? 0
+  const activeIndex = room?.currentSlideIndex ?? -1
+  useEffect(() => {
+    const onSummary = slideCount > 0 && activeIndex >= slideCount
+    if (!code || !onSummary) return
+    let cancelled = false
+    setSummaryLoading(true)
+    getAllResponses(code)
+      .then((all) => {
+        if (cancelled) return
+        setAllResponses(all)
+        setSummaryLoading(false)
+        const currentRoom = roomRef.current
+        if (currentRoom && !pdfDownloadedRef.current) {
+          pdfDownloadedRef.current = true
+          void exportResultsPdf(currentRoom, all)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSummaryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [code, activeIndex, slideCount])
+
+  // Decide o acesso assim que a sala e o uid estiverem prontos.
+  const creatorUid = room?.creatorUid
+  useEffect(() => {
+    if (!code || !creatorUid || !uid) return // ainda carregando
+    if (access !== 'checking') return // já decidido
+    if (creatorUid === uid) {
+      // Já é o dono neste navegador (criou a sala ou já reivindicou).
+      setAccess('granted')
+      return
+    }
+    if (!token) {
+      setAccess('denied')
+      return
+    }
+    if (claimTriedRef.current) return
+    claimTriedRef.current = true
+    // Recarregou ou trocou de navegador: prova o token e reassume o controle.
+    claimPresenter(code, uid, token)
+      .then(() => setAccess('granted'))
+      .catch(() => setAccess('denied'))
+  }, [code, creatorUid, uid, token, access])
+
+  // Concedido o acesso: lembra a sessão (retomar/reexportar pela tela inicial).
+  const roomTitle = room?.title
+  useEffect(() => {
+    if (access === 'granted' && code && token) {
+      savePresenterSession({ code, token, title: roomTitle ?? '' })
+    }
+  }, [access, code, token, roomTitle])
 
   if (loading) {
     return <FullScreenMessage>Carregando sala…</FullScreenMessage>
@@ -65,14 +145,39 @@ export function PresentPage() {
       </FullScreenMessage>
     )
   }
+  if (access === 'checking') {
+    return <FullScreenMessage>Verificando acesso de apresentador…</FullScreenMessage>
+  }
+  if (access === 'denied') {
+    return (
+      <FullScreenMessage>
+        <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-50">
+          Acesso de apresentador necessário
+        </p>
+        <p className="mt-1 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
+          Este link não tem o token de apresentador desta sala. Se você é da
+          plateia, entre como participante usando o código.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <Button onClick={() => navigate(`/room/${code}`)}>Entrar como participante</Button>
+          <Button variant="secondary" onClick={() => navigate('/')}>
+            Início
+          </Button>
+        </div>
+      </FullScreenMessage>
+    )
+  }
 
   const total = room.slides.length
   const index = room.currentSlideIndex
+  // Índice extra (= total) reservado para o slide de agradecimento automático.
+  const maxIndex = total > 0 ? total : 0
+  const isSummary = total > 0 && index >= total
   const joinUrl = `${window.location.origin}${window.location.pathname}#/room/${code}`
 
   function goTo(next: number) {
     if (!code) return
-    const clamped = Math.max(0, Math.min(next, total - 1))
+    const clamped = Math.max(0, Math.min(next, maxIndex))
     if (clamped !== index) void setCurrentSlide(code, clamped)
   }
 
@@ -131,12 +236,44 @@ export function PresentPage() {
             <FileText size={16} /> {exporting ? 'Gerando…' : 'Exportar PDF'}
           </Button>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          {/* Navegação de slides no canto superior direito (sem barra inferior,
+              aproveitando melhor a tela). Também dá para usar as setas do teclado. */}
+          <div
+            className="flex items-center gap-1 border-l border-neutral-200 pl-2 dark:border-neutral-800"
+            title="Use as setas do teclado para navegar"
+          >
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goTo(index - 1)}
+              disabled={index <= 0}
+              aria-label="Slide anterior"
+            >
+              <ChevronLeft size={16} />
+            </Button>
+            <span className="min-w-[3.5rem] text-center text-sm tabular-nums text-neutral-500 dark:text-neutral-400">
+              {total === 0 ? '—' : isSummary ? 'Fim' : `${index + 1} / ${total}`}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => goTo(index + 1)}
+              disabled={index >= maxIndex}
+              aria-label="Próximo slide"
+            >
+              <ChevronRight size={16} />
+            </Button>
+          </div>
         </div>
       </header>
 
       {/* Área do slide */}
       <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
-        {currentSlide ? (
+        {isSummary ? (
+          <div className="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col">
+            <SummarySlide room={room} responses={allResponses} loading={summaryLoading} />
+          </div>
+        ) : currentSlide ? (
           <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col">
             <SlideDisplay slide={currentSlide} responses={responses} />
           </div>
@@ -146,26 +283,6 @@ export function PresentPage() {
           </div>
         )}
       </main>
-
-      {/* Controles de navegação */}
-      <footer className="flex items-center justify-between border-t border-neutral-200 px-4 py-3 dark:border-neutral-800">
-        <Button variant="secondary" onClick={() => goTo(index - 1)} disabled={index <= 0}>
-          <ChevronLeft size={16} /> Anterior
-        </Button>
-        <span className="flex flex-col items-center text-sm text-neutral-500 dark:text-neutral-400">
-          <span>{total > 0 ? `Slide ${index + 1} de ${total}` : 'Sem slides'}</span>
-          <span className="text-xs text-neutral-400 dark:text-neutral-500">
-            Use as setas do teclado para navegar
-          </span>
-        </span>
-        <Button
-          variant="secondary"
-          onClick={() => goTo(index + 1)}
-          disabled={index >= total - 1}
-        >
-          Próximo <ChevronRight size={16} />
-        </Button>
-      </footer>
     </div>
   )
 }

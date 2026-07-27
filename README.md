@@ -132,11 +132,26 @@ O JSON é validado no import (schema em `src/utils/validation.ts`).
 
 Durante a apresentação, o botão **Exportar PDF** gera um relatório com os resultados
 de cada slide (votos, percentuais e palavras enviadas pelos participantes). O PDF é
-desenhado no próprio navegador (`src/utils/exportPdf.ts`), sem servidor.
+desenhado no próprio navegador (`src/utils/exportPdf.ts`), sem servidor. Ao final há
+um **slide automático de agradecimento** com uma grade de miniaturas de todos os
+slides; ao chegar nele, o PDF é baixado automaticamente.
+
+## Apresentador: token e reentrada
+
+Ao iniciar, a sala ganha um **token secreto de apresentador** embutido na URL
+(`/present/<código>/<token>`). Com essa URL o apresentador pode **recarregar a página
+ou trocar de navegador** sem perder o controle da sala — quem só tem o código (a
+plateia) **não** consegue apresentar. O token é guardado num documento privado
+(`rooms/<código>/private/presenter`) que os clientes não podem ler; reivindicar o
+controle exige reenviar o mesmo token. O token também fica salvo no `localStorage`
+deste dispositivo, então a **tela inicial sugere retomar a sala** (ou exportar os
+resultados de novo).
 
 ## Segurança
 
 As chaves `VITE_FIREBASE_*` são **identificadores públicos** do projeto (não são
 segredo). A proteção real dos dados é feita pelas **Firestore Security Rules**
 ([`firestore.rules`](firestore.rules)): qualquer um com o código lê a sala, mas só o
-criador altera a apresentação e cada participante só edita a própria resposta.
+**dono atual** (quem criou ou reivindicou com o token) altera a apresentação, e cada
+participante só edita a própria resposta. O token do apresentador fica num subdocumento
+privado, sem leitura por clientes.
