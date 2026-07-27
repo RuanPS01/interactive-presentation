@@ -46,8 +46,8 @@ export function TextConfig({ slide }: TextConfigProps) {
               className={clsx(
                 'flex-1 rounded-lg border px-3 py-2 text-sm transition',
                 slide.align === a.value
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100'
-                  : 'border-neutral-300 hover:border-indigo-300 dark:border-neutral-700',
+                  ? 'border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100'
+                  : 'border-neutral-300 hover:border-blue-300 dark:border-neutral-700',
               )}
             >
               {a.label}

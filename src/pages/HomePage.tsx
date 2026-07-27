@@ -1,7 +1,6 @@
 import { BarChart3, Presentation, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { useApplyTheme } from '../hooks/useApplyTheme'
-import { useEditorStore } from '../store/editorStore'
+import { useThemeStore } from '../store/themeStore'
 import { PageShell } from '../components/layout/PageShell'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
@@ -9,9 +8,8 @@ import { Card } from '../components/ui/Card'
 
 export function HomePage() {
   const navigate = useNavigate()
-  const theme = useEditorStore((s) => s.theme)
-  const toggleTheme = useEditorStore((s) => s.toggleTheme)
-  useApplyTheme(theme)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   return (
     <PageShell>
@@ -21,7 +19,7 @@ export function HomePage() {
 
       <header className="mx-auto mb-12 max-w-2xl pt-8 text-center">
         <div className="mb-4 flex justify-center">
-          <BarChart3 size={56} strokeWidth={1.5} className="text-indigo-600 dark:text-indigo-400" />
+          <BarChart3 size={56} strokeWidth={1.5} className="text-blue-600 dark:text-blue-400" />
         </div>
         <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-50 md:text-5xl">
           Apresentação Interativa
@@ -34,7 +32,7 @@ export function HomePage() {
 
       <div className="mx-auto grid max-w-3xl gap-6 md:grid-cols-2">
         <Card className="flex flex-col items-center gap-4 p-8 text-center">
-          <Presentation size={40} strokeWidth={1.5} className="text-indigo-600 dark:text-indigo-400" />
+          <Presentation size={40} strokeWidth={1.5} className="text-blue-600 dark:text-blue-400" />
           <div>
             <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
               Criar apresentação
@@ -49,7 +47,7 @@ export function HomePage() {
         </Card>
 
         <Card className="flex flex-col items-center gap-4 p-8 text-center">
-          <Users size={40} strokeWidth={1.5} className="text-indigo-600 dark:text-indigo-400" />
+          <Users size={40} strokeWidth={1.5} className="text-blue-600 dark:text-blue-400" />
           <div>
             <h2 className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
               Entrar em uma sala

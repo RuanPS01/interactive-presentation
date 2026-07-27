@@ -30,8 +30,8 @@ export function SlideList() {
             className={clsx(
               'flex items-center gap-2 rounded-xl border p-2 transition',
               index === selectedIndex
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950'
-                : 'border-neutral-200 bg-white hover:border-indigo-300 dark:border-neutral-800 dark:bg-neutral-900',
+                ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                : 'border-neutral-200 bg-white hover:border-blue-300 dark:border-neutral-800 dark:bg-neutral-900',
             )}
           >
             <button

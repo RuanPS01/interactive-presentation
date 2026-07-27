@@ -2,8 +2,9 @@ import { ChevronLeft } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
-import { useApplyTheme } from '../hooks/useApplyTheme'
+import { useThemeStore } from '../store/themeStore'
 import { ParticipateView } from '../components/participate/ParticipateView'
+import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 
@@ -12,7 +13,8 @@ export function RoomPage() {
   const navigate = useNavigate()
   const { uid, error: authError } = useParticipant()
   const { room, loading, error } = useRoom(code)
-  useApplyTheme(room?.theme)
+  const theme = useThemeStore((s) => s.theme)
+  const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   const currentSlide =
     room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
@@ -23,9 +25,12 @@ export function RoomPage() {
         <Button variant="ghost" size="sm" onClick={() => navigate('/join')}>
           <ChevronLeft size={16} /> Trocar sala
         </Button>
-        <span className="text-sm text-neutral-500 dark:text-neutral-400">
-          Sala <strong className="tracking-widest">{code}</strong>
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-neutral-500 dark:text-neutral-400">
+            Sala <strong className="tracking-widest">{code}</strong>
+          </span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
       </header>
 
       <main className="flex-1">

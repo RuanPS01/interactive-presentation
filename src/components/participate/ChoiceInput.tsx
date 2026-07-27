@@ -59,8 +59,8 @@ export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInpu
                   'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-base transition',
                   'disabled:opacity-60',
                   isSelected
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100'
-                    : 'border-neutral-300 bg-white hover:border-indigo-300 dark:border-neutral-700 dark:bg-neutral-900',
+                    ? 'border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100'
+                    : 'border-neutral-300 bg-white hover:border-blue-300 dark:border-neutral-700 dark:bg-neutral-900',
                 )}
               >
                 <span
@@ -68,7 +68,7 @@ export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInpu
                     'flex h-5 w-5 shrink-0 items-center justify-center border',
                     slide.allowMultiple ? 'rounded-md' : 'rounded-full',
                     isSelected
-                      ? 'border-indigo-600 bg-indigo-600 text-white'
+                      ? 'border-blue-600 bg-blue-600 text-white'
                       : 'border-neutral-400',
                   )}
                 >

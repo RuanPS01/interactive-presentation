@@ -3,19 +3,15 @@ import type {
   Presentation,
   Slide,
   SlideType,
-  ThemeMode,
 } from '../types/presentation'
 import { createDefaultSlide } from '../utils/slideFactory'
 
 interface EditorState {
   title: string
-  theme: ThemeMode
   slides: Slide[]
   selectedIndex: number
 
   setTitle: (title: string) => void
-  setTheme: (theme: ThemeMode) => void
-  toggleTheme: () => void
 
   addSlide: (type: SlideType) => void
   updateSlide: (id: string, patch: Partial<Slide>) => void
@@ -28,9 +24,8 @@ interface EditorState {
   reset: () => void
 }
 
-const INITIAL: Pick<EditorState, 'title' | 'theme' | 'slides' | 'selectedIndex'> = {
+const INITIAL: Pick<EditorState, 'title' | 'slides' | 'selectedIndex'> = {
   title: 'Minha apresentação',
-  theme: 'light',
   slides: [],
   selectedIndex: 0,
 }
@@ -44,8 +39,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   ...INITIAL,
 
   setTitle: (title) => set({ title }),
-  setTheme: (theme) => set({ theme }),
-  toggleTheme: () => set((s) => ({ theme: s.theme === 'dark' ? 'light' : 'dark' })),
 
   addSlide: (type) =>
     set((s) => {
@@ -80,14 +73,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   loadPresentation: (presentation) =>
     set({
       title: presentation.title,
-      theme: presentation.theme,
       slides: presentation.slides,
       selectedIndex: 0,
     }),
 
   getPresentation: () => {
-    const { title, theme, slides } = get()
-    return { title, theme, slides }
+    const { title, slides } = get()
+    return { title, slides }
   },
 
   reset: () => set({ ...INITIAL, slides: [] }),
