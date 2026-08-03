@@ -65,8 +65,10 @@ export function AiPromptButton() {
                   Gerar conteúdo com IA
                 </h2>
                 <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                  Copie o prompt, cole no assistente de IA, substitua o tema, salve a resposta
-                  em um arquivo <code>.json</code> e carregue em <strong>Importar JSON</strong>.
+                  Copie o prompt e cole no assistente de IA. Em seguida, descreva o tema, o
+                  público e o conteúdo da sua apresentação em uma mensagem separada. Salve a
+                  resposta em um arquivo <code>.json</code> e carregue em{' '}
+                  <strong>Importar JSON</strong>.
                 </p>
               </div>
               <button
