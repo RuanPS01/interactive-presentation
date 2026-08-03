@@ -333,7 +333,10 @@ export function PresentPage() {
             <SummarySlide room={room} responses={allResponses} loading={summaryLoading} />
           </div>
         ) : currentSlide ? (
-          <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col">
+          // Largura total: a nuvem de palavras e os gráficos aproveitam a tela
+          // inteira do projetor (sem limite de largura que deixaria as laterais
+          // vazias e cortaria conteúdo largo).
+          <div className="flex h-full w-full flex-1 flex-col">
             <SlideDisplay slide={currentSlide} responses={responses} />
           </div>
         ) : (

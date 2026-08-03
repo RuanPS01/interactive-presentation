@@ -9,6 +9,7 @@ import { savePresenterSession } from '../lib/presenterSessions'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { exportPresentation, importPresentationFromFile } from '../utils/importExport'
 import { AddSlideMenu } from '../components/editor/AddSlideMenu'
+import { AiPromptButton } from '../components/editor/AiPromptButton'
 import { SlideList } from '../components/editor/SlideList'
 import { SlideEditor } from '../components/editor/SlideEditor'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
@@ -99,6 +100,7 @@ export function CreatePage() {
             className="hidden"
             onChange={onImportFile}
           />
+          <AiPromptButton />
           <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} /> Importar JSON
           </Button>
