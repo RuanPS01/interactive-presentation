@@ -17,16 +17,46 @@
   }
 }
 
-/* Nuvem de palavras: crescimento suave do tamanho ao ganhar votos e
-   animação de entrada apenas para palavras novas (as existentes não se movem). */
+/* Nuvem de palavras: o layout é refeito a cada atualização, então tanto a
+   posição (no <g>) quanto o tamanho (no <text>) mudam. */
+.wc-cloud,
 .wc-word {
-  transition: font-size 0.4s ease;
+  /* Em SVG, `transform-origin` inicial é o centro do view-box; sem fixar em
+     0 0 o `scale()` do grupo seria aplicado em torno do centro da viewport e
+     deslocaria a nuvem inteira. */
+  transform-origin: 0 0;
 }
 
-.wc-word-new {
+/* As transições e a animação de entrada só valem depois da primeira pintura
+   (classe aplicada pelo componente). Sem isso o primeiro quadro animaria a
+   partir do estado inicial — a nuvem deslizaria do canto e cada palavra
+   apareceria reduzida — em vez de já surgir montada. */
+.wc-animate .wc-cloud,
+.wc-animate .wc-word {
+  transition: transform 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.wc-animate .wc-word > text {
+  transition: font-size 0.5s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* Animação de entrada, só para palavras inéditas. Fica no <text> (o <g> já usa
+   transform para a posição), com origem no centro da própria palavra. */
+.wc-animate .wc-word-new {
   transform-box: fill-box;
   transform-origin: center;
   animation: wc-pop 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-animate .wc-cloud,
+  .wc-animate .wc-word,
+  .wc-animate .wc-word > text {
+    transition: none;
+  }
+  .wc-animate .wc-word-new {
+    animation: none;
+  }
 }
 
 @keyframes wc-pop {
