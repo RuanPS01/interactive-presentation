@@ -129,6 +129,23 @@ export function QuizConfig({ slide }: QuizConfigProps) {
         <input
           type="checkbox"
           className="mt-0.5"
+          checked={slide.showResponses}
+          onChange={(e) => updateSlide(slide.id, { showResponses: e.target.checked })}
+        />
+        <span>
+          Mostrar as respostas dos participantes na tela do apresentador
+          <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+            Desligado (padrão), a pergunta fica no ar sem entregar o resultado —
+            só o total de quem já respondeu. Ligado, cada alternativa mostra
+            votos e porcentagem (e os nomes, se a sala identificar as respostas).
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-200">
+        <input
+          type="checkbox"
+          className="mt-0.5"
           checked={slide.revealAnswer}
           onChange={(e) => updateSlide(slide.id, { revealAnswer: e.target.checked })}
         />

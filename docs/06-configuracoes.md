@@ -22,7 +22,7 @@ Tamanhos aceitos: **10 a 200 px** (`FONT_SIZE_RANGE`).
 | --- | --- |
 | **Permitir limpar e trocar a resposta** | Ligado: o participante vê “Limpar resposta” / “Limpar tudo” e pode escolher de novo. Desligado: a resposta vira definitiva — na escolha única o primeiro toque encerra; na múltipla escolha só o **desmarcar** é bloqueado (senão a pessoa não conseguiria terminar a própria seleção); na nuvem de palavras, os itens enviados perdem o botão de remover. |
 | **Solicitar o nome antes de entrar na sala** | Ligado: quem abre `/room/<código>` preenche o nome antes de ver qualquer slide. O nome fica salvo por sala neste dispositivo, acompanha o registro de presença e vai junto de cada resposta. |
-| **Identificar as respostas com o nome** | Ligado: abaixo do slide (e no PDF) aparece a lista “Nome: resposta”. **Depende** de “Solicitar o nome”. |
+| **Identificar as respostas com o nome** | Ligado: abaixo do slide (e no PDF) aparece a lista “Nome: resposta”. **Depende** de “Solicitar o nome”. Nos slides de alternativas a lista só aparece se o slide também autorizar mostrar as respostas (ver [05](05-tipos-de-slide.md#quiz--alternativas-sem-gráfico)). |
 | **Tamanho do título** | Título do slide no projetor (e, limitado a 30 px, no celular). |
 | **Tamanho dos rótulos** | Eixos e legendas dos gráficos, contador acima das barras, textos de instrução, nomes na lista de identificação e o rodapé de contagem. |
 | **Tamanho do corpo** | Conteúdo principal: alternativas do `quiz`/gabarito e os controles do participante. Nos slides de texto, quem manda é o `fontSize` do próprio slide. |

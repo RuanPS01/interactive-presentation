@@ -80,6 +80,14 @@ export interface QuizSlide extends SlideBase {
   correctOptionIds: string[]
   /** Mantém um slide `answer` logo depois deste, revelando o gabarito. */
   revealAnswer: boolean
+  /**
+   * Mostrar na tela do apresentador o que os participantes responderam
+   * (contagem por alternativa e, se a sala identificar, os nomes).
+   *
+   * Padrão `false`: numa pergunta e resposta, exibir as respostas enquanto a
+   * pergunta está no ar entrega o resultado antes da hora.
+   */
+  showResponses: boolean
 }
 
 /**

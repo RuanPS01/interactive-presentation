@@ -53,7 +53,12 @@ export function SlideDisplay({
   slides,
 }: SlideDisplayProps) {
   const quiz = findQuizSlide(slide, slides)
-  const showNames = settings.identifyResponses && isInteractiveSlide(slide)
+  // Num `quiz`, identificar as respostas também as revela — então a lista de
+  // nomes só aparece quando o slide autoriza mostrar as respostas.
+  const showNames =
+    settings.identifyResponses &&
+    isInteractiveSlide(slide) &&
+    (slide.type !== 'quiz' || slide.showResponses)
 
   return (
     <div className="flex h-full flex-col">
@@ -112,8 +117,16 @@ function SlideBody({ slide, responses, settings, quiz }: BodyProps) {
         />
       )
     case 'quiz':
-      // Sem gráfico e sem contagem: a pergunta fica no ar até o gabarito.
-      return <OptionsBoard options={slide.options} fontSize={settings.bodyFontSize} />
+      // Sem gráfico. A contagem por alternativa só aparece se o slide pedir:
+      // por padrão a pergunta fica no ar sem entregar o resultado.
+      return (
+        <OptionsBoard
+          options={slide.options}
+          tallies={slide.showResponses ? aggregateChoices(responses, slide.options) : undefined}
+          showVotes={slide.showResponses}
+          fontSize={settings.bodyFontSize}
+        />
+      )
     case 'answer':
       if (!quiz) {
         return (
@@ -128,6 +141,7 @@ function SlideBody({ slide, responses, settings, quiz }: BodyProps) {
           correctOptionIds={quiz.correctOptionIds}
           tallies={aggregateChoices(responses, quiz.options)}
           reveal
+          showVotes
           fontSize={settings.bodyFontSize}
         />
       )

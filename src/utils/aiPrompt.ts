@@ -94,6 +94,9 @@ TIPOS DE SLIDE
      máximo um id.
    - "revealAnswer": true faz a plataforma manter automaticamente um slide
      "answer" logo depois, revelando o gabarito.
+   - "showResponses": true mostra na tela do apresentador quantos votos cada
+     alternativa recebeu enquanto a pergunta está no ar. Prefira false (padrão)
+     em pergunta e resposta, para não entregar o resultado antes da hora.
 
    {
      "id": "s4",
@@ -102,6 +105,7 @@ TIPOS DE SLIDE
      "allowMultiple": false,
      "correctOptionIds": ["s4o2"],
      "revealAnswer": true,
+     "showResponses": false,
      "options": [
        { "id": "s4o1", "label": "Conjunto" },
        { "id": "s4o2", "label": "Lista" },
@@ -154,7 +158,8 @@ REGRAS
 - Use exatamente esses nomes de campo e esses valores permitidos. Qualquer campo
   extra ou faltando faz a importação falhar.
 - Números devem ser números JSON (sem aspas) e inteiros.
-- "allowMultiple" e "revealAnswer" devem ser booleanos (true/false, sem aspas).
+- "allowMultiple", "revealAnswer" e "showResponses" devem ser booleanos
+  (true/false, sem aspas).
 - Todos os "id" de slides são diferentes entre si.
 - Escreva todo o conteúdo em português do Brasil.
 - Enunciados curtos e diretos; opções com no máximo 4 palavras.
@@ -203,6 +208,7 @@ EXEMPLO COMPLETO VÁLIDO
       "allowMultiple": false,
       "correctOptionIds": ["s4o2"],
       "revealAnswer": true,
+      "showResponses": false,
       "options": [
         { "id": "s4o1", "label": "A média dos valores" },
         { "id": "s4o2", "label": "O valor central" },

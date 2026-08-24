@@ -64,6 +64,8 @@ export function createDefaultSlide(type: SlideType): Slide {
         allowMultiple: false,
         correctOptionIds: [],
         revealAnswer: false,
+        // Pergunta e resposta: por padrão as respostas ficam ocultas.
+        showResponses: false,
         options: [
           { id: newId(), label: 'Alternativa 1' },
           { id: newId(), label: 'Alternativa 2' },

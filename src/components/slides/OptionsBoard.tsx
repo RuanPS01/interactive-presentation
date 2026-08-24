@@ -7,10 +7,16 @@ interface OptionsBoardProps {
   options: ChoiceOption[]
   /** Ids corretos; só destacados quando `reveal` é true. */
   correctOptionIds?: string[]
-  /** Contagem de votos por opção (usada na revelação do gabarito). */
+  /** Contagem de votos por opção. */
   tallies?: ChoiceTally[]
-  /** true no slide de resposta: pinta o gabarito e mostra os votos. */
+  /** true no slide de resposta: pinta a(s) alternativa(s) correta(s). */
   reveal?: boolean
+  /**
+   * Exibe votos e porcentagem ao lado de cada alternativa. Separado de
+   * `reveal` porque a pergunta pode mostrar o que a plateia respondeu sem
+   * entregar o gabarito (opção "mostrar as respostas" do slide `quiz`).
+   */
+  showVotes?: boolean
   /** Tamanho base (px) do texto das alternativas. */
   fontSize: number
 }
@@ -26,6 +32,7 @@ export function OptionsBoard({
   correctOptionIds = [],
   tallies,
   reveal = false,
+  showVotes = false,
   fontSize,
 }: OptionsBoardProps) {
   const correct = new Set(correctOptionIds)
@@ -80,7 +87,7 @@ export function OptionsBoard({
               >
                 {option.label}
               </span>
-              {reveal && tallies && (
+              {showVotes && tallies && (
                 <span
                   className="shrink-0 text-right font-bold tabular-nums text-neutral-500 dark:text-neutral-400"
                   style={{ fontSize: `${fontSize * 0.7}px` }}
