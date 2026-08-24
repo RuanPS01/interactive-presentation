@@ -30,6 +30,7 @@ export async function saveResponse(
   participantUid: string,
   type: ResponseType,
   value: string[],
+  participantName?: string | null,
 ): Promise<void> {
   const payload: ResponseDoc = {
     slideId,
@@ -37,6 +38,9 @@ export async function saveResponse(
     type,
     value,
     createdAt: Date.now(),
+    // Só grava o nome quando a sala pede identificação (campo `undefined` não
+    // é aceito pelo Firestore).
+    ...(participantName?.trim() ? { participantName: participantName.trim() } : {}),
   }
   await setDoc(doc(responsesCol(code), responseId(slideId, participantUid)), payload)
 }

@@ -12,9 +12,14 @@ import { colorAt } from './palette'
 
 interface PieChartViewProps {
   data: ChoiceTally[]
+  /** Tamanho (px) dos rótulos das fatias e da legenda. */
+  labelFontSize?: number
 }
 
-export function PieChartView({ data }: PieChartViewProps) {
+const DEFAULT_LABEL_SIZE = 16
+
+export function PieChartView({ data, labelFontSize }: PieChartViewProps) {
+  const size = labelFontSize ?? DEFAULT_LABEL_SIZE
   const total = totalVotes(data)
   // O gráfico só mostra fatias com votos; a proporção reflete o total.
   const slices = data.filter((d) => d.votes > 0)
@@ -38,6 +43,7 @@ export function PieChartView({ data }: PieChartViewProps) {
           cy="50%"
           outerRadius="62%"
           isAnimationActive={false}
+          fontSize={size}
           // Rótulo curto na fatia (nunca corta, mesmo em tela cheia); o nome
           // completo de cada opção aparece na legenda abaixo.
           // Recharts injeta os campos do dado (votes) no render de label.
@@ -59,7 +65,9 @@ export function PieChartView({ data }: PieChartViewProps) {
         />
         <Legend
           formatter={(value: unknown) => (
-            <span className="chart-legend-label">{value as string}</span>
+            <span className="chart-legend-label" style={{ fontSize: `${size}px` }}>
+              {value as string}
+            </span>
           )}
         />
       </PieChart>

@@ -1,4 +1,4 @@
-import type { ChoiceOption, ResponseDoc } from '../types/presentation'
+import type { ChoiceOption, ResponseDoc, Slide } from '../types/presentation'
 
 export interface WordCount {
   text: string
@@ -49,7 +49,48 @@ export function totalVotes(tallies: ChoiceTally[]): number {
   return tallies.reduce((sum, t) => sum + t.votes, 0)
 }
 
-/** Nº de participantes distintos que responderam. */
-export function participantCount(responses: ResponseDoc[]): number {
+/**
+ * Nº de participantes distintos que RESPONDERAM este slide.
+ *
+ * Não confundir com o total de participantes da sala: quem só entrou (e ainda
+ * não respondeu) não aparece aqui — esse número vem da coleção `participants`
+ * (ver `lib/participants.ts`).
+ */
+export function answeredCount(responses: ResponseDoc[]): number {
   return new Set(responses.map((r) => r.participantUid)).size
+}
+
+/** Total de itens enviados numa nuvem de palavras. */
+export function totalWords(responses: ResponseDoc[]): number {
+  return aggregateWords(responses).reduce((sum, w) => sum + w.value, 0)
+}
+
+export interface NamedResponse {
+  uid: string
+  name: string
+  /** Texto legível do que a pessoa respondeu (palavras ou rótulos). */
+  answers: string[]
+}
+
+/**
+ * Respostas com o nome de quem respondeu, para os slides que pedem
+ * identificação. Ids de opção são traduzidos para o rótulo correspondente.
+ */
+export function namedResponses(
+  responses: ResponseDoc[],
+  slide: Slide | undefined,
+): NamedResponse[] {
+  const labels = new Map<string, string>()
+  if (slide && 'options' in slide) {
+    for (const option of slide.options) labels.set(option.id, option.label)
+  }
+
+  return responses
+    .map((r) => ({
+      uid: r.participantUid,
+      name: r.participantName?.trim() || 'Anônimo',
+      answers: r.value.map((v) => labels.get(v) ?? v).filter(Boolean),
+    }))
+    .filter((r) => r.answers.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }

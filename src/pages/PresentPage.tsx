@@ -9,6 +9,7 @@ import {
   LogOut,
   Maximize2,
   Minimize2,
+  Users,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -16,11 +17,13 @@ import { useFullscreen } from '../hooks/useFullscreen'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
+import { useParticipants } from '../hooks/useParticipants'
 import { useThemeStore } from '../store/themeStore'
 import { claimPresenter, setCurrentSlide } from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
+import { resolveSlideSettings } from '../utils/settings'
 import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
@@ -48,7 +51,12 @@ export function PresentPage() {
 
   const currentSlide =
     room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
-  const responses = useResponses(code, currentSlide?.id)
+  // No slide de gabarito os resultados vêm da pergunta que ele revela.
+  const resultsSlideId =
+    currentSlide?.type === 'answer' ? currentSlide.quizSlideId : currentSlide?.id
+  const responses = useResponses(code, resultsSlideId)
+  const participants = useParticipants(code)
+  const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
 
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -265,6 +273,12 @@ export function PresentPage() {
           {copied ? 'Link copiado' : 'Copiar link de entrada'}
         </button>
         <ShareRoom code={code} joinUrl={joinUrl} />
+        <span
+          className="inline-flex items-center gap-1 rounded-md bg-neutral-100 px-2 py-1 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+          title="Pessoas conectadas nesta sala"
+        >
+          <Users size={14} /> {participants.length}
+        </span>
         <div className="ml-auto flex items-center gap-2">
           <Button
             variant="secondary"
@@ -337,7 +351,13 @@ export function PresentPage() {
           // inteira do projetor (sem limite de largura que deixaria as laterais
           // vazias e cortaria conteúdo largo).
           <div className="flex h-full w-full flex-1 flex-col">
-            <SlideDisplay slide={currentSlide} responses={responses} />
+            <SlideDisplay
+              slide={currentSlide}
+              slides={room.slides}
+              responses={responses}
+              settings={slideSettings}
+              participants={participants.length}
+            />
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center text-center text-neutral-500 dark:text-neutral-400">

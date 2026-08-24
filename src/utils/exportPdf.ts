@@ -1,6 +1,8 @@
 import type { jsPDF } from 'jspdf'
 import type {
   ChoiceSlide,
+  PresentationSettings,
+  QuizSlide,
   ResponseDoc,
   Room,
   Slide,
@@ -9,10 +11,12 @@ import type {
 import {
   aggregateChoices,
   aggregateWords,
-  participantCount,
+  answeredCount,
+  namedResponses,
   totalVotes,
 } from './aggregate'
 import { SLIDE_TYPE_LABELS } from './slideFactory'
+import { resolveSlideSettings, withDefaults } from './settings'
 import { CHART_COLORS } from '../components/charts/palette'
 
 const MARGIN = 48
@@ -46,13 +50,27 @@ export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Pr
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
+  const settings = withDefaults(room.settings)
 
   drawCover(doc, room, responses, W)
 
-  room.slides.forEach((slide, i) => {
+  // Slides de gabarito não viram página: a pergunta já sai com a resposta
+  // correta destacada, então uma página extra só repetiria a mesma informação.
+  const pages = room.slides.filter((s) => s.type !== 'answer')
+
+  pages.forEach((slide, i) => {
     doc.addPage()
     const slideResponses = responses.filter((r) => r.slideId === slide.id)
-    drawSlidePage(doc, slide, slideResponses, i + 1, room.slides.length, W, H)
+    drawSlidePage(
+      doc,
+      slide,
+      slideResponses,
+      i + 1,
+      pages.length,
+      W,
+      H,
+      resolveSlideSettings(settings, slide),
+    )
   })
 
   doc.save(`${slugify(room.title) || 'apresentacao'}-resultados.pdf`)
@@ -77,7 +95,7 @@ function drawCover(doc: jsPDF, room: Room, responses: ResponseDoc[], W: number):
   const generatedAt = new Date().toLocaleString('pt-BR')
   doc.text(`Gerado em: ${generatedAt}`, MARGIN, 172)
   doc.text(`Slides: ${room.slides.length}`, MARGIN, 194)
-  doc.text(`Participantes: ${participantCount(responses)}`, MARGIN, 216)
+  doc.text(`Participantes que responderam: ${answeredCount(responses)}`, MARGIN, 216)
 }
 
 function drawSlidePage(
@@ -88,6 +106,7 @@ function drawSlidePage(
   count: number,
   W: number,
   H: number,
+  settings: PresentationSettings,
 ): void {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
@@ -106,34 +125,62 @@ function drawSlidePage(
   const contentTop = MARGIN + 26 + titleLines.length * 22 + 24
   doc.setFont('helvetica', 'normal')
 
+  let bottom = contentTop
+
   switch (slide.type) {
     case 'bar':
     case 'pie':
-      drawChoice(doc, slide, responses, contentTop, W, H)
-      drawFooter(doc, `${participantCount(responses)} participante(s) · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`, H)
+      bottom = drawChoice(doc, slide, responses, contentTop, W, H)
+      drawFooter(
+        doc,
+        `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
+        H,
+      )
+      break
+    case 'quiz':
+      bottom = drawChoice(doc, slide, responses, contentTop, W, H, slide.correctOptionIds)
+      drawFooter(
+        doc,
+        `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
+        H,
+      )
       break
     case 'wordcloud': {
       const total = aggregateWords(responses).reduce((s, w) => s + w.value, 0)
-      drawWordCloud(doc, responses, contentTop, W, H)
-      drawFooter(doc, `${participantCount(responses)} participante(s) · ${total} palavra(s)`, H)
+      bottom = drawWordCloud(doc, responses, contentTop, W, H)
+      drawFooter(doc, `${answeredCount(responses)} responderam · ${total} resposta(s)`, H)
       break
     }
     case 'text':
       drawText(doc, slide, contentTop, W)
-      break
+      return
+    case 'answer':
+      // Filtrado antes de chegar aqui (ver `exportResultsPdf`).
+      return
+  }
+
+  if (settings.identifyResponses) {
+    drawNames(doc, slide, responses, bottom + 16, W, H)
   }
 }
 
+/**
+ * Barras horizontais com os votos. Com `correctIds` (slide de alternativas), a
+ * opção correta ganha um marcador — é o gabarito dentro do relatório.
+ * Devolve a coordenada Y final.
+ */
 function drawChoice(
   doc: jsPDF,
-  slide: ChoiceSlide,
+  slide: ChoiceSlide | QuizSlide,
   responses: ResponseDoc[],
   top: number,
   W: number,
   H: number,
-): void {
+  correctIds?: string[],
+): number {
   const tallies = aggregateChoices(responses, slide.options)
   const total = totalVotes(tallies)
+  const correct = new Set(correctIds ?? [])
   const trackW = W - 2 * MARGIN
   const rowH = 50
   let y = top
@@ -145,16 +192,21 @@ function drawChoice(
     }
     const [r, g, b] = hexToRgb(CHART_COLORS[idx % CHART_COLORS.length])
     const pct = total > 0 ? t.votes / total : 0
+    const isCorrect = correct.has(t.id)
 
     doc.setFontSize(12)
     doc.setTextColor(30, 30, 30)
-    doc.text(doc.splitTextToSize(t.label, trackW - 120)[0] ?? t.label, MARGIN, y)
+    doc.setFont('helvetica', isCorrect ? 'bold' : 'normal')
+    const label = isCorrect ? `[correta] ${t.label}` : t.label
+    doc.text(doc.splitTextToSize(label, trackW - 120)[0] ?? label, MARGIN, y)
+    doc.setFont('helvetica', 'normal')
 
     const barY = y + 8
     const barH = 16
     doc.setFillColor(230, 230, 230)
     doc.roundedRect(MARGIN, barY, trackW, barH, 4, 4, 'F')
-    doc.setFillColor(r, g, b)
+    if (isCorrect) doc.setFillColor(34, 197, 94)
+    else doc.setFillColor(r, g, b)
     doc.roundedRect(MARGIN, barY, Math.max(2, trackW * pct), barH, 4, 4, 'F')
 
     doc.setFontSize(10)
@@ -168,7 +220,9 @@ function drawChoice(
     doc.setFontSize(11)
     doc.setTextColor(140, 140, 140)
     doc.text('Nenhum voto registrado.', MARGIN, y + 8)
+    y += 24
   }
+  return y
 }
 
 function drawWordCloud(
@@ -177,13 +231,13 @@ function drawWordCloud(
   top: number,
   W: number,
   H: number,
-): void {
+): number {
   const words = aggregateWords(responses)
   if (words.length === 0) {
     doc.setFontSize(11)
     doc.setTextColor(140, 140, 140)
-    doc.text('Nenhuma palavra enviada.', MARGIN, top)
-    return
+    doc.text('Nenhuma resposta enviada.', MARGIN, top)
+    return top + 20
   }
 
   const values = words.map((w) => w.value)
@@ -220,6 +274,48 @@ function drawWordCloud(
     x += width + 14
   }
   doc.setFont('helvetica', 'normal')
+  return y + lineMax * 0.4 + 12
+}
+
+/** Lista "Nome: resposta" quando a sala identifica quem respondeu. */
+function drawNames(
+  doc: jsPDF,
+  slide: Slide,
+  responses: ResponseDoc[],
+  top: number,
+  W: number,
+  H: number,
+): void {
+  const named = namedResponses(responses, slide)
+  if (named.length === 0) return
+
+  let y = top
+  if (y > H - MARGIN - 40) {
+    doc.addPage()
+    y = MARGIN
+  }
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(60, 60, 60)
+  doc.text('Respostas por participante', MARGIN, y)
+  y += 16
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(10)
+  doc.setTextColor(40, 40, 40)
+  for (const r of named) {
+    const lines = doc.splitTextToSize(
+      `${r.name}: ${r.answers.join(', ')}`,
+      W - 2 * MARGIN,
+    )
+    if (y + lines.length * 13 > H - MARGIN - 20) {
+      doc.addPage()
+      y = MARGIN
+    }
+    doc.text(lines, MARGIN, y)
+    y += lines.length * 13 + 2
+  }
 }
 
 function drawText(doc: jsPDF, slide: TextSlide, top: number, W: number): void {

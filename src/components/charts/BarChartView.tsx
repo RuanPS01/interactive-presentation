@@ -13,7 +13,11 @@ import { colorAt } from './palette'
 
 interface BarChartViewProps {
   data: ChoiceTally[]
+  /** Tamanho (px) dos rótulos do eixo; o contador acima da barra escala junto. */
+  labelFontSize?: number
 }
+
+const DEFAULT_LABEL_SIZE = 16
 
 /** Quebra um rótulo longo em várias linhas (com hard-break e reticências). */
 function wrapLabel(text: string, maxChars = 15, maxLines = 4): string[] {
@@ -55,7 +59,8 @@ function wrapLabel(text: string, maxChars = 15, maxLines = 4): string[] {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function WrappedTick({ x, y, payload }: any) {
+function WrappedTick({ x, y, payload, fontSize }: any) {
+  const size = Number(fontSize) || DEFAULT_LABEL_SIZE
   const lines = wrapLabel(String(payload.value))
   return (
     <g transform={`translate(${x},${y})`}>
@@ -64,9 +69,9 @@ function WrappedTick({ x, y, payload }: any) {
           key={i}
           x={0}
           y={0}
-          dy={14 + i * 13}
+          dy={size + i * (size * 1.15)}
           textAnchor="middle"
-          fontSize={12}
+          fontSize={size}
           className="chart-axis-label"
         >
           {line}
@@ -79,13 +84,14 @@ function WrappedTick({ x, y, payload }: any) {
 // Número contador acima de cada barra (estilo Mentimeter). A cor adapta ao
 // tema via classe `.bar-count` (ver index.css).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function CountLabel({ x, y, width, value }: any) {
+function CountLabel({ x, y, width, value, fontSize }: any) {
+  const size = (Number(fontSize) || DEFAULT_LABEL_SIZE) * 1.5
   return (
     <text
       x={x + width / 2}
       y={y - 10}
       textAnchor="middle"
-      fontSize={24}
+      fontSize={size}
       fontWeight={700}
       className="bar-count"
     >
@@ -94,17 +100,19 @@ function CountLabel({ x, y, width, value }: any) {
   )
 }
 
-export function BarChartView({ data }: BarChartViewProps) {
+export function BarChartView({ data, labelFontSize }: BarChartViewProps) {
+  const size = labelFontSize ?? DEFAULT_LABEL_SIZE
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 40, right: 16, left: 16, bottom: 8 }}>
+      <BarChart data={data} margin={{ top: size * 2.5, right: 16, left: 16, bottom: 8 }}>
         <XAxis
           dataKey="label"
-          tick={<WrappedTick />}
+          tick={<WrappedTick fontSize={size} />}
           tickLine={false}
           axisLine={false}
           interval={0}
-          height={78}
+          // Altura reservada para até 4 linhas de rótulo no tamanho escolhido.
+          height={Math.round(size * 4.9)}
         />
         {/* Eixo de valores oculto: mantém a escala das barras, sem exibir. */}
         <YAxis hide domain={[0, 'dataMax']} />
@@ -113,7 +121,7 @@ export function BarChartView({ data }: BarChartViewProps) {
           formatter={(value: unknown) => [`${value as number} voto(s)`, 'Votos']}
         />
         <Bar dataKey="votes" radius={[8, 8, 0, 0]} isAnimationActive={false}>
-          <LabelList dataKey="votes" content={<CountLabel />} />
+          <LabelList dataKey="votes" content={<CountLabel fontSize={size} />} />
           {data.map((entry, index) => (
             <Cell key={entry.id} fill={colorAt(index)} />
           ))}

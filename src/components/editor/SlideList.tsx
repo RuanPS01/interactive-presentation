@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, Trash2 } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
 import { SLIDE_TYPE_LABELS } from '../../utils/slideFactory'
 import { SLIDE_TYPE_ICONS } from './slideTypeIcons'
@@ -24,6 +24,8 @@ export function SlideList() {
     <ol className="space-y-2">
       {slides.map((slide, index) => {
         const Icon = SLIDE_TYPE_ICONS[slide.type]
+        // O gabarito fica preso ao seu quiz: não se move sozinho na lista.
+        const linked = slide.type === 'answer'
         return (
         <li key={slide.id}>
           <div
@@ -32,6 +34,7 @@ export function SlideList() {
               index === selectedIndex
                 ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
                 : 'border-neutral-200 bg-white hover:border-blue-300 dark:border-neutral-800 dark:bg-neutral-900',
+              linked && 'ml-3',
             )}
           >
             <button
@@ -44,7 +47,8 @@ export function SlideList() {
                 <span className="block truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
                   {slide.title || SLIDE_TYPE_LABELS[slide.type]}
                 </span>
-                <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {linked && <Link2 size={12} />}
                   {index + 1}. {SLIDE_TYPE_LABELS[slide.type]}
                 </span>
               </span>
@@ -53,7 +57,7 @@ export function SlideList() {
               <button
                 type="button"
                 aria-label="Mover para cima"
-                disabled={index === 0}
+                disabled={index === 0 || linked}
                 onClick={() => moveSlide(index, index - 1)}
                 className="px-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30 dark:hover:text-neutral-100"
               >
@@ -62,7 +66,7 @@ export function SlideList() {
               <button
                 type="button"
                 aria-label="Mover para baixo"
-                disabled={index === slides.length - 1}
+                disabled={index === slides.length - 1 || linked}
                 onClick={() => moveSlide(index, index + 1)}
                 className="px-1 text-neutral-400 hover:text-neutral-700 disabled:opacity-30 dark:hover:text-neutral-100"
               >
@@ -72,6 +76,11 @@ export function SlideList() {
             <button
               type="button"
               aria-label="Remover slide"
+              title={
+                linked
+                  ? 'Remover o slide de resposta (desliga a revelação na pergunta)'
+                  : 'Remover slide'
+              }
               onClick={() => removeSlide(slide.id)}
               className="px-1 text-neutral-400 hover:text-red-600"
             >

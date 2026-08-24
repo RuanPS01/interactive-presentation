@@ -10,7 +10,8 @@ rules_version = '2';
 //    (recarregar a página / trocar de navegador) e vira o dono; a plateia,
 //    que só tem o código, não consegue apresentar.
 //  - Só o dono atual da sala altera/exclui a sala.
-//  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta.
+//  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta e o
+//    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -43,6 +44,16 @@ service cloud.firestore {
           && request.resource.data.token == resource.data.token
           && request.resource.data.ownerUid == request.auth.uid;
         allow delete: if false;
+      }
+
+      // Presença: um doc por participante (id = uid). Serve para o apresentador
+      // saber quantas pessoas estão na sala, mesmo antes de qualquer resposta.
+      match /participants/{participantUid} {
+        allow read: if true;
+        allow create, update: if isSignedIn()
+          && participantUid == request.auth.uid
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if isSignedIn() && participantUid == request.auth.uid;
       }
 
       match /responses/{responseId} {
