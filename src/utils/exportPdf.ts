@@ -1,22 +1,20 @@
 import type { jsPDF } from 'jspdf'
 import type {
   ChoiceSlide,
-  PresentationSettings,
   QuizSlide,
   ResponseDoc,
   Room,
   Slide,
   TextSlide,
 } from '../types/presentation'
+import { isInteractiveSlide } from '../types/presentation'
 import {
   aggregateChoices,
   aggregateWords,
   answeredCount,
-  namedResponses,
   totalVotes,
 } from './aggregate'
 import { SLIDE_TYPE_LABELS } from './slideFactory'
-import { resolveSlideSettings, withDefaults } from './settings'
 import { CHART_COLORS } from '../components/charts/palette'
 
 const MARGIN = 48
@@ -50,7 +48,6 @@ export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Pr
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
-  const settings = withDefaults(room.settings)
 
   drawCover(doc, room, responses, W)
 
@@ -61,16 +58,14 @@ export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Pr
   pages.forEach((slide, i) => {
     doc.addPage()
     const slideResponses = responses.filter((r) => r.slideId === slide.id)
-    drawSlidePage(
-      doc,
-      slide,
-      slideResponses,
-      i + 1,
-      pages.length,
-      W,
-      H,
-      resolveSlideSettings(settings, slide),
-    )
+    drawSlidePage(doc, slide, slideResponses, i + 1, pages.length, W, H)
+
+    // Página seguinte: quem respondeu o quê, em tabela. Só para slides que
+    // recebem resposta e que tenham pelo menos uma.
+    if (isInteractiveSlide(slide) && slideResponses.length > 0) {
+      doc.addPage()
+      drawResponsesTable(doc, slide, slideResponses, i + 1, pages.length, W, H)
+    }
   })
 
   doc.save(`${slugify(room.title) || 'apresentacao'}-resultados.pdf`)
@@ -106,7 +101,6 @@ function drawSlidePage(
   count: number,
   W: number,
   H: number,
-  settings: PresentationSettings,
 ): void {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
@@ -125,12 +119,10 @@ function drawSlidePage(
   const contentTop = MARGIN + 26 + titleLines.length * 22 + 24
   doc.setFont('helvetica', 'normal')
 
-  let bottom = contentTop
-
   switch (slide.type) {
     case 'bar':
     case 'pie':
-      bottom = drawChoice(doc, slide, responses, contentTop, W, H)
+      drawChoice(doc, slide, responses, contentTop, W, H)
       drawFooter(
         doc,
         `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
@@ -138,7 +130,7 @@ function drawSlidePage(
       )
       break
     case 'quiz':
-      bottom = drawChoice(doc, slide, responses, contentTop, W, H, slide.correctOptionIds)
+      drawChoice(doc, slide, responses, contentTop, W, H, slide.correctOptionIds)
       drawFooter(
         doc,
         `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
@@ -147,7 +139,7 @@ function drawSlidePage(
       break
     case 'wordcloud': {
       const total = aggregateWords(responses).reduce((s, w) => s + w.value, 0)
-      bottom = drawWordCloud(doc, responses, contentTop, W, H)
+      drawWordCloud(doc, responses, contentTop, W, H)
       drawFooter(doc, `${answeredCount(responses)} responderam · ${total} resposta(s)`, H)
       break
     }
@@ -157,10 +149,6 @@ function drawSlidePage(
     case 'answer':
       // Filtrado antes de chegar aqui (ver `exportResultsPdf`).
       return
-  }
-
-  if (settings.identifyResponses) {
-    drawNames(doc, slide, responses, bottom + 16, W, H)
   }
 }
 
@@ -277,45 +265,157 @@ function drawWordCloud(
   return y + lineMax * 0.4 + 12
 }
 
-/** Lista "Nome: resposta" quando a sala identifica quem respondeu. */
-function drawNames(
+interface TableRow {
+  participante: string
+  resposta: string
+  /** Só em perguntas com gabarito. */
+  resultado?: string
+}
+
+const ROW_PADDING = 6
+const LINE_H = 13
+const HEADER_H = 24
+
+/**
+ * Monta as linhas da tabela de respostas.
+ *
+ * Quando a sala pediu o nome, cada linha é identificada por ele. Sem nome, cai
+ * para "Participante N" — numerado pela ordem em que as respostas chegaram,
+ * para a tabela continuar útil (dá para ver o padrão individual) sem inventar
+ * uma identidade que ninguém informou.
+ */
+function buildRows(slide: Slide, responses: ResponseDoc[]): TableRow[] {
+  const labels = new Map<string, string>()
+  if ('options' in slide) {
+    for (const option of slide.options) labels.set(option.id, option.label)
+  }
+  const correct = slide.type === 'quiz' ? new Set(slide.correctOptionIds) : null
+
+  const porChegada = [...responses].sort((a, b) => a.createdAt - b.createdAt)
+  const numero = new Map(porChegada.map((r, i) => [r.participantUid, i + 1]))
+
+  const rows = porChegada.map((r) => {
+    const respostas = r.value.map((v) => labels.get(v) ?? v).filter(Boolean)
+    const nome = r.participantName?.trim()
+    const row: TableRow = {
+      participante: nome || `Participante ${numero.get(r.participantUid)}`,
+      resposta: respostas.length > 0 ? respostas.join(', ') : '—',
+    }
+    if (correct && correct.size > 0) {
+      const escolhidas = new Set(r.value)
+      const acertou =
+        escolhidas.size === correct.size && [...correct].every((id) => escolhidas.has(id))
+      row.resultado = acertou ? 'Correta' : 'Incorreta'
+    }
+    return row
+  })
+
+  // Com nomes, a ordem alfabética facilita procurar alguém na lista.
+  const temNomes = responses.some((r) => r.participantName?.trim())
+  return temNomes
+    ? rows.sort((a, b) => a.participante.localeCompare(b.participante, 'pt-BR'))
+    : rows
+}
+
+/**
+ * Página com a tabela "quem respondeu o quê", logo depois da página do slide.
+ * Quebra em quantas páginas forem necessárias, repetindo o cabeçalho.
+ */
+function drawResponsesTable(
   doc: jsPDF,
   slide: Slide,
   responses: ResponseDoc[],
-  top: number,
+  index: number,
+  count: number,
   W: number,
   H: number,
 ): void {
-  const named = namedResponses(responses, slide)
-  if (named.length === 0) return
+  const rows = buildRows(slide, responses)
+  const temResultado = rows.some((r) => r.resultado !== undefined)
+  const trackW = W - 2 * MARGIN
 
-  let y = top
-  if (y > H - MARGIN - 40) {
-    doc.addPage()
-    y = MARGIN
+  // Larguras: nome, resposta e (opcional) acerto.
+  const colNome = 150
+  const colResultado = temResultado ? 80 : 0
+  const colResposta = trackW - colNome - colResultado
+
+  let y = MARGIN
+
+  function drawTitle(): void {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.setTextColor(140, 140, 140)
+    doc.text(`Slide ${index}/${count} · Respostas por participante`, MARGIN, y)
+    y += 22
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(14)
+    doc.setTextColor(20, 20, 20)
+    const titulo = doc.splitTextToSize(
+      slide.title || SLIDE_TYPE_LABELS[slide.type],
+      trackW,
+    )
+    doc.text(titulo, MARGIN, y)
+    y += titulo.length * 17 + 14
   }
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(60, 60, 60)
-  doc.text('Respostas por participante', MARGIN, y)
-  y += 16
+  function drawHeader(): void {
+    doc.setFillColor(37, 99, 235)
+    doc.rect(MARGIN, y, trackW, HEADER_H, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(255, 255, 255)
+    doc.text('Participante', MARGIN + ROW_PADDING, y + 16)
+    doc.text('Resposta', MARGIN + colNome + ROW_PADDING, y + 16)
+    if (temResultado) {
+      doc.text('Resultado', MARGIN + colNome + colResposta + ROW_PADDING, y + 16)
+    }
+    y += HEADER_H
+  }
+
+  drawTitle()
+  drawHeader()
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
-  doc.setTextColor(40, 40, 40)
-  for (const r of named) {
-    const lines = doc.splitTextToSize(
-      `${r.name}: ${r.answers.join(', ')}`,
-      W - 2 * MARGIN,
-    )
-    if (y + lines.length * 13 > H - MARGIN - 20) {
+
+  rows.forEach((row, i) => {
+    const nomeLines = doc.splitTextToSize(row.participante, colNome - ROW_PADDING * 2)
+    const respLines = doc.splitTextToSize(row.resposta, colResposta - ROW_PADDING * 2)
+    const rowH = Math.max(nomeLines.length, respLines.length) * LINE_H + ROW_PADDING * 2
+
+    if (y + rowH > H - MARGIN) {
       doc.addPage()
       y = MARGIN
+      drawHeader()
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
     }
-    doc.text(lines, MARGIN, y)
-    y += lines.length * 13 + 2
-  }
+
+    // Zebra: facilita seguir a linha em tabelas longas.
+    if (i % 2 === 1) {
+      doc.setFillColor(245, 245, 245)
+      doc.rect(MARGIN, y, trackW, rowH, 'F')
+    }
+
+    const textoY = y + ROW_PADDING + 10
+    doc.setTextColor(30, 30, 30)
+    doc.text(nomeLines, MARGIN + ROW_PADDING, textoY)
+    doc.text(respLines, MARGIN + colNome + ROW_PADDING, textoY)
+
+    if (row.resultado) {
+      if (row.resultado === 'Correta') doc.setTextColor(21, 128, 61)
+      else doc.setTextColor(180, 83, 9)
+      doc.text(row.resultado, MARGIN + colNome + colResposta + ROW_PADDING, textoY)
+    }
+
+    y += rowH
+  })
+
+  doc.setDrawColor(225, 225, 225)
+  doc.line(MARGIN, y, MARGIN + trackW, y)
+
+  drawFooter(doc, `${rows.length} participante(s) responderam este slide`, H)
 }
 
 function drawText(doc: jsPDF, slide: TextSlide, top: number, W: number): void {

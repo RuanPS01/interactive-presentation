@@ -35,9 +35,26 @@ Estrutura:
    - `wordcloud`: os textos enviados, com tamanho proporcional à frequência;
    - `text`: o conteúdo, respeitando o alinhamento;
    - `answer`: **não vira página** — a página da pergunta já traz o gabarito.
-3. **Respostas por participante**, quando a identificação está ligada naquele
-   slide.
-4. **Rodapé** com “N responderam · M voto(s)”.
+3. **Uma página de tabela logo depois de cada slide interativo que recebeu
+   respostas**, com o que cada pessoa respondeu:
+
+   | Participante | Resposta | Resultado |
+   | --- | --- | --- |
+   | Ana Paula | Lista | Correta |
+   | Bruno | Conjunto | Incorreta |
+
+   - A coluna **Resultado** só aparece em perguntas (`quiz`) com gabarito.
+   - Com nomes coletados, as linhas vêm em **ordem alfabética**; sem nomes, a
+     tabela cai para **“Participante N”**, numerado pela ordem de chegada das
+     respostas — assim a página continua útil sem inventar uma identidade que
+     ninguém informou.
+   - Tabelas longas quebram em várias páginas, **repetindo o cabeçalho**.
+4. **Rodapé** com “N responderam · M voto(s)” na página do slide, e com o total
+   de participantes na página da tabela.
+
+> A tabela sai no relatório mesmo com a identificação desligada nas opções.
+> Essa opção controla o que aparece **no projetor**, à vista da plateia; o PDF é
+> o material do apresentador.
 
 Quando é gerado:
 

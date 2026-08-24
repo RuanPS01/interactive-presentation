@@ -77,9 +77,15 @@ pizza quando as opções são mutuamente exclusivas.
 
 Formato de **pergunta e resposta**. As alternativas aparecem grandes no centro
 da tela do apresentador (com letras A, B, C…) e também na tela dos
-participantes — **sem gráfico e sem distribuição por alternativa**, para não
-entregar a resposta enquanto a pergunta está no ar. O rodapé mostra apenas
-quantas pessoas já votaram.
+participantes — **sem gráfico**.
+
+Por padrão a distribuição fica **oculta**, para não entregar a resposta enquanto
+a pergunta está no ar: o rodapé mostra só quantas pessoas já votaram. Ligando
+**"Mostrar as respostas dos participantes na tela do apresentador"**
+(`showResponses`), cada alternativa passa a exibir votos e porcentagem ao vivo —
+e, se a sala identificar as respostas, a lista de nomes aparece junto. Com a
+opção desligada essa lista fica suprimida mesmo com a identificação ativa, já
+que mostrar "Ana: Lista" revelaria a resposta do mesmo jeito.
 
 No editor ([`QuizConfig`](../src/components/editor/QuizConfig.tsx)) cada
 alternativa tem um marcador de “correta” ao lado: caixa de seleção quando

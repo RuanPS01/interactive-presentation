@@ -62,6 +62,7 @@ export const slideSchema = z.discriminatedUnion('type', [
     allowMultiple: z.boolean(),
     correctOptionIds: z.array(z.string()).default([]),
     revealAnswer: z.boolean().default(false),
+    showResponses: z.boolean().default(false),
   }),
   z.object({
     ...baseFields,
