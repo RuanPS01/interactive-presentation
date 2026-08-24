@@ -120,23 +120,38 @@ Scripts:
 | `npm run typecheck` | Apenas checagem de tipos |
 | `npm run lint` | ESLint |
 
-## Deploy no GitHub Pages
+## Deploy
+
+A action [`deploy.yml`](.github/workflows/deploy.yml) faz duas coisas a cada push
+na `main`: **publica as regras do Firestore** (quando o `firestore.rules` muda) e
+**publica o site no GitHub Pages** — nessa ordem, para o app nunca ir ao ar antes
+das regras de que ele depende.
 
 1. **Suba o projeto** para um repositório no GitHub.
    - O nome do repositório define o caminho da URL. O workflow ajusta o `base`
      automaticamente para `"/<nome-do-repo>/"` (via `VITE_BASE`).
 2. **Settings → Secrets and variables → Actions → New repository secret** e crie:
    `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`,
-   `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`.
+   `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`,
+   `VITE_FIREBASE_APP_ID` e `FIREBASE_SERVICE_ACCOUNT`.
+   - `FIREBASE_SERVICE_ACCOUNT` é o **JSON de uma conta de serviço** com os papéis
+     *Firebase Rules Admin* e *Firebase Viewer* no projeto — é ela que publica as
+     regras. Passo a passo em
+     [docs/11 — Desenvolvimento](docs/11-desenvolvimento.md#conta-de-serviço-para-as-regras).
+   - Sem essa secret o site continua sendo publicado normalmente; só as regras
+     ficam por sua conta no console do Firebase.
 3. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-4. **Faça push na branch `main`** (ou rode o workflow manualmente). A action
-   [`deploy.yml`](.github/workflows/deploy.yml) faz build e publica em
+4. **Faça push na branch `main`** (ou rode o workflow manualmente). O site sai em
    `https://<usuario>.github.io/<nome-do-repo>/`.
 5. Em **Authentication → Settings → Domínios autorizados**, adicione
    `SEU-USUARIO.github.io` para o login anônimo funcionar no domínio publicado.
 
 > Como o app usa `HashRouter`, os links diretos (ex.: `.../#/room/ABC123`) funcionam
 > no GitHub Pages sem configuração extra de fallback.
+
+> As chaves `VITE_FIREBASE_*` são identificadores públicos do projeto. Já o JSON em
+> `FIREBASE_SERVICE_ACCOUNT` **é um segredo de verdade**: ele autoriza publicar
+> regras no seu projeto do Firebase.
 
 ## Importar / Exportar
 

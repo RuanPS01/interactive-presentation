@@ -100,8 +100,10 @@ dispositivo.
 
 ## Regras de segurança
 
-[`firestore.rules`](../firestore.rules) — publique-as no console ou com
-`firebase deploy --only firestore:rules`.
+[`firestore.rules`](../firestore.rules) — a pipeline as publica sozinha sempre
+que o arquivo muda (job `regras-firestore`, ver
+[02](02-arquitetura.md#deploy)); dá para publicá-las à mão no console ou com
+`npx firebase-tools deploy --only firestore:rules --project <id>`.
 
 | Caminho | Leitura | Escrita |
 | --- | --- | --- |

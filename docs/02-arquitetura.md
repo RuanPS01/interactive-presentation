@@ -101,10 +101,29 @@ O `base` do Vite precisa bater com o caminho de publicação. O padrão é
 
 ## Deploy
 
-`push` na `main` dispara [`deploy.yml`](../.github/workflows/deploy.yml):
-`npm ci` → `npm run build` (com os secrets `VITE_FIREBASE_*` e o `VITE_BASE`) →
-publicação do `dist/` no GitHub Pages.
+`push` na `main` dispara [`deploy.yml`](../.github/workflows/deploy.yml), com
+dois alvos em paralelo e uma publicação que espera os dois:
+
+```
+build (npm ci + npm run build + artefato) ──┐
+                                            ├──> deploy (GitHub Pages)
+regras-firestore (firebase deploy) ─────────┘
+```
+
+- **`build`** compila o app com os secrets `VITE_FIREBASE_*` e o `VITE_BASE`.
+- **`regras-firestore`** publica o [`firestore.rules`](../firestore.rules) no
+  projeto do Firebase, mas **só quando esse arquivo muda** (ou no disparo
+  manual) — cada publicação cria um *ruleset* novo no projeto.
+- **`deploy`** só roda depois dos dois: assim uma versão do app que depende de
+  uma coleção recém-liberada nunca vai ao ar antes das regras que a permitem.
+
+Sem a secret `FIREBASE_SERVICE_ACCOUNT`, o job das regras emite um aviso e
+termina com sucesso — o Pages continua publicando normalmente. Detalhes de
+configuração e papéis da conta de serviço em
+[11 — Desenvolvimento](11-desenvolvimento.md#pipeline-de-deploy).
 
 As chaves `VITE_FIREBASE_*` são **identificadores públicos** do projeto, não
 segredos: quem protege os dados são as
-[regras do Firestore](07-tempo-real-e-comunicacao.md#regras-de-segurança).
+[regras do Firestore](07-tempo-real-e-comunicacao.md#regras-de-segurança). Já o
+JSON em `FIREBASE_SERVICE_ACCOUNT` é um segredo de verdade — ele autoriza
+publicar regras no projeto.

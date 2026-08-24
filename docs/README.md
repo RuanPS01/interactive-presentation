@@ -34,5 +34,6 @@ atualize o documento correspondente:
 | `src/types/presentation.ts` | [04](04-modelo-de-dados.md) e [05](05-tipos-de-slide.md) |
 | `src/utils/validation.ts` | [04](04-modelo-de-dados.md), [10](10-exportacoes.md) e `src/utils/aiPrompt.ts` |
 | `src/utils/settings.ts` | [06](06-configuracoes.md) |
-| `firestore.rules` | [07](07-tempo-real-e-comunicacao.md) |
+| `firestore.rules` | [07](07-tempo-real-e-comunicacao.md) (e a pipeline republica sozinha) |
+| `.github/workflows/deploy.yml` | [02](02-arquitetura.md) e [11](11-desenvolvimento.md) |
 | Novo componente/hook | [03](03-estrutura-de-pastas.md) e [08](08-componentes.md) |
