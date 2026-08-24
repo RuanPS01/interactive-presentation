@@ -117,15 +117,21 @@ regras entram antes do código.
 No **Google Cloud Console** do mesmo projeto (IAM e Admin → Contas de serviço):
 
 1. **Criar conta de serviço** (ex.: `github-actions-regras`).
-2. Conceder os papéis:
+2. Conceder os **três** papéis:
    - **Firebase Rules Admin** (`roles/firebaserules.admin`) — cria e publica os
      rulesets;
    - **Firebase Viewer** (`roles/firebase.viewer`) — a CLI lê o projeto antes de
-     publicar.
-   - Se o deploy reclamar da Service Usage API, acrescente **Service Usage
-     Consumer** (`roles/serviceusage.serviceUsageConsumer`).
-   - Alternativa mais simples e mais permissiva: um único **Firebase Admin**
-     (`roles/firebase.admin`).
+     publicar;
+   - **Service Usage Consumer** (`roles/serviceusage.serviceUsageConsumer`) —
+     antes de publicar, a CLI verifica se a API `firestore.googleapis.com` está
+     ativa, e essa checagem exige `serviceusage.services.get`. Sem este papel o
+     deploy falha com `HTTP Error: 403, Permission denied to get service`.
+
+   Os três podem ser trocados por um único **Firebase Admin**
+   (`roles/firebase.admin`), mais simples de conceder e bem mais permissivo.
+
+   Alterações de IAM levam um ou dois minutos para propagar; se o job falhar
+   logo depois de conceder um papel, reexecute-o antes de investigar.
 3. Na aba **Chaves**, **Adicionar chave → Criar nova chave → JSON**.
 4. Colar o **conteúdo inteiro do JSON** na secret `FIREBASE_SERVICE_ACCOUNT`.
 
@@ -169,7 +175,8 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 | Página em branco após o deploy | `base` não bate com o caminho do Pages — confira o `VITE_BASE` no workflow |
 | Login recusado no domínio publicado | Adicione o domínio em Authentication → Settings → Domínios autorizados |
 | Contagem de participantes parada em zero | Regras antigas, sem a seção `participants/{participantUid}` — republique o `firestore.rules` (o job `regras-firestore` faz isso quando o arquivo muda) |
-| Job `regras-firestore` falha com `PERMISSION_DENIED` | A conta de serviço não tem **Firebase Rules Admin** / **Firebase Viewer** no projeto |
+| `403, Permission denied to get service [firestore.googleapis.com]` | Falta o papel **Service Usage Consumer** na conta de serviço |
+| Job `regras-firestore` falha com `PERMISSION_DENIED` ao publicar | A conta de serviço não tem **Firebase Rules Admin** / **Firebase Viewer** no projeto |
 | Job `regras-firestore` falha com erro de credencial | A secret `FIREBASE_SERVICE_ACCOUNT` não contém o JSON inteiro (inclusive as chaves `{}`) |
 | Aviso "Credenciais ausentes" no workflow | Falta `FIREBASE_SERVICE_ACCOUNT` — o Pages publica assim mesmo, mas as regras não sobem |
 | Link curto não aparece em desenvolvimento | Esperado: o encurtador recusa `localhost`; use o link completo |

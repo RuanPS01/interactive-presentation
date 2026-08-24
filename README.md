@@ -135,8 +135,8 @@ das regras de que ele depende.
    `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`,
    `VITE_FIREBASE_APP_ID` e `FIREBASE_SERVICE_ACCOUNT`.
    - `FIREBASE_SERVICE_ACCOUNT` é o **JSON de uma conta de serviço** com os papéis
-     *Firebase Rules Admin* e *Firebase Viewer* no projeto — é ela que publica as
-     regras. Passo a passo em
+     *Firebase Rules Admin*, *Firebase Viewer* e *Service Usage Consumer* no
+     projeto — é ela que publica as regras. Passo a passo em
      [docs/11 — Desenvolvimento](docs/11-desenvolvimento.md#conta-de-serviço-para-as-regras).
    - Sem essa secret o site continua sendo publicado normalmente; só as regras
      ficam por sua conta no console do Firebase.
