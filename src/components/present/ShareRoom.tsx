@@ -1,6 +1,11 @@
-import { Check, Copy, Maximize2, X } from 'lucide-react'
+import { Check, Copy, Link2, Maximize2, RefreshCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import QRCode from 'react-qr-code'
+import {
+  displayShortUrl,
+  getCachedShortUrl,
+  shortenUrl,
+} from '../../lib/shortUrl'
 import { Button } from '../ui/Button'
 
 interface ShareRoomProps {
@@ -15,11 +20,15 @@ const QR_BG = '#ffffff'
 
 /**
  * Miniatura do QR Code da sala na barra do apresentador. Clicar abre um modal
- * com o QR ampliado, o código da sala e o link de entrada.
+ * com o QR ampliado, o código da sala e o link de entrada — em versão curta,
+ * grande o suficiente para a plateia digitar do fundo da sala.
  */
 export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [shortUrl, setShortUrl] = useState<string | null>(() => getCachedShortUrl(joinUrl))
+  const [shortening, setShortening] = useState(false)
+  const [shortError, setShortError] = useState<string | null>(null)
 
   // Fecha o modal com Esc.
   useEffect(() => {
@@ -31,14 +40,47 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
 
+  // Encurta ao abrir o modal (só uma vez por link: o resultado fica em cache).
+  useEffect(() => {
+    if (!open || shortUrl || shortening) return
+    let cancelled = false
+    setShortening(true)
+    setShortError(null)
+    shortenUrl(joinUrl)
+      .then((short) => {
+        if (!cancelled) setShortUrl(short)
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setShortError(e.message)
+      })
+      .finally(() => {
+        if (!cancelled) setShortening(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, joinUrl, shortUrl, shortening])
+
+  // Link exibido em destaque: o curto quando existir, senão o completo.
+  const highlighted = shortUrl ?? joinUrl
+
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(joinUrl)
+      await navigator.clipboard.writeText(highlighted)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
       /* clipboard indisponível: o usuário pode copiar manualmente */
     }
+  }
+
+  function retryShorten() {
+    setShortError(null)
+    setShortening(true)
+    shortenUrl(joinUrl)
+      .then(setShortUrl)
+      .catch((e: Error) => setShortError(e.message))
+      .finally(() => setShortening(false))
   }
 
   return (
@@ -82,8 +124,8 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
               Aponte a câmera do celular para entrar
             </p>
 
-            {/* QR o maior possível dentro da tela (limitado por largura e altura). */}
-            <div className="my-6 w-[min(88vw,60vh,32rem)] rounded-xl bg-white p-4">
+            {/* O QR codifica sempre a URL COMPLETA: não depende do encurtador. */}
+            <div className="my-6 w-[min(88vw,52vh,30rem)] rounded-xl bg-white p-4">
               <QRCode
                 value={joinUrl}
                 size={512}
@@ -93,21 +135,39 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
               />
             </div>
 
+            {/* Link curto em texto grande, para quem prefere digitar. */}
+            <div className="mb-6 w-full">
+              <p className="text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                {shortUrl ? 'Link curto' : 'Link de entrada'}
+              </p>
+              <p className="break-all text-3xl font-extrabold text-neutral-900 dark:text-neutral-50 md:text-5xl">
+                {shortening && !shortUrl ? 'encurtando…' : displayShortUrl(highlighted)}
+              </p>
+              {shortError && (
+                <p className="mt-2 flex items-center justify-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+                  Não foi possível encurtar o link agora.
+                  <Button variant="ghost" size="sm" onClick={retryShorten} disabled={shortening}>
+                    <RefreshCw size={14} /> Tentar de novo
+                  </Button>
+                </p>
+              )}
+            </div>
+
             <div className="mb-6">
               <p className="text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
                 Código da sala
               </p>
-              <p className="text-6xl font-extrabold tracking-[0.25em] text-neutral-900 dark:text-neutral-50 md:text-7xl">
+              <p className="text-5xl font-extrabold tracking-[0.25em] text-neutral-900 dark:text-neutral-50 md:text-6xl">
                 {code}
               </p>
             </div>
 
             <div className="w-full max-w-2xl">
-              <p className="mb-1 text-left text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
-                Link de entrada
+              <p className="mb-1 flex items-center gap-1.5 text-left text-sm font-medium uppercase tracking-wide text-neutral-400 dark:text-neutral-500">
+                <Link2 size={14} /> Link completo
               </p>
               <div className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800">
-                <span className="flex-1 break-all text-left text-base text-neutral-700 dark:text-neutral-200 md:text-lg">
+                <span className="flex-1 break-all text-left text-sm text-neutral-700 dark:text-neutral-200 md:text-base">
                   {joinUrl}
                 </span>
                 <Button variant="secondary" onClick={() => void copyLink()}>

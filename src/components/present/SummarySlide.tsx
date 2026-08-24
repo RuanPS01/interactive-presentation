@@ -51,7 +51,12 @@ export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
               <span className="truncate">{slide.title || 'Sem título'}</span>
             </p>
             <div className="min-h-0 flex-1">
-              <Miniature slide={slide} responses={bySlide.get(slide.id) ?? []} />
+              <Miniature
+                slide={slide}
+                slides={room.slides}
+                responses={bySlide.get(slide.id) ?? []}
+                bySlide={bySlide}
+              />
             </div>
           </div>
         ))}
@@ -60,15 +65,46 @@ export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
   )
 }
 
+interface MiniatureProps {
+  slide: Slide
+  slides: Slide[]
+  responses: ResponseDoc[]
+  bySlide: Map<string, ResponseDoc[]>
+}
+
 /** Corpo do slide reduzido: reaproveita as mesmas views (responsivas). */
-function Miniature({ slide, responses }: { slide: Slide; responses: ResponseDoc[] }) {
+function Miniature({ slide, slides, responses, bySlide }: MiniatureProps) {
   switch (slide.type) {
     case 'wordcloud':
       return <WordCloudView words={aggregateWords(responses)} />
     case 'bar':
-      return <BarChartView data={aggregateChoices(responses, slide.options)} />
+      return (
+        <BarChartView data={aggregateChoices(responses, slide.options)} labelFontSize={11} />
+      )
     case 'pie':
-      return <PieChartView data={aggregateChoices(responses, slide.options)} />
+      return (
+        <PieChartView data={aggregateChoices(responses, slide.options)} labelFontSize={11} />
+      )
+    case 'quiz':
+      // Na miniatura o resumo cabe melhor como lista compacta de alternativas.
+      return (
+        <AnswerList
+          slide={slide}
+          responses={responses}
+          correctIds={slide.correctOptionIds}
+        />
+      )
+    case 'answer': {
+      const quiz = slides.find((s) => s.id === slide.quizSlideId)
+      if (quiz?.type !== 'quiz') return <Empty>Pergunta removida.</Empty>
+      return (
+        <AnswerList
+          slide={quiz}
+          responses={bySlide.get(quiz.id) ?? []}
+          correctIds={quiz.correctOptionIds}
+        />
+      )
+    }
     case 'text':
       return (
         <div className="h-full overflow-hidden">
@@ -78,4 +114,42 @@ function Miniature({ slide, responses }: { slide: Slide; responses: ResponseDoc[
         </div>
       )
   }
+}
+
+function AnswerList({
+  slide,
+  responses,
+  correctIds,
+}: {
+  slide: { options: { id: string; label: string }[] }
+  responses: ResponseDoc[]
+  correctIds: string[]
+}) {
+  const tallies = aggregateChoices(responses, slide.options)
+  const correct = new Set(correctIds)
+  return (
+    <ul className="h-full space-y-1 overflow-y-auto text-xs">
+      {tallies.map((t) => (
+        <li
+          key={t.id}
+          className={
+            correct.has(t.id)
+              ? 'flex justify-between gap-2 rounded bg-green-100 px-2 py-1 font-semibold text-green-900 dark:bg-green-950 dark:text-green-100'
+              : 'flex justify-between gap-2 rounded px-2 py-1 text-neutral-600 dark:text-neutral-300'
+          }
+        >
+          <span className="truncate">{t.label}</span>
+          <span className="shrink-0 tabular-nums">{t.votes}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex h-full items-center justify-center text-xs text-neutral-400">
+      {children}
+    </div>
+  )
 }

@@ -1,17 +1,14 @@
 import { useEditorStore } from '../../store/editorStore'
-import type { SlideType } from '../../types/presentation'
-import { SLIDE_TYPE_LABELS } from '../../utils/slideFactory'
+import { CREATABLE_SLIDE_TYPES, SLIDE_TYPE_LABELS } from '../../utils/slideFactory'
 import { SLIDE_TYPE_ICONS } from './slideTypeIcons'
 
-const TYPES: SlideType[] = ['wordcloud', 'bar', 'pie', 'text']
-
-/** Botões para adicionar um novo slide de cada um dos 4 tipos. */
+/** Botões para adicionar um novo slide de cada tipo criável manualmente. */
 export function AddSlideMenu() {
   const addSlide = useEditorStore((s) => s.addSlide)
 
   return (
     <div className="grid grid-cols-2 gap-2">
-      {TYPES.map((type) => {
+      {CREATABLE_SLIDE_TYPES.map((type) => {
         const Icon = SLIDE_TYPE_ICONS[type]
         return (
           <button

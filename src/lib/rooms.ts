@@ -7,8 +7,10 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
+import { withDefaults } from '../utils/settings'
 import type {
   Presentation,
+  PresentationSettings,
   Room,
   RoomStatus,
   Slide,
@@ -54,6 +56,9 @@ export async function createRoom(
     const token = generatePresenterToken()
     const room: Room = {
       ...presentation,
+      // O Firestore rejeita `undefined`: a sala sempre nasce com a configuração
+      // completa, mesmo que a apresentação importada não a traga.
+      settings: withDefaults(presentation.settings),
       creatorUid,
       currentSlideIndex: 0,
       status: 'live',
@@ -122,4 +127,12 @@ export async function setStatus(code: string, status: RoomStatus): Promise<void>
 /** Atualiza os slides de uma sala já criada (edição durante a apresentação). */
 export async function updateSlides(code: string, slides: Slide[]): Promise<void> {
   await updateDoc(roomRef(code), { slides, updatedAt: Date.now() })
+}
+
+/** Atualiza as opções globais de uma sala já criada. */
+export async function updateSettings(
+  code: string,
+  settings: PresentationSettings,
+): Promise<void> {
+  await updateDoc(roomRef(code), { settings, updatedAt: Date.now() })
 }

@@ -1,9 +1,14 @@
 import { ChevronLeft } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useThemeStore } from '../store/themeStore'
+import { joinRoom } from '../lib/participants'
+import { getParticipantName, saveParticipantName } from '../lib/participantName'
+import { resolveSlideSettings, withDefaults } from '../utils/settings'
 import { ParticipateView } from '../components/participate/ParticipateView'
+import { NamePrompt } from '../components/participate/NamePrompt'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
@@ -16,6 +21,34 @@ export function RoomPage() {
   const theme = useThemeStore((s) => s.theme)
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
+  // Nome lembrado deste dispositivo para esta sala (só usado se a sala pedir).
+  const [name, setName] = useState<string | null>(() =>
+    code ? getParticipantName(code) : null,
+  )
+
+  const settings = withDefaults(room?.settings)
+  const askName = settings.askName
+  const needsName = askName && !name
+  const ready = Boolean(uid && room && !needsName)
+
+  // Presença: entrar na sala já conta como participante, mesmo sem responder.
+  // A dependência é `roomExists` (e não `room`): o objeto da sala muda a cada
+  // snapshot do Firestore — inclusive quando o apresentador troca de slide — e
+  // isso faria cada participante reescrever a presença o tempo todo.
+  const roomExists = Boolean(room)
+  useEffect(() => {
+    if (!code || !uid || !roomExists || needsName) return
+    void joinRoom(code, uid, askName ? (name ?? undefined) : undefined).catch(() => {
+      /* falha de presença não impede participar */
+    })
+  }, [code, uid, roomExists, needsName, name, askName])
+
+  function confirmName(value: string) {
+    if (!code) return
+    saveParticipantName(code, value)
+    setName(value)
+  }
+
   const total = room?.slides.length ?? 0
   // O apresentador passou do último slide: apresentação encerrada (slide final).
   const finished = !!room && total > 0 && room.currentSlideIndex >= total
@@ -23,6 +56,7 @@ export function RoomPage() {
     room && total > 0 && room.currentSlideIndex < total
       ? room.slides[room.currentSlideIndex]
       : undefined
+  const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-6">
@@ -31,6 +65,11 @@ export function RoomPage() {
           <ChevronLeft size={16} /> Trocar sala
         </Button>
         <div className="flex items-center gap-3">
+          {name && (
+            <span className="max-w-[8rem] truncate text-sm text-neutral-500 dark:text-neutral-400">
+              {name}
+            </span>
+          )}
           <span className="text-sm text-neutral-500 dark:text-neutral-400">
             Sala <strong className="tracking-widest">{code}</strong>
           </span>
@@ -54,9 +93,11 @@ export function RoomPage() {
 
         {room && (
           <Card className="p-5">
-            <h1 className="mb-1 text-lg font-bold text-neutral-900 dark:text-neutral-50">
-              {room.title}
-            </h1>
+            {!needsName && (
+              <h1 className="mb-1 text-lg font-bold text-neutral-900 dark:text-neutral-50">
+                {room.title}
+              </h1>
+            )}
 
             {authError && (
               <p className="mb-3 text-sm text-red-600 dark:text-red-400">
@@ -68,13 +109,17 @@ export function RoomPage() {
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Conectando…</p>
             )}
 
-            {uid && !finished && !currentSlide && (
+            {uid && needsName && (
+              <NamePrompt roomTitle={room.title} onConfirm={confirmName} />
+            )}
+
+            {ready && !finished && !currentSlide && (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
                 Aguardando o apresentador iniciar…
               </p>
             )}
 
-            {uid && finished && (
+            {ready && finished && (
               <div className="py-4 text-center">
                 <p className="text-3xl">🎉</p>
                 <p className="mt-2 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
@@ -86,13 +131,16 @@ export function RoomPage() {
               </div>
             )}
 
-            {uid && !finished && currentSlide && code && (
+            {ready && !finished && currentSlide && code && uid && (
               // A `key` reinicia os controles quando o apresentador troca de slide.
               <ParticipateView
                 key={currentSlide.id}
                 code={code}
                 slide={currentSlide}
+                slides={room.slides}
                 participantUid={uid}
+                participantName={askName ? name : null}
+                settings={slideSettings}
               />
             )}
           </Card>

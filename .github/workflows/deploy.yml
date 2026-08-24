@@ -53,8 +53,99 @@ jobs:
         with:
           path: ./dist
 
+  # Publica as regras de segurança do Firestore (firestore.rules).
+  #
+  # O app depende das regras para funcionar: uma versão nova que usa uma coleção
+  # ainda não liberada falha com `permission-denied` em produção. Por isso a
+  # publicação no Pages espera este job — as regras entram antes do código.
+  #
+  # Só roda quando `firestore.rules` muda (ou no disparo manual): cada deploy
+  # cria um "ruleset" novo no projeto, e republicar regras idênticas a cada push
+  # só consumiria a cota à toa.
+  regras-firestore:
+    name: Publicar regras do Firestore
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Precisa do commit anterior para saber se as regras mudaram.
+          fetch-depth: 0
+
+      - name: Decidir se publica
+        id: verificar
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          ANTES: ${{ github.event.before }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ] || [ -z "$PROJECT_ID" ]; then
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Credenciais ausentes (FIREBASE_SERVICE_ACCOUNT e/ou VITE_FIREBASE_PROJECT_ID). As regras do Firestore NÃO foram publicadas; publique-as manualmente no console."
+            exit 0
+          fi
+
+          # Disparo manual publica sempre; útil para forçar uma republicação.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+            echo "Disparo manual: publicando as regras."
+            exit 0
+          fi
+
+          # `before` vem zerado no primeiro push de uma branch e pode apontar
+          # para um commit que sumiu depois de um force-push.
+          BASE_VALIDA=1
+          if [ -z "$ANTES" ] || [ "$ANTES" = "0000000000000000000000000000000000000000" ]; then
+            BASE_VALIDA=0
+          elif ! git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            BASE_VALIDA=0
+          fi
+
+          # Sem base de comparação confiável, publica por segurança.
+          if [ "$BASE_VALIDA" = "0" ]; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+            echo "Sem commit anterior para comparar: publicando as regras."
+            exit 0
+          fi
+
+          if git diff --name-only "$ANTES" "${{ github.sha }}" | grep -qx "firestore.rules"; then
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+            echo "firestore.rules mudou: publicando as regras."
+          else
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+            echo "firestore.rules inalterado: nada a publicar."
+          fi
+
+      - name: Configurar Node
+        if: steps.verificar.outputs.publicar == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Gravar credencial da conta de serviço
+        if: steps.verificar.outputs.publicar == 'true'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          # O arquivo fica no diretório temporário do runner, descartado ao fim
+          # do job; a CLI o lê por GOOGLE_APPLICATION_CREDENTIALS.
+          printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Publicar regras
+        if: steps.verificar.outputs.publicar == 'true'
+        env:
+          PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        # Só `firestore:rules`: incluir `firestore:indexes` faria a CLI apagar
+        # índices criados pelo console que não estejam versionados aqui.
+        run: >
+          npx --yes firebase-tools@15 deploy
+          --only firestore:rules
+          --project "$PROJECT_ID"
+          --non-interactive
+
   deploy:
-    needs: build
+    needs: [build, regras-firestore]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

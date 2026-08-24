@@ -16,6 +16,14 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Firebase CLI: cache local e a conta de serviço usada em deploys manuais.
+# O `.firebaserc` não é versionado de propósito — o id do projeto vai pela
+# secret VITE_FIREBASE_PROJECT_ID (ver .github/workflows/deploy.yml).
+.firebase/
+.firebaserc
+firebase-debug.log
+*service-account*.json
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

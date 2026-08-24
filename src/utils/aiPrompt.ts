@@ -15,25 +15,29 @@ FORMATO GERAL
 
 {
   "title": "Título da apresentação",
-  "slides": [ ...slides... ]
+  "slides": [ ...slides... ],
+  "settings": { ...opções globais (opcional)... }
 }
 
 - "title": texto livre (obrigatório).
 - "slides": lista de slides na ordem de apresentação (pode estar vazia, mas gere pelo menos 5).
+- "settings": opcional. Se omitido, a plataforma usa os padrões.
 
 CAMPOS COMUNS A TODO SLIDE
 
 - "id": identificador único no arquivo, texto não vazio (ex.: "s1", "s2").
-- "type": um de "wordcloud", "bar", "pie", "text".
+- "type": um de "wordcloud", "bar", "pie", "quiz", "answer", "text".
 - "title": título exibido no slide e para os participantes.
+- "overrides": opcional. Objeto com as mesmas chaves de "settings" (menos
+  "askName") para valer só neste slide. Omita se não precisar.
 
 TIPOS DE SLIDE
 
-1) "wordcloud" - nuvem de palavras. Os participantes enviam palavras pelo celular
-   e elas aparecem com tamanho proporcional à frequência. Use para perguntas
-   abertas e curtas.
+1) "wordcloud" - nuvem de palavras. Os participantes enviam textos curtos pelo
+   celular (uma palavra ou uma frase) e eles aparecem com tamanho proporcional à
+   frequência. Use para perguntas abertas.
    Campos adicionais:
-   - "wordLimitMode": "one" (uma palavra por pessoa), "range" (até "maxWords") ou
+   - "wordLimitMode": "one" (um envio por pessoa), "range" (até "maxWords") ou
      "unlimited" (sem limite).
    - "maxWords": número inteiro de 1 a 50. Obrigatório sempre; só tem efeito
      quando "wordLimitMode" é "range".
@@ -80,7 +84,35 @@ TIPOS DE SLIDE
      ]
    }
 
-4) "text" - slide de conteúdo, sem interação. Use para abertura, explicações e
+4) "quiz" - alternativas SEM gráfico. As alternativas aparecem grandes no centro
+   da tela do apresentador e na tela dos participantes. É o formato de pergunta e
+   resposta: nada de contagem enquanto a pergunta está no ar.
+   Campos adicionais:
+   - "options" e "allowMultiple": iguais aos de "bar".
+   - "correctOptionIds": lista com os "id" das alternativas corretas (pode ser
+     vazia, para perguntas sem gabarito). Com "allowMultiple": false, use no
+     máximo um id.
+   - "revealAnswer": true faz a plataforma manter automaticamente um slide
+     "answer" logo depois, revelando o gabarito.
+
+   {
+     "id": "s4",
+     "type": "quiz",
+     "title": "Qual estrutura garante ordem de inserção?",
+     "allowMultiple": false,
+     "correctOptionIds": ["s4o2"],
+     "revealAnswer": true,
+     "options": [
+       { "id": "s4o1", "label": "Conjunto" },
+       { "id": "s4o2", "label": "Lista" },
+       { "id": "s4o3", "label": "Dicionário" }
+     ]
+   }
+
+5) "answer" - slide de gabarito. NÃO gere este tipo: a plataforma cria e remove
+   sozinha os slides "answer" a partir do "revealAnswer" do "quiz".
+
+6) "text" - slide de conteúdo, sem interação. Use para abertura, explicações e
    transições entre perguntas.
    Campos adicionais:
    - "content": texto exibido. Use "\\n" para quebrar linha.
@@ -89,7 +121,7 @@ TIPOS DE SLIDE
      costumam ficar bem entre 48 e 72; parágrafos entre 28 e 40.
 
    {
-     "id": "s4",
+     "id": "s5",
      "type": "text",
      "title": "Boas-vindas",
      "content": "Vamos falar sobre dados\\ne como interpretá-los",
@@ -97,12 +129,32 @@ TIPOS DE SLIDE
      "fontSize": 56
    }
 
+OPÇÕES GLOBAIS ("settings")
+
+Todas opcionais; inclua apenas as que quiser mudar.
+- "allowChangeAnswer": booleano. true (padrão) deixa o participante apagar a
+  resposta e escolher outra.
+- "askName": booleano. true pede o nome antes de entrar na sala.
+- "identifyResponses": booleano. true mostra "Nome: resposta" nos slides e no
+  PDF. Só funciona com "askName": true.
+- "titleFontSize", "labelFontSize", "bodyFontSize": inteiros de 10 a 200 (px),
+  para título, rótulos e corpo dos slides.
+
+  "settings": {
+    "allowChangeAnswer": true,
+    "askName": false,
+    "identifyResponses": false,
+    "titleFontSize": 36,
+    "labelFontSize": 16,
+    "bodyFontSize": 24
+  }
+
 REGRAS
 
 - Use exatamente esses nomes de campo e esses valores permitidos. Qualquer campo
   extra ou faltando faz a importação falhar.
 - Números devem ser números JSON (sem aspas) e inteiros.
-- "allowMultiple" deve ser booleano (true/false, sem aspas).
+- "allowMultiple" e "revealAnswer" devem ser booleanos (true/false, sem aspas).
 - Todos os "id" de slides são diferentes entre si.
 - Escreva todo o conteúdo em português do Brasil.
 - Enunciados curtos e diretos; opções com no máximo 4 palavras.
@@ -112,6 +164,10 @@ EXEMPLO COMPLETO VÁLIDO
 
 {
   "title": "Introdução à Análise de Dados",
+  "settings": {
+    "titleFontSize": 40,
+    "bodyFontSize": 26
+  },
   "slides": [
     {
       "id": "s1",
@@ -142,18 +198,31 @@ EXEMPLO COMPLETO VÁLIDO
     },
     {
       "id": "s4",
-      "type": "bar",
-      "title": "Quais ferramentas você já usou?",
-      "allowMultiple": true,
+      "type": "quiz",
+      "title": "O que é uma mediana?",
+      "allowMultiple": false,
+      "correctOptionIds": ["s4o2"],
+      "revealAnswer": true,
       "options": [
-        { "id": "s4o1", "label": "Excel" },
-        { "id": "s4o2", "label": "Power BI" },
-        { "id": "s4o3", "label": "Python" },
-        { "id": "s4o4", "label": "SQL" }
+        { "id": "s4o1", "label": "A média dos valores" },
+        { "id": "s4o2", "label": "O valor central" },
+        { "id": "s4o3", "label": "O valor mais frequente" }
       ]
     },
     {
       "id": "s5",
+      "type": "bar",
+      "title": "Quais ferramentas você já usou?",
+      "allowMultiple": true,
+      "options": [
+        { "id": "s5o1", "label": "Excel" },
+        { "id": "s5o2", "label": "Power BI" },
+        { "id": "s5o3", "label": "Python" },
+        { "id": "s5o4", "label": "SQL" }
+      ]
+    },
+    {
+      "id": "s6",
       "type": "text",
       "title": "Encerramento",
       "content": "Obrigado pela participação",

@@ -1,31 +1,56 @@
 import { clsx } from 'clsx'
-import { Check } from 'lucide-react'
+import { Check, Eraser, Lock } from 'lucide-react'
 import { useState } from 'react'
-import { saveResponse } from '../../lib/responses'
-import type { ChoiceSlide } from '../../types/presentation'
+import { clearResponse, saveResponse } from '../../lib/responses'
+import type { ChoiceSlide, PresentationSettings } from '../../types/presentation'
+import { Button } from '../ui/Button'
 
 interface ChoiceInputProps {
   code: string
   slide: ChoiceSlide
   participantUid: string
+  participantName: string | null
   current: string[]
+  settings: PresentationSettings
 }
 
-/** Entrada de voto para gráficos de barras/pizza (radio ou checkbox). */
-export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInputProps) {
+/** Voto para barras, pizza e alternativas (radio ou checkbox). */
+export function ChoiceInput({
+  code,
+  slide,
+  participantUid,
+  participantName,
+  current,
+  settings,
+}: ChoiceInputProps) {
   const [busy, setBusy] = useState(false)
   const selected = new Set(current)
+  const hasAnswered = current.length > 0
+  const size = Math.min(settings.bodyFontSize, 22)
+
+  /**
+   * Sem permissão para trocar, a resposta é definitiva — mas o que fica travado
+   * depende do tipo de votação. Na escolha única, o primeiro toque encerra. Na
+   * múltipla escolha, travar tudo no primeiro toque impediria a pessoa de
+   * terminar a própria seleção: aqui o bloqueio é só para DESMARCAR o que já
+   * foi enviado; marcar novas opções continua liberado.
+   */
+  function isBlocked(optionId: string): boolean {
+    if (settings.allowChangeAnswer || !hasAnswered) return false
+    return slide.allowMultiple ? selected.has(optionId) : true
+  }
 
   async function persist(next: string[]) {
     setBusy(true)
     try {
-      await saveResponse(code, slide.id, participantUid, 'choice', next)
+      await saveResponse(code, slide.id, participantUid, 'choice', next, participantName)
     } finally {
       setBusy(false)
     }
   }
 
   async function toggle(optionId: string) {
+    if (isBlocked(optionId)) return
     if (slide.allowMultiple) {
       const next = new Set(selected)
       if (next.has(optionId)) next.delete(optionId)
@@ -37,9 +62,21 @@ export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInpu
     }
   }
 
+  async function clearVote() {
+    setBusy(true)
+    try {
+      await clearResponse(code, slide.id, participantUid)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+      <p
+        className="text-neutral-500 dark:text-neutral-400"
+        style={{ fontSize: `${settings.labelFontSize * 0.9}px` }}
+      >
         {slide.allowMultiple
           ? 'Você pode escolher mais de uma opção.'
           : 'Escolha uma opção.'}
@@ -53,15 +90,16 @@ export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInpu
               <button
                 type="button"
                 onClick={() => void toggle(option.id)}
-                disabled={busy}
+                disabled={busy || isBlocked(option.id)}
                 aria-pressed={isSelected}
                 className={clsx(
-                  'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-base transition',
+                  'flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition',
                   'disabled:opacity-60',
                   isSelected
                     ? 'border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100'
                     : 'border-neutral-300 bg-white hover:border-blue-300 dark:border-neutral-700 dark:bg-neutral-900',
                 )}
+                style={{ fontSize: `${size}px` }}
               >
                 <span
                   className={clsx(
@@ -74,17 +112,29 @@ export function ChoiceInput({ code, slide, participantUid, current }: ChoiceInpu
                 >
                   {isSelected && <Check size={14} strokeWidth={3} />}
                 </span>
-                <span>{option.label}</span>
+                <span className="min-w-0 break-words">{option.label}</span>
               </button>
             </li>
           )
         })}
       </ul>
 
-      {selected.size > 0 && (
-        <p className="flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
-          <Check size={16} strokeWidth={3} /> Voto registrado
-        </p>
+      {hasAnswered && (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
+            <Check size={16} strokeWidth={3} /> Voto registrado
+          </p>
+          {settings.allowChangeAnswer ? (
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => void clearVote()}>
+              <Eraser size={16} /> Limpar resposta
+            </Button>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-sm text-neutral-500 dark:text-neutral-400">
+              <Lock size={14} />
+              {slide.allowMultiple ? 'Não é possível desmarcar' : 'Não é possível trocar'}
+            </span>
+          )}
+        </div>
       )}
     </div>
   )

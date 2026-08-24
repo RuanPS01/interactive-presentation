@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FONT_SIZE_RANGE } from './settings'
 
 /** Schemas Zod usados para validar apresentações importadas via JSON. */
 
@@ -7,32 +8,69 @@ export const choiceOptionSchema = z.object({
   label: z.string(),
 })
 
+const fontSizeSchema = z
+  .number()
+  .int()
+  .min(FONT_SIZE_RANGE.min)
+  .max(FONT_SIZE_RANGE.max)
+
+/** Opções globais. Tudo opcional: o que faltar recebe o padrão na importação. */
+export const settingsSchema = z
+  .object({
+    allowChangeAnswer: z.boolean(),
+    askName: z.boolean(),
+    identifyResponses: z.boolean(),
+    titleFontSize: fontSizeSchema,
+    labelFontSize: fontSizeSchema,
+    bodyFontSize: fontSizeSchema,
+  })
+  .partial()
+
+/** Sobrescritas por slide (mesmas opções, sem `askName`). */
+export const overridesSchema = settingsSchema.omit({ askName: true })
+
+/** Campos comuns a todos os slides. */
+const baseFields = {
+  id: z.string().min(1),
+  title: z.string(),
+  overrides: overridesSchema.optional(),
+}
+
 export const slideSchema = z.discriminatedUnion('type', [
   z.object({
-    id: z.string().min(1),
+    ...baseFields,
     type: z.literal('wordcloud'),
-    title: z.string(),
     wordLimitMode: z.enum(['one', 'range', 'unlimited']),
     maxWords: z.number().int().min(1).max(50),
   }),
   z.object({
-    id: z.string().min(1),
+    ...baseFields,
     type: z.literal('bar'),
-    title: z.string(),
     options: z.array(choiceOptionSchema).min(1),
     allowMultiple: z.boolean(),
   }),
   z.object({
-    id: z.string().min(1),
+    ...baseFields,
     type: z.literal('pie'),
-    title: z.string(),
     options: z.array(choiceOptionSchema).min(1),
     allowMultiple: z.boolean(),
   }),
   z.object({
-    id: z.string().min(1),
+    ...baseFields,
+    type: z.literal('quiz'),
+    options: z.array(choiceOptionSchema).min(1),
+    allowMultiple: z.boolean(),
+    correctOptionIds: z.array(z.string()).default([]),
+    revealAnswer: z.boolean().default(false),
+  }),
+  z.object({
+    ...baseFields,
+    type: z.literal('answer'),
+    quizSlideId: z.string().min(1),
+  }),
+  z.object({
+    ...baseFields,
     type: z.literal('text'),
-    title: z.string(),
     content: z.string(),
     align: z.enum(['left', 'center', 'right']),
     fontSize: z.number().int().min(8).max(200),
@@ -42,6 +80,7 @@ export const slideSchema = z.discriminatedUnion('type', [
 export const presentationSchema = z.object({
   title: z.string(),
   slides: z.array(slideSchema),
+  settings: settingsSchema.optional(),
 })
 
 export type PresentationInput = z.infer<typeof presentationSchema>

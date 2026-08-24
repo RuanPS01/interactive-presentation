@@ -8,8 +8,10 @@ import { createRoom } from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { exportPresentation, importPresentationFromFile } from '../utils/importExport'
+import { resolveSlideSettings } from '../utils/settings'
 import { AddSlideMenu } from '../components/editor/AddSlideMenu'
 import { AiPromptButton } from '../components/editor/AiPromptButton'
+import { PresentationSettingsButton } from '../components/editor/PresentationSettingsButton'
 import { SlideList } from '../components/editor/SlideList'
 import { SlideEditor } from '../components/editor/SlideEditor'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
@@ -27,6 +29,7 @@ export function CreatePage() {
   const title = useEditorStore((s) => s.title)
   const setTitle = useEditorStore((s) => s.setTitle)
   const slides = useEditorStore((s) => s.slides)
+  const settings = useEditorStore((s) => s.settings)
   const selectedIndex = useEditorStore((s) => s.selectedIndex)
   const getPresentation = useEditorStore((s) => s.getPresentation)
   const loadPresentation = useEditorStore((s) => s.loadPresentation)
@@ -36,6 +39,7 @@ export function CreatePage() {
   const [error, setError] = useState<string | null>(null)
 
   const selectedSlide = slides[selectedIndex]
+  const previewSettings = resolveSlideSettings(settings, selectedSlide)
 
   async function startPresentation() {
     if (!uid) {
@@ -79,9 +83,12 @@ export function CreatePage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    // Em telas grandes o editor ocupa exatamente a altura da janela e cada
+    // coluna rola por conta própria — a página não cresce conforme os slides
+    // são adicionados. Abaixo de `lg` volta ao empilhamento natural.
+    <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
       {/* Barra superior */}
-      <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
           <ChevronLeft size={16} /> Início
         </Button>
@@ -100,6 +107,7 @@ export function CreatePage() {
             className="hidden"
             onChange={onImportFile}
           />
+          <PresentationSettingsButton />
           <AiPromptButton />
           <Button variant="secondary" size="sm" onClick={() => fileInputRef.current?.click()}>
             <FileUp size={16} /> Importar JSON
@@ -117,60 +125,71 @@ export function CreatePage() {
         </div>
       </div>
 
-      {!isFirebaseConfigured && (
-        <Banner tone="warning">
-          Firebase não configurado. Copie <code>.env.example</code> para <code>.env</code> e
-          preencha as chaves <code>VITE_FIREBASE_*</code> para iniciar salas (veja o README).
-        </Banner>
-      )}
-      {isFirebaseConfigured && authError && (
-        <Banner tone="error">
-          Falha na autenticação anônima do Firebase: {authError}. Ative{' '}
-          <strong>Authentication → Sign-in method → Anônimo</strong> no console do Firebase.
-        </Banner>
-      )}
-      {error && <Banner tone="error">{error}</Banner>}
+      <div className="shrink-0">
+        {!isFirebaseConfigured && (
+          <Banner tone="warning">
+            Firebase não configurado. Copie <code>.env.example</code> para <code>.env</code> e
+            preencha as chaves <code>VITE_FIREBASE_*</code> para iniciar salas (veja o README).
+          </Banner>
+        )}
+        {isFirebaseConfigured && authError && (
+          <Banner tone="error">
+            Falha na autenticação anônima do Firebase: {authError}. Ative{' '}
+            <strong>Authentication → Sign-in method → Anônimo</strong> no console do Firebase.
+          </Banner>
+        )}
+        {error && <Banner tone="error">{error}</Banner>}
+      </div>
 
-      {/* Editor em 3 colunas */}
-      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Coluna 1: slides */}
-        <div className="space-y-4">
-          <Card className="p-3">
+      {/* Editor em 3 colunas, cada uma com rolagem independente. */}
+      <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[280px_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Coluna 1: adicionar + lista de slides */}
+        <div className="flex flex-col gap-4 lg:min-h-0">
+          <Card className="shrink-0 p-3">
             <h2 className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
               Adicionar slide
             </h2>
             <AddSlideMenu />
           </Card>
-          <Card className="p-3">
-            <h2 className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+          <Card className="flex flex-col p-3 lg:min-h-0 lg:flex-1">
+            <h2 className="mb-2 shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
               Slides ({slides.length})
             </h2>
-            <SlideList />
+            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+              <SlideList />
+            </div>
           </Card>
         </div>
 
         {/* Coluna 2: configuração do slide */}
-        <Card className="p-4">
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+        <Card className="flex flex-col p-4 lg:min-h-0">
+          <h2 className="mb-4 shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
             Configuração
           </h2>
-          {selectedSlide ? (
-            <SlideEditor slide={selectedSlide} />
-          ) : (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              Selecione ou adicione um slide para editar.
-            </p>
-          )}
+          <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            {selectedSlide ? (
+              <SlideEditor slide={selectedSlide} />
+            ) : (
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                Selecione ou adicione um slide para editar.
+              </p>
+            )}
+          </div>
         </Card>
 
         {/* Coluna 3: prévia */}
-        <Card className="flex flex-col p-4">
-          <h2 className="mb-4 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
+        <Card className="flex flex-col p-4 lg:min-h-0">
+          <h2 className="mb-4 shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
             Prévia
           </h2>
-          <div className="min-h-[360px] flex-1">
+          <div className="min-h-[360px] flex-1 overflow-auto lg:min-h-0">
             {selectedSlide ? (
-              <SlideDisplay slide={selectedSlide} responses={[]} />
+              <SlideDisplay
+                slide={selectedSlide}
+                slides={slides}
+                responses={[]}
+                settings={previewSettings}
+              />
             ) : (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem slide.</p>
             )}
