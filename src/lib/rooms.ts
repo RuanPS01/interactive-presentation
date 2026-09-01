@@ -8,13 +8,13 @@ import {
 import { db } from './firebase'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
 import { withDefaults } from '../utils/settings'
-import type { SlideTimer } from '../utils/timer'
 import type {
   Presentation,
   PresentationSettings,
   Room,
   RoomStatus,
   Slide,
+  SlideTimers,
 } from '../types/presentation'
 
 const ROOMS = 'rooms'
@@ -65,10 +65,9 @@ export async function createRoom(
       status: 'live',
       createdAt: now,
       updatedAt: now,
-      // O cronômetro do primeiro slide é iniciado pela tela do apresentador,
-      // quando ela assume o controle da sala.
-      timerSlideId: null,
-      timerEndsAt: null,
+      // Os cronômetros nascem vazios: cada um é iniciado pela tela do
+      // apresentador quando o slide correspondente entra no ar.
+      timers: {},
     }
     // Sala + doc privado (token) numa escrita atômica.
     const batch = writeBatch(db)
@@ -122,36 +121,32 @@ export function subscribeRoom(
 }
 
 /**
- * Troca o slide atual e, na mesma escrita, define o cronômetro que vale para
- * ele (`null` nos slides sem cronômetro). Juntar as duas coisas evita um
- * intervalo em que a plateia veria o novo slide com o tempo do anterior.
+ * Troca o slide atual e grava os cronômetros na mesma escrita — o slide que
+ * sai é pausado e o que entra é iniciado/retomado de uma vez só (ver
+ * `advanceTimers`). Separar as duas escritas abriria um intervalo em que a
+ * plateia veria o novo slide com o tempo do anterior.
  */
 export async function setCurrentSlide(
   code: string,
   index: number,
-  timer: SlideTimer | null = null,
+  timers: SlideTimers,
 ): Promise<void> {
   await updateDoc(roomRef(code), {
     currentSlideIndex: index,
-    timerSlideId: timer?.slideId ?? null,
-    timerEndsAt: timer?.endsAt ?? null,
+    timers,
     updatedAt: Date.now(),
   })
 }
 
 /**
- * (Re)inicia o cronômetro do slide que já está no ar — usado quando o
- * apresentador abre ou retoma a sala num slide que tem tempo definido.
+ * Grava os cronômetros sem trocar de slide — usado quando o apresentador abre
+ * ou retoma a sala num slide cujo tempo ainda não começou (ou ficou pausado).
  */
-export async function startSlideTimer(
+export async function saveSlideTimers(
   code: string,
-  timer: SlideTimer,
+  timers: SlideTimers,
 ): Promise<void> {
-  await updateDoc(roomRef(code), {
-    timerSlideId: timer.slideId,
-    timerEndsAt: timer.endsAt,
-    updatedAt: Date.now(),
-  })
+  await updateDoc(roomRef(code), { timers, updatedAt: Date.now() })
 }
 
 export async function setStatus(code: string, status: RoomStatus): Promise<void> {

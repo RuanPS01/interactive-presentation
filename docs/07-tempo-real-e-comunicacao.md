@@ -41,18 +41,40 @@ nunca recebe respostas.
 
 ### Cronômetro
 
-O documento da sala guarda **um instante final**, não uma contagem:
+O documento da sala guarda **um instante final por slide**, não uma contagem:
 
 ```ts
-{ timerSlideId: 's4', timerEndsAt: 1735689600000 }   // epoch ms
+timers: {
+  s4: { endsAt: 1735689600000, remainingMs: 20000 },  // correndo
+  s7: { endsAt: null,          remainingMs: 12000 },  // pausado (fora do slide)
+  s9: { endsAt: null,          remainingMs: 0 },      // esgotado, congelado
+}
 ```
 
-Só o apresentador escreve esses campos, e sempre junto da troca de slide
+Três estados, e a transição entre eles está toda em `advanceTimers`
+([`utils/timer.ts`](../src/utils/timer.ts)), chamada pelo apresentador a cada
+troca de slide:
+
+| Situação | Escrita |
+| --- | --- |
+| Entra num slide pela 1ª vez | `{ endsAt: agora + duração, remainingMs: duração }` |
+| Sai do slide correndo | `{ endsAt: null, remainingMs: o que sobrou }` |
+| Volta a um slide pausado | `{ endsAt: agora + remainingMs, remainingMs }` |
+| Volta a um slide esgotado | nada muda — continua em zero |
+
+Só o apresentador escreve, e sempre junto da troca de slide
 (`setCurrentSlide`) ou ao assumir uma sala parada num slide com tempo
-(`startSlideTimer`). Cada navegador conta localmente a partir do mesmo
-`timerEndsAt` ([`useSlideTimer`](../src/hooks/useSlideTimer.ts)) — uma escrita
-por pergunta, e não uma por segundo, que multiplicaria a cota do plano gratuito
-pelo número de segundos da apresentação.
+(`saveSlideTimers`). Cada navegador conta localmente a partir do mesmo
+`endsAt` ([`useSlideTimer`](../src/hooks/useSlideTimer.ts)) — uma escrita por
+troca de slide, e não uma por segundo, que multiplicaria a cota do plano
+gratuito pelo número de segundos da apresentação.
+
+> **Por que pausar em vez de deixar correr.** Se o tempo continuasse passando
+> fora do slide, pular para uma referência no meio da pergunta queimaria o
+> tempo da plateia. E um cronômetro esgotado **não** reinicia ao voltar: a
+> pergunta encerrada é para ser revista, não refeita — daí `frozen` em
+> `useSlideTimer`, que também impede a troca automática para o gabarito
+> disparar de novo.
 
 Duas consequências assumidas:
 

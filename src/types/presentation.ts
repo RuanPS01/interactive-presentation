@@ -149,6 +149,23 @@ export interface Presentation {
 
 export type RoomStatus = 'live' | 'ended'
 
+/**
+ * Cronômetro de um slide dentro da sala.
+ *
+ * - **correndo**: `endsAt` tem o instante final (epoch ms);
+ * - **pausado**: `endsAt` é `null` e o que sobrou está em `remainingMs` — é o
+ *   estado de um slide que o apresentador deixou no meio da contagem;
+ * - **esgotado**: `endsAt` é `null` e `remainingMs` é 0. Voltar para a pergunta
+ *   não reabre as respostas: elas ficam congeladas como estavam.
+ */
+export interface SlideTimer {
+  endsAt: number | null
+  remainingMs: number
+}
+
+/** Cronômetros da sala, indexados pelo id do slide. */
+export type SlideTimers = Record<string, SlideTimer>
+
 /** Documento salvo em `rooms/{roomCode}` no Firestore. */
 export interface Room extends Presentation {
   creatorUid: string
@@ -157,13 +174,12 @@ export interface Room extends Presentation {
   createdAt: number
   updatedAt: number
   /**
-   * Cronômetro em vigor: a qual slide pertence e o instante (epoch ms) em que
-   * termina. Só o apresentador grava esses campos; todos os navegadores contam
-   * a partir do mesmo `timerEndsAt`, o que dispensa uma escrita por segundo.
-   * `null` quando o slide atual não tem cronômetro.
+   * Cronômetro de cada slide que já esteve no ar. Só o apresentador grava;
+   * todos os navegadores contam a partir do mesmo instante final, o que
+   * dispensa uma escrita por segundo. Ausente nas salas criadas antes do
+   * cronômetro existir.
    */
-  timerSlideId?: string | null
-  timerEndsAt?: number | null
+  timers?: SlideTimers
 }
 
 export type ResponseType = 'word' | 'choice'

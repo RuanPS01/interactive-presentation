@@ -101,6 +101,18 @@ Ao zerar:
    encerradas”);
 2. se houver um slide `answer` logo depois, a apresentação avança sozinha.
 
+O cronômetro **acompanha o slide, não a apresentação**:
+
+| O apresentador… | O cronômetro… |
+| --- | --- |
+| sai da pergunta no meio da contagem | **pausa** — nada corre enquanto ele está fora |
+| volta para essa pergunta | **retoma de onde parou** |
+| volta para uma pergunta que já zerou | **continua zerado** — sem contagem nova, e as respostas seguem congeladas como estavam |
+
+A última linha é o que permite revisitar uma pergunta encerrada para comentá-la
+sem reabrir a votação — e sem que a apresentação pule sozinha para o gabarito
+de novo.
+
 No editor ([`QuizConfig`](../src/components/editor/QuizConfig.tsx)) cada
 alternativa tem um marcador de “correta” ao lado: caixa de seleção quando
 `allowMultiple`, botão de opção quando não (clicar de novo desmarca e volta a

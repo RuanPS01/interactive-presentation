@@ -19,13 +19,22 @@ interface Room extends Presentation {
   status: 'live' | 'ended'
   createdAt: number         // epoch ms
   updatedAt: number
-  timerSlideId?: string | null // slide a que o cronômetro pertence
-  timerEndsAt?: number | null  // instante (epoch ms) em que o tempo acaba
+  timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
+}
+
+interface SlideTimer {
+  endsAt: number | null   // instante final enquanto corre; null quando parado
+  remainingMs: number     // o que sobrou quando parado (0 = tempo esgotado)
 }
 ```
 
 `Presentation` é a estrutura **serializável** (import/export JSON).
 `Room` é ela mais os campos que só existem depois de publicada.
+
+`timers` guarda **um registro por slide**, e não um cronômetro só: o
+apresentador pode sair de uma pergunta no meio da contagem e voltar depois, e
+cada slide precisa lembrar em que pé estava. Ver
+[07](07-tempo-real-e-comunicacao.md#cronômetro).
 
 ### Slides
 

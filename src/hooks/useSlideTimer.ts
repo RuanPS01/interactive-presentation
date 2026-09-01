@@ -1,26 +1,38 @@
 import { useEffect, useState } from 'react'
 import type { PresentationSettings, Room, Slide } from '../types/presentation'
-import { slideTimerSeconds } from '../utils/timer'
+import { slideTimerSeconds, timerRemainingMs } from '../utils/timer'
 
 export interface SlideTimerState {
-  /** Existe cronômetro em vigor para o slide atual. */
+  /** O slide tem cronômetro (mostre a contagem). */
   active: boolean
   /** Segundos que faltam, arredondados para cima (0 quando acabou). */
   seconds: number
   /** O tempo acabou — a entrada dos participantes fica bloqueada. */
   expired: boolean
+  /**
+   * O cronômetro está parado: pausado porque o apresentador saiu do slide no
+   * meio da contagem, ou esgotado numa passagem anterior. Um cronômetro
+   * congelado em zero **não** dispara a troca automática para o gabarito —
+   * voltar para uma pergunta encerrada é para revê-la, não para avançar.
+   */
+  frozen: boolean
 }
 
-const IDLE: SlideTimerState = { active: false, seconds: 0, expired: false }
+const IDLE: SlideTimerState = {
+  active: false,
+  seconds: 0,
+  expired: false,
+  frozen: false,
+}
 
 /**
  * Contagem regressiva do slide atual, lida da sala.
  *
- * O apresentador grava só o instante final (`timerEndsAt`); cada navegador
- * conta localmente a partir dele, sem uma escrita por segundo no Firestore.
- * Como a comparação usa o relógio do próprio dispositivo, o tempo restante é
- * limitado à duração do slide: um relógio atrasado não faz a contagem começar
- * acima do que a pergunta vale.
+ * O apresentador grava só o instante final (`timers[slideId].endsAt`); cada
+ * navegador conta localmente a partir dele, sem uma escrita por segundo no
+ * Firestore. Como a comparação usa o relógio do próprio dispositivo, o tempo
+ * restante é limitado à duração do slide: um relógio atrasado não faz a
+ * contagem começar acima do que a pergunta vale.
  */
 export function useSlideTimer(
   room: Room | null,
@@ -28,12 +40,9 @@ export function useSlideTimer(
   settings: PresentationSettings,
 ): SlideTimerState {
   const total = slideTimerSeconds(slide, settings)
-  // O cronômetro só vale para o slide em que foi iniciado: ao trocar de slide o
-  // valor antigo ainda chega num snapshot ou outro.
-  const endsAt =
-    total > 0 && slide && room?.timerSlideId === slide.id
-      ? (room.timerEndsAt ?? null)
-      : null
+  const entry = total > 0 && slide ? room?.timers?.[slide.id] : undefined
+  // Só um cronômetro correndo precisa de tique: pausado e esgotado são fixos.
+  const endsAt = entry?.endsAt ?? null
 
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -44,11 +53,18 @@ export function useSlideTimer(
     return () => window.clearInterval(id)
   }, [endsAt])
 
-  if (endsAt === null) return IDLE
-  const remaining = Math.min(Math.max(endsAt - now, 0), total * 1000)
+  if (total <= 0) return IDLE
+
+  // Sem registro, o apresentador ainda vai gravar o início: mostrar o tempo
+  // cheio evita a contagem piscar na tela por uma fração de segundo.
+  const remaining = entry
+    ? Math.min(timerRemainingMs(entry, now) ?? 0, total * 1000)
+    : total * 1000
+
   return {
     active: true,
     seconds: Math.ceil(remaining / 1000),
-    expired: remaining <= 0,
+    expired: entry !== undefined && remaining <= 0,
+    frozen: entry !== undefined && entry.endsAt === null,
   }
 }

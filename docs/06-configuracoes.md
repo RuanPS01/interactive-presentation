@@ -39,8 +39,10 @@ desativado, com a explicação. Um slide pode ter tempo próprio pela sobrescrit
 cronômetro numa apresentação que tem tempo em todas as outras.
 
 Quem conta o tempo é cada navegador, a partir de um instante final único
-gravado na sala (`timerEndsAt`); ver
-[07](07-tempo-real-e-comunicacao.md#cronômetro).
+gravado na sala. O cronômetro pausa quando o apresentador sai do slide e
+retoma quando ele volta; se já tinha zerado, continua zerado. Ver
+[07](07-tempo-real-e-comunicacao.md#cronômetro) e
+[05](05-tipos-de-slide.md#cronômetro).
 
 ## Global × por slide
 

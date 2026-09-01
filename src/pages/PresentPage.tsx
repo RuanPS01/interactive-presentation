@@ -21,12 +21,12 @@ import { useParticipants } from '../hooks/useParticipants'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
-import { claimPresenter, setCurrentSlide, startSlideTimer } from '../lib/rooms'
+import { claimPresenter, saveSlideTimers, setCurrentSlide } from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
-import { nextSlideTimer, slideTimerSeconds } from '../utils/timer'
+import { advanceTimers, slideTimerSeconds } from '../utils/timer'
 import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
@@ -82,9 +82,10 @@ export function PresentPage() {
   roomRef.current = room
 
   /**
-   * Troca o slide atual, já definindo o cronômetro do slide de destino. Lê a
-   * sala pela referência para continuar estável entre snapshots — assim o
-   * ouvinte de teclado não é recadastrado a cada resposta que chega.
+   * Troca o slide atual, pausando o cronômetro do slide que sai e
+   * iniciando/retomando o do slide que entra. Lê a sala pela referência para
+   * continuar estável entre snapshots — assim o ouvinte de teclado não é
+   * recadastrado a cada resposta que chega.
    */
   const goTo = useCallback(
     (next: number) => {
@@ -94,8 +95,13 @@ export function PresentPage() {
       // O índice extra (= nº de slides) é o slide de agradecimento automático.
       const clamped = Math.max(0, Math.min(next, count > 0 ? count : 0))
       if (clamped === current.currentSlideIndex) return
-      const target = current.slides[clamped]
-      void setCurrentSlide(code, clamped, nextSlideTimer(target, current.settings))
+      const timers = advanceTimers(
+        current.timers,
+        current.slides[current.currentSlideIndex],
+        current.slides[clamped],
+        current.settings,
+      )
+      void setCurrentSlide(code, clamped, timers)
     },
     [code],
   )
@@ -148,26 +154,37 @@ export function PresentPage() {
     }
   }, [code, activeIndex, slideCount])
 
-  // Sala aberta (ou retomada) num slide com tempo definido e ainda sem
-  // cronômetro em vigor: quem apresenta grava o instante final para todos.
+  // Sala aberta (ou retomada) num slide cujo cronômetro nunca começou, ou que
+  // ficou pausado numa passagem anterior: quem apresenta grava o instante
+  // final para todos. Um cronômetro já esgotado não entra aqui — voltar para
+  // a pergunta não abre uma contagem nova.
   const currentSlideId = currentSlide?.id
   const timerSeconds = slideTimerSeconds(currentSlide, slideSettings)
-  const timerOwnerId = room?.timerSlideId ?? null
+  const currentTimer = currentSlideId ? room?.timers?.[currentSlideId] : undefined
+  const needsTimer =
+    timerSeconds > 0 &&
+    (currentTimer === undefined ||
+      (currentTimer.endsAt === null && currentTimer.remainingMs > 0))
   useEffect(() => {
-    if (access !== 'granted' || !code || !currentSlideId) return
-    if (timerSeconds <= 0 || timerOwnerId === currentSlideId) return
-    void startSlideTimer(code, {
-      slideId: currentSlideId,
-      endsAt: Date.now() + timerSeconds * 1000,
-    }).catch(() => {
+    if (access !== 'granted' || !code || !currentSlideId || !needsTimer) return
+    const current = roomRef.current
+    const slide = current?.slides.find((s) => s.id === currentSlideId)
+    if (!current || !slide) return
+    void saveSlideTimers(
+      code,
+      advanceTimers(current.timers, undefined, slide, current.settings),
+    ).catch(() => {
       /* sem cronômetro a pergunta segue no ar até o apresentador avançar */
     })
-  }, [access, code, currentSlideId, timerSeconds, timerOwnerId])
+  }, [access, code, currentSlideId, needsTimer])
 
-  // Tempo esgotado: a entrada da plateia já está bloqueada; aqui a
-  // apresentação passa sozinha para o gabarito da própria pergunta. Sem
-  // gabarito logo depois, a pergunta continua no ar e o apresentador decide.
-  const expiredSlideId = timer.expired ? currentSlideId : undefined
+  // Tempo esgotado agora, com o cronômetro correndo: a entrada da plateia já
+  // está bloqueada e a apresentação passa sozinha para o gabarito da própria
+  // pergunta. Sem gabarito logo depois, a pergunta continua no ar.
+  //
+  // Um cronômetro congelado em zero (pergunta encerrada que o apresentador
+  // reabriu para rever) não avança nada: ele voltou ali de propósito.
+  const expiredSlideId = timer.expired && !timer.frozen ? currentSlideId : undefined
   useEffect(() => {
     if (access !== 'granted' || !expiredSlideId) return
     const current = roomRef.current
