@@ -40,6 +40,21 @@ export function timerRemainingMs(
 }
 
 /**
+ * Congela o cronômetro de um slide em zero — o fim oficial da pergunta.
+ *
+ * É esta escrita que encerra a votação para a plateia. O bloqueio **não** pode
+ * sair do relógio de cada celular: um aparelho adiantado travaria as opções
+ * segundos antes de o tempo acabar no projetor. Quem dá a palavra final é
+ * sempre o apresentador.
+ */
+export function closeTimer(
+  timers: SlideTimers | undefined,
+  slideId: string,
+): SlideTimers {
+  return { ...(timers ?? {}), [slideId]: { endsAt: null, remainingMs: 0 } }
+}
+
+/**
  * Cronômetros da sala depois de sair de um slide e entrar em outro.
  *
  * Sair **pausa** o que estava correndo; entrar **inicia** (primeira vez) ou

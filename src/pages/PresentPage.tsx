@@ -31,7 +31,7 @@ import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
-import { advanceTimers, slideTimerSeconds } from '../utils/timer'
+import { advanceTimers, closeTimer, slideTimerSeconds } from '../utils/timer'
 import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
@@ -185,21 +185,29 @@ export function PresentPage() {
     })
   }, [access, code, currentSlideId, needsTimer])
 
-  // Tempo esgotado agora, com o cronômetro correndo: a entrada da plateia já
-  // está bloqueada e a apresentação passa sozinha para o gabarito da própria
-  // pergunta. Sem gabarito logo depois, a pergunta continua no ar.
+  // A contagem do projetor zerou: é aqui que a pergunta é encerrada para toda
+  // a sala. O apresentador congela o cronômetro em zero — é essa escrita que
+  // trava as opções nos celulares, e não o relógio de cada aparelho — e, se o
+  // gabarito da própria pergunta vier logo depois, avança na mesma escrita.
   //
-  // Um cronômetro congelado em zero (pergunta encerrada que o apresentador
-  // reabriu para rever) não avança nada: ele voltou ali de propósito.
-  const expiredSlideId = timer.expired && !timer.frozen ? currentSlideId : undefined
+  // Um cronômetro já congelado não entra aqui: quem voltou a uma pergunta
+  // encerrada foi rever, não avançar.
+  const runOutSlideId = timer.runOut ? currentSlideId : undefined
   useEffect(() => {
-    if (access !== 'granted' || !expiredSlideId) return
+    if (access !== 'granted' || !code || !runOutSlideId) return
     const current = roomRef.current
     if (!current) return
     const index = current.currentSlideIndex
     const next = current.slides[index + 1]
-    if (next?.type === 'answer' && next.quizSlideId === expiredSlideId) goTo(index + 1)
-  }, [access, expiredSlideId, goTo])
+    if (next?.type === 'answer' && next.quizSlideId === runOutSlideId) {
+      // `advanceTimers` congela o slide que sai — o encerramento vai junto.
+      goTo(index + 1)
+      return
+    }
+    void saveSlideTimers(code, closeTimer(current.timers, runOutSlideId)).catch(() => {
+      /* sem o registro a pergunta segue aberta até o apresentador avançar */
+    })
+  }, [access, code, runOutSlideId, goTo])
 
   // Suspense terminado: fica registrado na sala para que voltar ao gabarito
   // (ou chegar atrasado nele) mostre a resposta na hora, sem repetir a espera.
@@ -440,7 +448,11 @@ export function PresentPage() {
               responses={responses}
               settings={slideSettings}
               participants={participants.length}
-              secondsLeft={timer.active ? timer.seconds : null}
+              countdown={
+                timer.active
+                  ? { endsAt: timer.endsAt, remainingMs: timer.remainingMs }
+                  : null
+              }
               revealPending={reveal.pending}
               revealDots={reveal.dots}
             />

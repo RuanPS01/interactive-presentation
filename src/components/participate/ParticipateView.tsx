@@ -2,7 +2,6 @@ import type { PresentationSettings, Slide } from '../../types/presentation'
 import { useMyResponse } from '../../hooks/useMyResponse'
 import { findQuizSlide } from '../../utils/slides'
 import { AnswerSuspense } from '../slides/AnswerSuspense'
-import { SlideCountdown } from '../slides/SlideCountdown'
 import { AnswerReveal } from './AnswerReveal'
 import { WordCloudInput } from './WordCloudInput'
 import { ChoiceInput } from './ChoiceInput'
@@ -16,9 +15,10 @@ interface ParticipateViewProps {
   /** Nome informado ao entrar (null quando a sala não pede). */
   participantName: string | null
   settings: PresentationSettings
-  /** Segundos restantes do cronômetro; `null` quando o slide não tem. */
-  secondsLeft?: number | null
-  /** Tempo esgotado: a resposta não é mais aceita. */
+  /**
+   * A sala encerrou a pergunta: a resposta não é mais aceita. Vem do
+   * apresentador, nunca do relógio deste aparelho.
+   */
   timeUp?: boolean
   /** Gabarito ainda em suspense ("A resposta certa é…"). */
   revealPending?: boolean
@@ -34,7 +34,6 @@ export function ParticipateView({
   participantUid,
   participantName,
   settings,
-  secondsLeft = null,
   timeUp = false,
   revealPending = false,
   revealDots = 0,
@@ -55,8 +54,6 @@ export function ParticipateView({
       >
         {slide.type === 'answer' ? (quiz?.title ?? slide.title) : slide.title}
       </h2>
-
-      {secondsLeft !== null && <SlideCountdown seconds={secondsLeft} fontSize={44} />}
 
       {slide.type === 'wordcloud' && (
         <WordCloudInput

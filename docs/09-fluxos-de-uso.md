@@ -80,12 +80,13 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
    pergunta, marca a alternativa correta e liga **“Adicionar um slide de
    resposta logo depois”** — o gabarito aparece na lista, recuado.
 2. Na apresentação, o slide da pergunta mostra as alternativas grandes, sem
-   revelar a distribuição (só quantos já votaram), com a contagem regressiva
-   logo abaixo do enunciado.
-3. Os participantes votam pelo celular enquanto há tempo.
-4. **O tempo acaba**: os controles do celular travam e a apresentação passa
-   sozinha para o gabarito. (Sem cronômetro — `0` segundos — o apresentador
-   avança quando quiser.)
+   revelar a distribuição (só quantos já votaram), com o card do cronômetro na
+   base da tela.
+3. Os participantes votam pelo celular enquanto há tempo. O celular não mostra
+   contagem: quem marca o tempo é o projetor.
+4. **O tempo acaba no projetor**: o apresentador encerra a pergunta, os
+   controles do celular travam e a apresentação passa sozinha para o gabarito.
+   (Sem cronômetro — `0` segundos — o apresentador avança quando quiser.)
 5. Por 3 segundos a tela mostra **“A resposta certa é…”**, ganhando um ponto por
    segundo, e só então o gabarito destaca a correta em verde com votos e
    porcentagem por alternativa. No celular, cada pessoa vê se acertou.
@@ -102,6 +103,7 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Encurtador indisponível (ou `localhost`) | O modal mostra o link completo e um botão “Tentar de novo” |
 | Gabarito cuja pergunta foi removida | “A pergunta deste gabarito não existe mais.” (o editor remove órfãos sozinho) |
 | Tempo esgotado sem slide de gabarito depois | A pergunta continua no ar, já travada para novas respostas; o apresentador avança |
+| Relógio do celular adiantado ou atrasado | Não muda nada: a votação só trava quando o projetor encerra a pergunta |
 | Apresentador sai de uma pergunta no meio da contagem | O cronômetro pausa; voltar retoma de onde parou |
 | Apresentador volta para uma pergunta que já zerou | Continua zerada: sem contagem nova, respostas congeladas e sem avanço automático |
 | Apresentador volta para um gabarito já revelado | A resposta aparece na hora, sem repetir os 3 s de suspense |

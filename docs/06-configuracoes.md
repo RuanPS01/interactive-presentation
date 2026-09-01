@@ -38,9 +38,9 @@ desativado, com a explicação. Um slide pode ter tempo próprio pela sobrescrit
 `quizTimerSeconds` — inclusive `0`, para deixar **aquela** pergunta sem
 cronômetro numa apresentação que tem tempo em todas as outras.
 
-Quem conta o tempo é cada navegador, a partir de um instante final único
-gravado na sala. O cronômetro pausa quando o apresentador sai do slide e
-retoma quando ele volta; se já tinha zerado, continua zerado. Ver
+A contagem aparece só na tela do apresentador. O cronômetro pausa quando ele
+sai do slide e retoma quando volta; se já tinha zerado, continua zerado. Quem
+encerra a votação é sempre o projetor, não o relógio de cada celular. Ver
 [07](07-tempo-real-e-comunicacao.md#cronômetro) e
 [05](05-tipos-de-slide.md#cronômetro).
 
