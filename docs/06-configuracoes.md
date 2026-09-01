@@ -13,10 +13,12 @@ interface PresentationSettings {
   titleFontSize: number        // padrão: 36 px
   labelFontSize: number        // padrão: 16 px
   bodyFontSize: number         // padrão: 24 px
+  quizTimerSeconds: number     // padrão: 20 s (0 = sem cronômetro)
 }
 ```
 
 Tamanhos aceitos: **10 a 200 px** (`FONT_SIZE_RANGE`).
+Cronômetro: **0 a 300 s** (`QUIZ_TIMER_RANGE`).
 
 | Opção | O que muda |
 | --- | --- |
@@ -26,6 +28,19 @@ Tamanhos aceitos: **10 a 200 px** (`FONT_SIZE_RANGE`).
 | **Tamanho do título** | Título do slide no projetor (e, limitado a 30 px, no celular). |
 | **Tamanho dos rótulos** | Eixos e legendas dos gráficos, contador acima das barras, textos de instrução, nomes na lista de identificação e o rodapé de contagem. |
 | **Tamanho do corpo** | Conteúdo principal: alternativas do `quiz`/gabarito e os controles do participante. Nos slides de texto, quem manda é o `fontSize` do próprio slide. |
+| **Tempo do cronômetro** | Segundos que uma pergunta (`quiz`) fica aberta. Ao zerar, as respostas são encerradas e a apresentação passa para o slide de resposta. `0` deixa a pergunta sem cronômetro. |
+
+### Cronômetro das perguntas
+
+O tempo só tem efeito em slides `quiz`
+([`slideTimerSeconds`](../src/utils/timer.ts)); nos demais o controle aparece
+desativado, com a explicação. Um slide pode ter tempo próprio pela sobrescrita
+`quizTimerSeconds` — inclusive `0`, para deixar **aquela** pergunta sem
+cronômetro numa apresentação que tem tempo em todas as outras.
+
+Quem conta o tempo é cada navegador, a partir de um instante final único
+gravado na sala (`timerEndsAt`); ver
+[07](07-tempo-real-e-comunicacao.md#cronômetro).
 
 ## Global × por slide
 
@@ -46,9 +61,10 @@ type SlideOverrides = Partial<Omit<PresentationSettings, 'askName'>>
 > opções aceitam sobrescrita.
 
 Na interface, cada opção booleana do slide é um seletor de três estados —
-**Herdar da apresentação (sim/não)**, **Sim**, **Não** — e cada tamanho de fonte
-tem uma caixa “personalizar” que libera o controle deslizante. Quando um slide
-tem sobrescritas, a seção mostra um selo com quantas são.
+**Herdar da apresentação (sim/não)**, **Sim**, **Não**; cada tamanho de fonte
+tem uma caixa “personalizar” que libera o controle deslizante; e o cronômetro
+tem a mesma caixa, liberando um campo numérico (valor exato, não deslizante).
+Quando um slide tem sobrescritas, a seção mostra um selo com quantas são.
 
 ## Como o valor efetivo é calculado
 

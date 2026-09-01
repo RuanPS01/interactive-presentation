@@ -49,8 +49,10 @@ Estrutura:
      respostas — assim a página continua útil sem inventar uma identidade que
      ninguém informou.
    - Tabelas longas quebram em várias páginas, **repetindo o cabeçalho**.
-4. **Rodapé** com “N responderam · M voto(s)” na página do slide, e com o total
-   de participantes na página da tabela.
+4. **Rodapé** com a mesma contagem da tela na página do slide (“N responderam”,
+   e o total de envios só quando ele pode ser diferente — ver
+   [04](04-modelo-de-dados.md#números-derivados)), e com o total de
+   participantes na página da tabela.
 
 > A tabela sai no relatório mesmo com a identificação desligada nas opções.
 > Essa opção controla o que aparece **no projetor**, à vista da plateia; o PDF é

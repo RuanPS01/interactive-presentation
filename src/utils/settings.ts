@@ -16,15 +16,26 @@ export const DEFAULT_SETTINGS: PresentationSettings = {
   titleFontSize: 36,
   labelFontSize: 16,
   bodyFontSize: 24,
+  quizTimerSeconds: 20,
 }
 
 /** Limites aceitos pelos controles e pela validação do JSON. */
 export const FONT_SIZE_RANGE = { min: 10, max: 200 } as const
 
+/** Limites do cronômetro, em segundos. O mínimo 0 significa "sem cronômetro". */
+export const QUIZ_TIMER_RANGE = { min: 0, max: 300 } as const
+
 export function clampFontSize(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_SETTINGS.bodyFontSize
   return Math.round(
     Math.max(FONT_SIZE_RANGE.min, Math.min(FONT_SIZE_RANGE.max, value)),
+  )
+}
+
+export function clampTimerSeconds(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SETTINGS.quizTimerSeconds
+  return Math.round(
+    Math.max(QUIZ_TIMER_RANGE.min, Math.min(QUIZ_TIMER_RANGE.max, value)),
   )
 }
 
@@ -63,4 +74,5 @@ export const SETTING_LABELS = {
   titleFontSize: 'Tamanho do título',
   labelFontSize: 'Tamanho dos rótulos',
   bodyFontSize: 'Tamanho do corpo',
+  quizTimerSeconds: 'Tempo do cronômetro (questionário)',
 } as const

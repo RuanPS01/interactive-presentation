@@ -1,4 +1,10 @@
-import type { ChoiceOption, ResponseDoc, Slide } from '../types/presentation'
+import type {
+  ChoiceOption,
+  ChoiceSlide,
+  ResponseDoc,
+  Slide,
+  WordCloudSlide,
+} from '../types/presentation'
 
 export interface WordCount {
   text: string
@@ -63,6 +69,26 @@ export function answeredCount(responses: ResponseDoc[]): number {
 /** Total de itens enviados numa nuvem de palavras. */
 export function totalWords(responses: ResponseDoc[]): number {
   return aggregateWords(responses).reduce((sum, w) => sum + w.value, 0)
+}
+
+/**
+ * Rodapé de contagem de um slide interativo.
+ *
+ * O total de envios só entra quando pode ser diferente de quem respondeu: numa
+ * escolha única, ou numa nuvem de um envio por pessoa, os dois números são
+ * sempre iguais e repeti-los ("8 responderam · 8 voto(s)") só polui a tela.
+ */
+export function responseSummary(
+  slide: WordCloudSlide | ChoiceSlide,
+  responses: ResponseDoc[],
+): string {
+  const answered = `${answeredCount(responses)} responderam`
+  if (slide.type === 'wordcloud') {
+    if (slide.wordLimitMode === 'one') return answered
+    return `${answered} · ${totalWords(responses)} resposta(s) enviada(s)`
+  }
+  if (!slide.allowMultiple) return answered
+  return `${answered} · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`
 }
 
 export interface NamedResponse {

@@ -31,6 +31,11 @@ export interface PresentationSettings {
   labelFontSize: number
   /** Tamanho (px) do corpo/conteúdo do slide. */
   bodyFontSize: number
+  /**
+   * Segundos do cronômetro dos slides de questionário (`quiz`). Zerado, o
+   * slide fica sem cronômetro e a pergunta espera o apresentador avançar.
+   */
+  quizTimerSeconds: number
 }
 
 /**
@@ -151,6 +156,14 @@ export interface Room extends Presentation {
   status: RoomStatus
   createdAt: number
   updatedAt: number
+  /**
+   * Cronômetro em vigor: a qual slide pertence e o instante (epoch ms) em que
+   * termina. Só o apresentador grava esses campos; todos os navegadores contam
+   * a partir do mesmo `timerEndsAt`, o que dispensa uma escrita por segundo.
+   * `null` quando o slide atual não tem cronômetro.
+   */
+  timerSlideId?: string | null
+  timerEndsAt?: number | null
 }
 
 export type ResponseType = 'word' | 'choice'

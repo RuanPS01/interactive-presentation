@@ -84,6 +84,12 @@ o comportamento certo no celular.
   verde e mostra votos e porcentagem. Passa a duas colunas com mais de 4 opções.
 - **[`NamedResponsesList`](../src/components/slides/NamedResponsesList.tsx)** —
   chips “Nome: resposta”, com rolagem própria e altura limitada.
+- **[`SlideCountdown`](../src/components/slides/SlideCountdown.tsx)** — o tempo
+  restante em número grande com o sufixo `s`, vermelho nos últimos 5 segundos.
+  Usado no projetor e, menor, na tela do participante.
+- **[`AnswerSuspense`](../src/components/slides/AnswerSuspense.tsx)** —
+  “A resposta certa é…”, com um ponto a mais por segundo, no lugar do gabarito
+  durante os 3 segundos de espera. Também usado pelo `ParticipateView`.
 
 ### `participate/` — tela do participante
 
@@ -136,6 +142,8 @@ PDF.
 | --- | --- |
 | `useRoom`, `useResponses`, `useMyResponse`, `useParticipants` | Assinaturas do Firestore ([07](07-tempo-real-e-comunicacao.md)) |
 | `useParticipant` | Sessão anônima e uid |
+| `useSlideTimer` | Contagem regressiva do slide a partir do `timerEndsAt` da sala |
+| `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito |
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
 | `useFullscreen` | Fullscreen API, acompanhando a saída por Esc |
 

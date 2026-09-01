@@ -12,6 +12,7 @@ import {
   aggregateChoices,
   aggregateWords,
   answeredCount,
+  responseSummary,
   totalVotes,
 } from './aggregate'
 import { SLIDE_TYPE_LABELS } from './slideFactory'
@@ -123,26 +124,16 @@ function drawSlidePage(
     case 'bar':
     case 'pie':
       drawChoice(doc, slide, responses, contentTop, W, H)
-      drawFooter(
-        doc,
-        `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
-        H,
-      )
+      drawFooter(doc, responseSummary(slide, responses), H)
       break
     case 'quiz':
       drawChoice(doc, slide, responses, contentTop, W, H, slide.correctOptionIds)
-      drawFooter(
-        doc,
-        `${answeredCount(responses)} responderam · ${totalVotes(aggregateChoices(responses, slide.options))} voto(s)`,
-        H,
-      )
+      drawFooter(doc, responseSummary(slide, responses), H)
       break
-    case 'wordcloud': {
-      const total = aggregateWords(responses).reduce((s, w) => s + w.value, 0)
+    case 'wordcloud':
       drawWordCloud(doc, responses, contentTop, W, H)
-      drawFooter(doc, `${answeredCount(responses)} responderam · ${total} resposta(s)`, H)
+      drawFooter(doc, responseSummary(slide, responses), H)
       break
-    }
     case 'text':
       drawText(doc, slide, contentTop, W)
       return

@@ -39,6 +39,32 @@ No slide de gabarito, apresentador e participante assinam as respostas do
 **`quiz` de origem** (`resultsSlideId`), não as do próprio slide `answer` — que
 nunca recebe respostas.
 
+### Cronômetro
+
+O documento da sala guarda **um instante final**, não uma contagem:
+
+```ts
+{ timerSlideId: 's4', timerEndsAt: 1735689600000 }   // epoch ms
+```
+
+Só o apresentador escreve esses campos, e sempre junto da troca de slide
+(`setCurrentSlide`) ou ao assumir uma sala parada num slide com tempo
+(`startSlideTimer`). Cada navegador conta localmente a partir do mesmo
+`timerEndsAt` ([`useSlideTimer`](../src/hooks/useSlideTimer.ts)) — uma escrita
+por pergunta, e não uma por segundo, que multiplicaria a cota do plano gratuito
+pelo número de segundos da apresentação.
+
+Duas consequências assumidas:
+
+- **A comparação usa o relógio de cada dispositivo.** Um celular adiantado ou
+  atrasado vê alguns segundos a mais ou a menos; o tempo restante é limitado à
+  duração do slide para nunca começar acima dela. A troca para o gabarito quem
+  decide é o apresentador, então a apresentação continua sincronizada.
+- **O bloqueio é da interface, não das regras.** Ao zerar, os controles do
+  participante travam, mas as regras do Firestore não conhecem o cronômetro —
+  uma resposta já em trânsito ainda pode ser gravada. É o mesmo nível de
+  confiança do resto da sala: quem tem o código participa.
+
 ## Presença
 
 [`src/lib/participants.ts`](../src/lib/participants.ts)

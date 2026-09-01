@@ -2,7 +2,7 @@ import { Settings, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useEditorStore } from '../../store/editorStore'
 import { Button } from '../ui/Button'
-import { FontSizeRow, ToggleRow } from './SettingsControls'
+import { FontSizeRow, TimerRow, ToggleRow } from './SettingsControls'
 
 /**
  * Opções que valem para TODOS os slides. Cada slide pode sobrescrever quase
@@ -98,6 +98,15 @@ export function PresentationSettingsButton() {
                 disabled={!settings.askName}
                 onChange={(identifyResponses) => updateSettings({ identifyResponses })}
               />
+
+              <div className="border-t border-neutral-200 pt-4 dark:border-neutral-800">
+                <TimerRow
+                  label="Tempo do cronômetro (slides de questionário)"
+                  hint="Vale para os slides de alternativas. Ao acabar, as respostas são encerradas e a apresentação passa para o slide de resposta. Use 0 para deixar a pergunta sem cronômetro. Cada slide pode ter um tempo próprio em “Opções deste slide”."
+                  value={settings.quizTimerSeconds}
+                  onChange={(quizTimerSeconds) => updateSettings({ quizTimerSeconds })}
+                />
+              </div>
 
               <div className="space-y-4 border-t border-neutral-200 pt-4 dark:border-neutral-800">
                 <FontSizeRow

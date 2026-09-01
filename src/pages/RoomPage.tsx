@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
+import { useRevealCountdown } from '../hooks/useRevealCountdown'
+import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
 import { joinRoom } from '../lib/participants'
 import { getParticipantName, saveParticipantName } from '../lib/participantName'
@@ -57,6 +59,14 @@ export function RoomPage() {
       ? room.slides[room.currentSlideIndex]
       : undefined
   const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
+
+  // Cronômetro e suspense do gabarito vêm da sala, iguais aos do projetor: a
+  // contagem sai do mesmo instante final e o atraso da revelação é o mesmo
+  // para todo mundo.
+  const timer = useSlideTimer(room, currentSlide, slideSettings)
+  const reveal = useRevealCountdown(
+    currentSlide?.type === 'answer' ? currentSlide.id : null,
+  )
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-6">
@@ -141,6 +151,10 @@ export function RoomPage() {
                 participantUid={uid}
                 participantName={askName ? name : null}
                 settings={slideSettings}
+                secondsLeft={timer.active ? timer.seconds : null}
+                timeUp={timer.expired}
+                revealPending={reveal.pending}
+                revealDots={reveal.dots}
               />
             )}
           </Card>

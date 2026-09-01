@@ -47,7 +47,11 @@ Não há administrador, moderador nem limite de participantes por sala.
   pizza, alternativas sem gráfico (pergunta e resposta), slide de gabarito
   automático e texto simples.
 - **Opções globais e por slide**: troca de resposta, pedido de nome,
-  identificação das respostas e tamanhos de fonte (título, rótulos, corpo).
+  identificação das respostas, tamanhos de fonte (título, rótulos, corpo) e o
+  tempo do cronômetro das perguntas.
+- **Cronômetro nas perguntas**: contagem regressiva grande na tela; ao zerar,
+  as respostas são encerradas e o gabarito entra sozinho, depois de três
+  segundos de "A resposta certa é…".
 - **Tempo real**: cada mudança de slide e cada resposta aparecem
   instantaneamente para todos, via assinaturas do Firestore.
 - **Contagem separada** de *participantes conectados* e de *quem já respondeu*.
