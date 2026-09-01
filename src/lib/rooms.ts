@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   doc,
   getDoc,
   onSnapshot,
@@ -68,6 +69,7 @@ export async function createRoom(
       // Os cronômetros nascem vazios: cada um é iniciado pela tela do
       // apresentador quando o slide correspondente entra no ar.
       timers: {},
+      revealedSlideIds: [],
     }
     // Sala + doc privado (token) numa escrita atômica.
     const batch = writeBatch(db)
@@ -147,6 +149,20 @@ export async function saveSlideTimers(
   timers: SlideTimers,
 ): Promise<void> {
   await updateDoc(roomRef(code), { timers, updatedAt: Date.now() })
+}
+
+/**
+ * Registra que o suspense de um gabarito terminou. `arrayUnion` deixa a
+ * escrita idempotente: repetir não duplica o id.
+ */
+export async function markAnswerRevealed(
+  code: string,
+  slideId: string,
+): Promise<void> {
+  await updateDoc(roomRef(code), {
+    revealedSlideIds: arrayUnion(slideId),
+    updatedAt: Date.now(),
+  })
 }
 
 export async function setStatus(code: string, status: RoomStatus): Promise<void> {

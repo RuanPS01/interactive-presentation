@@ -69,6 +69,11 @@ Só o apresentador escreve, e sempre junto da troca de slide
 troca de slide, e não uma por segundo, que multiplicaria a cota do plano
 gratuito pelo número de segundos da apresentação.
 
+A revelação do gabarito segue a mesma ideia: quando o suspense termina, o
+apresentador acrescenta o id do slide a `revealedSlideIds` (com `arrayUnion`,
+que torna a escrita idempotente). É esse registro que faz voltar ao gabarito —
+ou chegar atrasado nele — mostrar a resposta na hora.
+
 > **Por que pausar em vez de deixar correr.** Se o tempo continuasse passando
 > fora do slide, pular para uma referência no meio da pergunta queimaria o
 > tempo da plateia. E um cronômetro esgotado **não** reinicia ao voltar: a

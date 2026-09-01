@@ -104,4 +104,6 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Tempo esgotado sem slide de gabarito depois | A pergunta continua no ar, já travada para novas respostas; o apresentador avança |
 | Apresentador sai de uma pergunta no meio da contagem | O cronômetro pausa; voltar retoma de onde parou |
 | Apresentador volta para uma pergunta que já zerou | Continua zerada: sem contagem nova, respostas congeladas e sem avanço automático |
+| Apresentador volta para um gabarito já revelado | A resposta aparece na hora, sem repetir os 3 s de suspense |
+| Apresentador sai do gabarito antes dos 3 s | Nada foi revelado ainda: voltar refaz o suspense |
 | Apresentador recarrega com o tempo já esgotado | A apresentação passa direto para o gabarito |

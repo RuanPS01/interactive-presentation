@@ -139,8 +139,17 @@ ganhando um ponto por segundo. Só então as alternativas surgem.
 O atraso não é enfeite: cada celular recebe a troca de slide com alguns
 milissegundos de diferença, e sem ele quem tem a conexão mais rápida veria a
 resposta antes dos colegas. A contagem é local
-([`useRevealCountdown`](../src/hooks/useRevealCountdown.ts)) e recomeça sempre
-que o slide entra no ar.
+([`useRevealCountdown`](../src/hooks/useRevealCountdown.ts)).
+
+**Só a primeira vez.** Quando o suspense termina, o apresentador registra o
+slide em `room.revealedSlideIds`. A partir daí o gabarito abre direto:
+
+| Situação | O que aparece |
+| --- | --- |
+| 1ª vez no gabarito | 3 s de “A resposta certa é…” e então a resposta |
+| Voltar depois de revelado | A resposta na hora — não há mais nada a sincronizar |
+| Sair antes dos 3 s e voltar | O suspense recomeça: a revelação não chegou a acontecer |
+| Participante que chega atrasado | A resposta na hora, sem esperar por uma contagem que já passou |
 
 ### Ciclo de vida
 

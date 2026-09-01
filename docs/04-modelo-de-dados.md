@@ -20,6 +20,7 @@ interface Room extends Presentation {
   createdAt: number         // epoch ms
   updatedAt: number
   timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
+  revealedSlideIds?: string[]          // gabaritos cujo suspense já terminou
 }
 
 interface SlideTimer {

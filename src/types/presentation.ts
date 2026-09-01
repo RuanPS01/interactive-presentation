@@ -180,6 +180,12 @@ export interface Room extends Presentation {
    * cronômetro existir.
    */
   timers?: SlideTimers
+  /**
+   * Ids dos slides de gabarito cujo suspense já terminou. Voltar a um deles
+   * mostra a resposta na hora: a espera de 3 s existe para sincronizar a
+   * primeira revelação, não para atrasar a revisão.
+   */
+  revealedSlideIds?: string[]
 }
 
 export type ResponseType = 'word' | 'choice'

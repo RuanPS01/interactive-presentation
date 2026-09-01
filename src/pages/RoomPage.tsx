@@ -64,9 +64,12 @@ export function RoomPage() {
   // contagem sai do mesmo instante final e o atraso da revelação é o mesmo
   // para todo mundo.
   const timer = useSlideTimer(room, currentSlide, slideSettings)
-  const reveal = useRevealCountdown(
-    currentSlide?.type === 'answer' ? currentSlide.id : null,
-  )
+  const answerSlideId = currentSlide?.type === 'answer' ? currentSlide.id : null
+  const reveal = useRevealCountdown(answerSlideId, {
+    // Gabarito já revelado: quem chega agora (ou volta a ele) vê a resposta
+    // direto, sem uma espera que não sincroniza mais nada.
+    revealed: Boolean(answerSlideId && room?.revealedSlideIds?.includes(answerSlideId)),
+  })
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-6">

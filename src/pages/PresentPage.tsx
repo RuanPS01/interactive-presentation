@@ -21,7 +21,12 @@ import { useParticipants } from '../hooks/useParticipants'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
-import { claimPresenter, saveSlideTimers, setCurrentSlide } from '../lib/rooms'
+import {
+  claimPresenter,
+  markAnswerRevealed,
+  saveSlideTimers,
+  setCurrentSlide,
+} from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
@@ -64,9 +69,11 @@ export function PresentPage() {
   // Cronômetro do slide atual e suspense do gabarito: os mesmos dois estados
   // que a plateia vê, para o projetor e os celulares andarem juntos.
   const timer = useSlideTimer(room, currentSlide, slideSettings)
-  const reveal = useRevealCountdown(
-    currentSlide?.type === 'answer' ? currentSlide.id : null,
+  const answerSlideId = currentSlide?.type === 'answer' ? currentSlide.id : null
+  const alreadyRevealed = Boolean(
+    answerSlideId && room?.revealedSlideIds?.includes(answerSlideId),
   )
+  const reveal = useRevealCountdown(answerSlideId, { revealed: alreadyRevealed })
 
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -193,6 +200,18 @@ export function PresentPage() {
     const next = current.slides[index + 1]
     if (next?.type === 'answer' && next.quizSlideId === expiredSlideId) goTo(index + 1)
   }, [access, expiredSlideId, goTo])
+
+  // Suspense terminado: fica registrado na sala para que voltar ao gabarito
+  // (ou chegar atrasado nele) mostre a resposta na hora, sem repetir a espera.
+  const revealToRecord = answerSlideId && !reveal.pending && !alreadyRevealed
+    ? answerSlideId
+    : null
+  useEffect(() => {
+    if (access !== 'granted' || !code || !revealToRecord) return
+    void markAnswerRevealed(code, revealToRecord).catch(() => {
+      /* sem o registro o suspense apenas se repete; nada quebra */
+    })
+  }, [access, code, revealToRecord])
 
   // Decide o acesso assim que a sala e o uid estiverem prontos.
   const creatorUid = room?.creatorUid

@@ -143,7 +143,7 @@ PDF.
 | `useRoom`, `useResponses`, `useMyResponse`, `useParticipants` | Assinaturas do Firestore ([07](07-tempo-real-e-comunicacao.md)) |
 | `useParticipant` | Sessão anônima e uid |
 | `useSlideTimer` | Contagem regressiva do slide a partir dos `timers` da sala (correndo, pausado ou congelado) |
-| `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito |
+| `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito — pulados num gabarito já revelado |
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
 | `useFullscreen` | Fullscreen API, acompanhando a saída por Esc |
 
