@@ -31,6 +31,11 @@ export interface PresentationSettings {
   labelFontSize: number
   /** Tamanho (px) do corpo/conteúdo do slide. */
   bodyFontSize: number
+  /**
+   * Segundos do cronômetro dos slides de questionário (`quiz`). Zerado, o
+   * slide fica sem cronômetro e a pergunta espera o apresentador avançar.
+   */
+  quizTimerSeconds: number
 }
 
 /**
@@ -144,6 +149,23 @@ export interface Presentation {
 
 export type RoomStatus = 'live' | 'ended'
 
+/**
+ * Cronômetro de um slide dentro da sala.
+ *
+ * - **correndo**: `endsAt` tem o instante final (epoch ms);
+ * - **pausado**: `endsAt` é `null` e o que sobrou está em `remainingMs` — é o
+ *   estado de um slide que o apresentador deixou no meio da contagem;
+ * - **esgotado**: `endsAt` é `null` e `remainingMs` é 0. Voltar para a pergunta
+ *   não reabre as respostas: elas ficam congeladas como estavam.
+ */
+export interface SlideTimer {
+  endsAt: number | null
+  remainingMs: number
+}
+
+/** Cronômetros da sala, indexados pelo id do slide. */
+export type SlideTimers = Record<string, SlideTimer>
+
 /** Documento salvo em `rooms/{roomCode}` no Firestore. */
 export interface Room extends Presentation {
   creatorUid: string
@@ -151,6 +173,19 @@ export interface Room extends Presentation {
   status: RoomStatus
   createdAt: number
   updatedAt: number
+  /**
+   * Cronômetro de cada slide que já esteve no ar. Só o apresentador grava;
+   * todos os navegadores contam a partir do mesmo instante final, o que
+   * dispensa uma escrita por segundo. Ausente nas salas criadas antes do
+   * cronômetro existir.
+   */
+  timers?: SlideTimers
+  /**
+   * Ids dos slides de gabarito cujo suspense já terminou. Voltar a um deles
+   * mostra a resposta na hora: a espera de 3 s existe para sincronizar a
+   * primeira revelação, não para atrasar a revisão.
+   */
+  revealedSlideIds?: string[]
 }
 
 export type ResponseType = 'word' | 'choice'

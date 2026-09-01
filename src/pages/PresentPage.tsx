@@ -11,19 +11,27 @@ import {
   Minimize2,
   Users,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useFullscreen } from '../hooks/useFullscreen'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
 import { useParticipants } from '../hooks/useParticipants'
+import { useRevealCountdown } from '../hooks/useRevealCountdown'
+import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
-import { claimPresenter, setCurrentSlide } from '../lib/rooms'
+import {
+  claimPresenter,
+  markAnswerRevealed,
+  saveSlideTimers,
+  setCurrentSlide,
+} from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
+import { advanceTimers, slideTimerSeconds } from '../utils/timer'
 import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
@@ -58,6 +66,15 @@ export function PresentPage() {
   const participants = useParticipants(code)
   const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
 
+  // Cronômetro do slide atual e suspense do gabarito: os mesmos dois estados
+  // que a plateia vê, para o projetor e os celulares andarem juntos.
+  const timer = useSlideTimer(room, currentSlide, slideSettings)
+  const answerSlideId = currentSlide?.type === 'answer' ? currentSlide.id : null
+  const alreadyRevealed = Boolean(
+    answerSlideId && room?.revealedSlideIds?.includes(answerSlideId),
+  )
+  const reveal = useRevealCountdown(answerSlideId, { revealed: alreadyRevealed })
+
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
 
@@ -71,30 +88,50 @@ export function PresentPage() {
   const roomRef = useRef(room)
   roomRef.current = room
 
+  /**
+   * Troca o slide atual, pausando o cronômetro do slide que sai e
+   * iniciando/retomando o do slide que entra. Lê a sala pela referência para
+   * continuar estável entre snapshots — assim o ouvinte de teclado não é
+   * recadastrado a cada resposta que chega.
+   */
+  const goTo = useCallback(
+    (next: number) => {
+      const current = roomRef.current
+      if (!code || !current) return
+      const count = current.slides.length
+      // O índice extra (= nº de slides) é o slide de agradecimento automático.
+      const clamped = Math.max(0, Math.min(next, count > 0 ? count : 0))
+      if (clamped === current.currentSlideIndex) return
+      const timers = advanceTimers(
+        current.timers,
+        current.slides[current.currentSlideIndex],
+        current.slides[clamped],
+        current.settings,
+      )
+      void setCurrentSlide(code, clamped, timers)
+    },
+    [code],
+  )
+
   // Navegação por teclado e passador de slides (clicker):
-  // avança com →, PageDown, Espaço; volta com ←, PageUp. O último passo
-  // (índice === nº de slides) é o slide de agradecimento automático.
+  // avança com →, PageDown, Espaço; volta com ←, PageUp.
   useEffect(() => {
-    if (!room || !code) return
-    const slideCount = room.slides.length
-    const maxIndex = slideCount > 0 ? slideCount : 0
     function onKey(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
-      const idx = room!.currentSlideIndex
+      const idx = roomRef.current?.currentSlideIndex
+      if (idx === undefined) return
       if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
         e.preventDefault()
-        const next = Math.min(idx + 1, maxIndex)
-        if (next !== idx) void setCurrentSlide(code!, next)
+        goTo(idx + 1)
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault()
-        const prev = Math.max(idx - 1, 0)
-        if (prev !== idx) void setCurrentSlide(code!, prev)
+        goTo(idx - 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [room, code])
+  }, [goTo])
 
   // Ao chegar no slide final: busca todas as respostas (para a grade) e,
   // no apresentador, dispara o download do PDF de resultados automaticamente.
@@ -123,6 +160,58 @@ export function PresentPage() {
       cancelled = true
     }
   }, [code, activeIndex, slideCount])
+
+  // Sala aberta (ou retomada) num slide cujo cronômetro nunca começou, ou que
+  // ficou pausado numa passagem anterior: quem apresenta grava o instante
+  // final para todos. Um cronômetro já esgotado não entra aqui — voltar para
+  // a pergunta não abre uma contagem nova.
+  const currentSlideId = currentSlide?.id
+  const timerSeconds = slideTimerSeconds(currentSlide, slideSettings)
+  const currentTimer = currentSlideId ? room?.timers?.[currentSlideId] : undefined
+  const needsTimer =
+    timerSeconds > 0 &&
+    (currentTimer === undefined ||
+      (currentTimer.endsAt === null && currentTimer.remainingMs > 0))
+  useEffect(() => {
+    if (access !== 'granted' || !code || !currentSlideId || !needsTimer) return
+    const current = roomRef.current
+    const slide = current?.slides.find((s) => s.id === currentSlideId)
+    if (!current || !slide) return
+    void saveSlideTimers(
+      code,
+      advanceTimers(current.timers, undefined, slide, current.settings),
+    ).catch(() => {
+      /* sem cronômetro a pergunta segue no ar até o apresentador avançar */
+    })
+  }, [access, code, currentSlideId, needsTimer])
+
+  // Tempo esgotado agora, com o cronômetro correndo: a entrada da plateia já
+  // está bloqueada e a apresentação passa sozinha para o gabarito da própria
+  // pergunta. Sem gabarito logo depois, a pergunta continua no ar.
+  //
+  // Um cronômetro congelado em zero (pergunta encerrada que o apresentador
+  // reabriu para rever) não avança nada: ele voltou ali de propósito.
+  const expiredSlideId = timer.expired && !timer.frozen ? currentSlideId : undefined
+  useEffect(() => {
+    if (access !== 'granted' || !expiredSlideId) return
+    const current = roomRef.current
+    if (!current) return
+    const index = current.currentSlideIndex
+    const next = current.slides[index + 1]
+    if (next?.type === 'answer' && next.quizSlideId === expiredSlideId) goTo(index + 1)
+  }, [access, expiredSlideId, goTo])
+
+  // Suspense terminado: fica registrado na sala para que voltar ao gabarito
+  // (ou chegar atrasado nele) mostre a resposta na hora, sem repetir a espera.
+  const revealToRecord = answerSlideId && !reveal.pending && !alreadyRevealed
+    ? answerSlideId
+    : null
+  useEffect(() => {
+    if (access !== 'granted' || !code || !revealToRecord) return
+    void markAnswerRevealed(code, revealToRecord).catch(() => {
+      /* sem o registro o suspense apenas se repete; nada quebra */
+    })
+  }, [access, code, revealToRecord])
 
   // Decide o acesso assim que a sala e o uid estiverem prontos.
   const creatorUid = room?.creatorUid
@@ -199,12 +288,6 @@ export function PresentPage() {
   const maxIndex = total > 0 ? total : 0
   const isSummary = total > 0 && index >= total
   const joinUrl = `${window.location.origin}${window.location.pathname}#/room/${code}`
-
-  function goTo(next: number) {
-    if (!code) return
-    const clamped = Math.max(0, Math.min(next, maxIndex))
-    if (clamped !== index) void setCurrentSlide(code, clamped)
-  }
 
   async function copyJoinLink() {
     try {
@@ -357,6 +440,9 @@ export function PresentPage() {
               responses={responses}
               settings={slideSettings}
               participants={participants.length}
+              secondsLeft={timer.active ? timer.seconds : null}
+              revealPending={reveal.pending}
+              revealDots={reveal.dots}
             />
           </div>
         ) : (

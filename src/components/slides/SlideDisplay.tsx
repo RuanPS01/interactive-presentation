@@ -10,18 +10,18 @@ import { isInteractiveSlide } from '../../types/presentation'
 import {
   aggregateChoices,
   aggregateWords,
-  answeredCount,
   namedResponses,
-  totalVotes,
-  totalWords,
+  responseSummary,
 } from '../../utils/aggregate'
 import { DEFAULT_SETTINGS } from '../../utils/settings'
 import { findQuizSlide } from '../../utils/slides'
 import { BarChartView } from '../charts/BarChartView'
 import { PieChartView } from '../charts/PieChartView'
 import { WordCloudView } from '../charts/WordCloudView'
+import { AnswerSuspense } from './AnswerSuspense'
 import { NamedResponsesList } from './NamedResponsesList'
 import { OptionsBoard } from './OptionsBoard'
+import { SlideCountdown } from './SlideCountdown'
 
 interface SlideDisplayProps {
   slide: Slide
@@ -36,6 +36,12 @@ interface SlideDisplayProps {
   participants?: number
   /** Demais slides, para o gabarito achar o `quiz` que ele revela. */
   slides?: Slide[]
+  /** Segundos restantes do cronômetro; `null` quando o slide não tem. */
+  secondsLeft?: number | null
+  /** Gabarito ainda em suspense ("A resposta certa é…"). */
+  revealPending?: boolean
+  /** Pontos já exibidos nas reticências do suspense. */
+  revealDots?: number
 }
 
 const ALIGN_ITEMS: Record<TextAlign, string> = {
@@ -51,6 +57,9 @@ export function SlideDisplay({
   settings = DEFAULT_SETTINGS,
   participants,
   slides,
+  secondsLeft = null,
+  revealPending = false,
+  revealDots = 0,
 }: SlideDisplayProps) {
   const quiz = findQuizSlide(slide, slides)
   // Num `quiz`, identificar as respostas também as revela — então a lista de
@@ -69,24 +78,45 @@ export function SlideDisplay({
         {slide.type === 'answer' ? (quiz?.title ?? slide.title) : slide.title}
       </h2>
 
-      <div className="min-h-0 flex-1">
-        <SlideBody slide={slide} responses={responses} settings={settings} quiz={quiz} />
-      </div>
-
-      {showNames && (
-        <NamedResponsesList
-          responses={namedResponses(responses, slide)}
-          fontSize={settings.labelFontSize}
+      {secondsLeft !== null && (
+        <SlideCountdown
+          seconds={secondsLeft}
+          fontSize={Math.max(settings.titleFontSize * 1.6, 64)}
+          className="mb-6 shrink-0"
         />
       )}
 
-      <SlideFooter
-        slide={slide}
-        responses={responses}
-        settings={settings}
-        participants={participants}
-        quiz={quiz}
-      />
+      {/* Enquanto o gabarito está em suspense, nada do resultado aparece — nem
+          o quadro de alternativas, nem os nomes, nem a contagem do rodapé. */}
+      {revealPending ? (
+        <div className="min-h-0 flex-1">
+          <AnswerSuspense
+            dots={revealDots}
+            fontSize={Math.max(settings.titleFontSize, 40)}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="min-h-0 flex-1">
+            <SlideBody slide={slide} responses={responses} settings={settings} quiz={quiz} />
+          </div>
+
+          {showNames && (
+            <NamedResponsesList
+              responses={namedResponses(responses, slide)}
+              fontSize={settings.labelFontSize}
+            />
+          )}
+
+          <SlideFooter
+            slide={slide}
+            responses={responses}
+            settings={settings}
+            participants={participants}
+            quiz={quiz}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -165,17 +195,12 @@ interface FooterProps extends BodyProps {
 
 /**
  * Rodapé com os números da sala. "Participantes" conta quem está conectado
- * (mesmo sem responder); "respostas" conta quem já enviou algo.
+ * (mesmo sem responder); o resto vem de `responseSummary`, que só acrescenta o
+ * total de envios quando ele pode diferir de quem respondeu.
  */
 function SlideFooter({ slide, responses, settings, participants, quiz }: FooterProps) {
   const source = slide.type === 'answer' ? quiz : slide
   if (!source || !isInteractiveSlide(source)) return null
-
-  const answered = answeredCount(responses)
-  const detail =
-    source.type === 'wordcloud'
-      ? `${totalWords(responses)} resposta(s) enviada(s)`
-      : `${totalVotes(aggregateChoices(responses, source.options))} voto(s)`
 
   return (
     <p
@@ -183,7 +208,7 @@ function SlideFooter({ slide, responses, settings, participants, quiz }: FooterP
       style={{ fontSize: `${settings.labelFontSize * 0.85}px` }}
     >
       {participants !== undefined && <>{participants} participante(s) · </>}
-      {answered} responderam · {detail}
+      {responseSummary(source, responses)}
     </p>
   )
 }

@@ -9,6 +9,7 @@ import { savePresenterSession } from '../lib/presenterSessions'
 import { isFirebaseConfigured } from '../lib/firebase'
 import { exportPresentation, importPresentationFromFile } from '../utils/importExport'
 import { resolveSlideSettings } from '../utils/settings'
+import { slideTimerSeconds } from '../utils/timer'
 import { AddSlideMenu } from '../components/editor/AddSlideMenu'
 import { AiPromptButton } from '../components/editor/AiPromptButton'
 import { PresentationSettingsButton } from '../components/editor/PresentationSettingsButton'
@@ -40,6 +41,9 @@ export function CreatePage() {
 
   const selectedSlide = slides[selectedIndex]
   const previewSettings = resolveSlideSettings(settings, selectedSlide)
+  // A prévia mostra o cronômetro parado no tempo configurado, para o
+  // apresentador conferir como o slide fica com ele na tela.
+  const previewSeconds = slideTimerSeconds(selectedSlide, previewSettings) || null
 
   async function startPresentation() {
     if (!uid) {
@@ -189,6 +193,7 @@ export function CreatePage() {
                 slides={slides}
                 responses={[]}
                 settings={previewSettings}
+                secondsLeft={previewSeconds}
               />
             ) : (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem slide.</p>

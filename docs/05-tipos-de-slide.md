@@ -87,6 +87,32 @@ e, se a sala identificar as respostas, a lista de nomes aparece junto. Com a
 opção desligada essa lista fica suprimida mesmo com a identificação ativa, já
 que mostrar "Ana: Lista" revelaria a resposta do mesmo jeito.
 
+### Cronômetro
+
+Por padrão a pergunta fica no ar por **20 segundos** (opção global
+`quizTimerSeconds`, com tempo próprio por slide — ver
+[06](06-configuracoes.md#cronômetro-das-perguntas)). A contagem aparece grande
+logo abaixo do enunciado, em vermelho nos últimos 5 segundos, e é a mesma no
+projetor e nos celulares.
+
+Ao zerar:
+
+1. os controles do participante travam (“Tempo esgotado — as respostas foram
+   encerradas”);
+2. se houver um slide `answer` logo depois, a apresentação avança sozinha.
+
+O cronômetro **acompanha o slide, não a apresentação**:
+
+| O apresentador… | O cronômetro… |
+| --- | --- |
+| sai da pergunta no meio da contagem | **pausa** — nada corre enquanto ele está fora |
+| volta para essa pergunta | **retoma de onde parou** |
+| volta para uma pergunta que já zerou | **continua zerado** — sem contagem nova, e as respostas seguem congeladas como estavam |
+
+A última linha é o que permite revisitar uma pergunta encerrada para comentá-la
+sem reabrir a votação — e sem que a apresentação pule sozinha para o gabarito
+de novo.
+
 No editor ([`QuizConfig`](../src/components/editor/QuizConfig.tsx)) cada
 alternativa tem um marcador de “correta” ao lado: caixa de seleção quando
 `allowMultiple`, botão de opção quando não (clicar de novo desmarca e volta a
@@ -103,6 +129,27 @@ Não tem conteúdo próprio: aponta para o `quiz` e reexibe as alternativas com 
 correta destacada em verde, mais **votos e porcentagem por alternativa**. No
 celular, o participante vê “Você acertou!” / “Não foi dessa vez”, quais eram as
 corretas e qual foi a sua escolha.
+
+### Suspense antes de revelar
+
+O gabarito não aparece de imediato: por **3 segundos** a tela mostra, no
+centro, **“A resposta certa é…”** — e as reticências são a própria contagem,
+ganhando um ponto por segundo. Só então as alternativas surgem.
+
+O atraso não é enfeite: cada celular recebe a troca de slide com alguns
+milissegundos de diferença, e sem ele quem tem a conexão mais rápida veria a
+resposta antes dos colegas. A contagem é local
+([`useRevealCountdown`](../src/hooks/useRevealCountdown.ts)).
+
+**Só a primeira vez.** Quando o suspense termina, o apresentador registra o
+slide em `room.revealedSlideIds`. A partir daí o gabarito abre direto:
+
+| Situação | O que aparece |
+| --- | --- |
+| 1ª vez no gabarito | 3 s de “A resposta certa é…” e então a resposta |
+| Voltar depois de revelado | A resposta na hora — não há mais nada a sincronizar |
+| Sair antes dos 3 s e voltar | O suspense recomeça: a revelação não chegou a acontecer |
+| Participante que chega atrasado | A resposta na hora, sem esperar por uma contagem que já passou |
 
 ### Ciclo de vida
 

@@ -97,6 +97,8 @@ TIPOS DE SLIDE
    - "showResponses": true mostra na tela do apresentador quantos votos cada
      alternativa recebeu enquanto a pergunta está no ar. Prefira false (padrão)
      em pergunta e resposta, para não entregar o resultado antes da hora.
+   - Para dar a esta pergunta um tempo diferente do geral, use
+     "overrides": { "quizTimerSeconds": 30 } (0 = sem cronômetro).
 
    {
      "id": "s4",
@@ -143,6 +145,10 @@ Todas opcionais; inclua apenas as que quiser mudar.
   PDF. Só funciona com "askName": true.
 - "titleFontSize", "labelFontSize", "bodyFontSize": inteiros de 10 a 200 (px),
   para título, rótulos e corpo dos slides.
+- "quizTimerSeconds": inteiro de 0 a 300. Segundos do cronômetro dos slides
+  "quiz" (padrão 20). Ao acabar o tempo, as respostas são encerradas e a
+  apresentação passa sozinha para o slide de resposta. Use 0 para deixar as
+  perguntas sem cronômetro.
 
   "settings": {
     "allowChangeAnswer": true,
@@ -150,7 +156,8 @@ Todas opcionais; inclua apenas as que quiser mudar.
     "identifyResponses": false,
     "titleFontSize": 36,
     "labelFontSize": 16,
-    "bodyFontSize": 24
+    "bodyFontSize": 24,
+    "quizTimerSeconds": 20
   }
 
 REGRAS
@@ -171,7 +178,8 @@ EXEMPLO COMPLETO VÁLIDO
   "title": "Introdução à Análise de Dados",
   "settings": {
     "titleFontSize": 40,
-    "bodyFontSize": 26
+    "bodyFontSize": 26,
+    "quizTimerSeconds": 20
   },
   "slides": [
     {

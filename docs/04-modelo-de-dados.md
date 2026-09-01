@@ -19,11 +19,23 @@ interface Room extends Presentation {
   status: 'live' | 'ended'
   createdAt: number         // epoch ms
   updatedAt: number
+  timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
+  revealedSlideIds?: string[]          // gabaritos cujo suspense já terminou
+}
+
+interface SlideTimer {
+  endsAt: number | null   // instante final enquanto corre; null quando parado
+  remainingMs: number     // o que sobrou quando parado (0 = tempo esgotado)
 }
 ```
 
 `Presentation` é a estrutura **serializável** (import/export JSON).
 `Room` é ela mais os campos que só existem depois de publicada.
+
+`timers` guarda **um registro por slide**, e não um cronômetro só: o
+apresentador pode sair de uma pergunta no meio da contagem e voltar depois, e
+cada slide precisa lembrar em que pé estava. Ver
+[07](07-tempo-real-e-comunicacao.md#cronômetro).
 
 ### Slides
 
@@ -127,7 +139,8 @@ O JSON exportado é exatamente um `Presentation`:
     "identifyResponses": false,
     "titleFontSize": 36,
     "labelFontSize": 16,
-    "bodyFontSize": 24
+    "bodyFontSize": 24,
+    "quizTimerSeconds": 20
   },
   "slides": [
     { "id": "s1", "type": "text", "title": "Abertura",
@@ -170,7 +183,15 @@ puras sobre `ResponseDoc[]`:
 | `totalWords` | Total de textos enviados na nuvem |
 | `answeredCount` | Participantes **distintos que responderam** aquele slide |
 | `namedResponses` | `{ uid, name, answers[] }[]`, com ids de opção traduzidos para o rótulo |
+| `responseSummary` | O texto do rodapé: “8 responderam”, com o total de envios só quando ele pode ser diferente |
 
 > **`answeredCount` não é o total de participantes.** Esse número vem da coleção
 > `participants` (ver [07](07-tempo-real-e-comunicacao.md#presença)); a distinção
 > é o que faz o rodapé mostrar “12 participantes · 8 responderam”.
+
+> **Por que o rodapé nem sempre mostra os dois números.** Numa escolha única —
+> ou numa nuvem de uma palavra por pessoa — cada participante envia exatamente
+> um item, então “8 responderam · 8 voto(s)” diria a mesma coisa duas vezes.
+> `responseSummary` só acrescenta o total quando o slide permite mais de um
+> envio (`allowMultiple`, ou `wordLimitMode` diferente de `one`). Vale para a
+> tela e para o PDF.

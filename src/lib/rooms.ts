@@ -1,4 +1,5 @@
 import {
+  arrayUnion,
   doc,
   getDoc,
   onSnapshot,
@@ -14,6 +15,7 @@ import type {
   Room,
   RoomStatus,
   Slide,
+  SlideTimers,
 } from '../types/presentation'
 
 const ROOMS = 'rooms'
@@ -64,6 +66,10 @@ export async function createRoom(
       status: 'live',
       createdAt: now,
       updatedAt: now,
+      // Os cronômetros nascem vazios: cada um é iniciado pela tela do
+      // apresentador quando o slide correspondente entra no ar.
+      timers: {},
+      revealedSlideIds: [],
     }
     // Sala + doc privado (token) numa escrita atômica.
     const batch = writeBatch(db)
@@ -116,8 +122,47 @@ export function subscribeRoom(
   )
 }
 
-export async function setCurrentSlide(code: string, index: number): Promise<void> {
-  await updateDoc(roomRef(code), { currentSlideIndex: index, updatedAt: Date.now() })
+/**
+ * Troca o slide atual e grava os cronômetros na mesma escrita — o slide que
+ * sai é pausado e o que entra é iniciado/retomado de uma vez só (ver
+ * `advanceTimers`). Separar as duas escritas abriria um intervalo em que a
+ * plateia veria o novo slide com o tempo do anterior.
+ */
+export async function setCurrentSlide(
+  code: string,
+  index: number,
+  timers: SlideTimers,
+): Promise<void> {
+  await updateDoc(roomRef(code), {
+    currentSlideIndex: index,
+    timers,
+    updatedAt: Date.now(),
+  })
+}
+
+/**
+ * Grava os cronômetros sem trocar de slide — usado quando o apresentador abre
+ * ou retoma a sala num slide cujo tempo ainda não começou (ou ficou pausado).
+ */
+export async function saveSlideTimers(
+  code: string,
+  timers: SlideTimers,
+): Promise<void> {
+  await updateDoc(roomRef(code), { timers, updatedAt: Date.now() })
+}
+
+/**
+ * Registra que o suspense de um gabarito terminou. `arrayUnion` deixa a
+ * escrita idempotente: repetir não duplica o id.
+ */
+export async function markAnswerRevealed(
+  code: string,
+  slideId: string,
+): Promise<void> {
+  await updateDoc(roomRef(code), {
+    revealedSlideIds: arrayUnion(slideId),
+    updatedAt: Date.now(),
+  })
 }
 
 export async function setStatus(code: string, status: RoomStatus): Promise<void> {

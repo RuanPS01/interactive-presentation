@@ -17,10 +17,10 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
   1. **Nuvem de palavras** — o apresentador escolhe se cada participante envia **1 resposta**, **de 1 até N**, ou **quantas quiser** (padrão). Aceita palavra ou frase.
   2. **Gráfico de barras** — opções definidas pelo apresentador; voto único ou **múltipla escolha** (padrão: único).
   3. **Gráfico de pizza** — mesma configuração das barras; a visualização vira pizza proporcional ao total de votos.
-  4. **Alternativas (sem gráfico)** — pergunta e resposta: as alternativas aparecem grandes no centro da tela e no celular, sem revelar a distribuição.
-  5. **Resposta correta** — slide de gabarito **criado automaticamente** depois de uma pergunta, destacando a alternativa certa e os votos de cada uma.
+  4. **Alternativas (sem gráfico)** — pergunta e resposta: as alternativas aparecem grandes no centro da tela e no celular, sem revelar a distribuição. Tem **cronômetro** (padrão de 20 s): ao zerar, as respostas são encerradas e a apresentação passa para o gabarito.
+  5. **Resposta correta** — slide de gabarito **criado automaticamente** depois de uma pergunta, destacando a alternativa certa e os votos de cada uma. Aparece depois de 3 segundos de “A resposta certa é…”, para todo mundo ver a revelação junto.
   6. **Texto simples** — alinhamento (esquerda/centro/direita) e tamanho da fonte.
-- **Opções globais e por slide** (ver [docs/06](docs/06-configuracoes.md)): permitir limpar/trocar a resposta, pedir o nome antes de entrar, identificar cada resposta pelo nome e definir os tamanhos de título, rótulos e corpo.
+- **Opções globais e por slide** (ver [docs/06](docs/06-configuracoes.md)): permitir limpar/trocar a resposta, pedir o nome antes de entrar, identificar cada resposta pelo nome, definir os tamanhos de título, rótulos e corpo e o **tempo do cronômetro** das perguntas (0 desliga).
 - **Contagem de participantes** separada de quem já respondeu: quem abre a sala já conta como participante.
 - **Compartilhamento**: código grande, QR Code ampliado e **link curto** para quem prefere digitar.
 - **Tema claro/escuro** como **preferência de cada usuário**, salva no navegador (localStorage). Apresentador e participantes escolhem o seu de forma independente; não é sincronizado pela sala.

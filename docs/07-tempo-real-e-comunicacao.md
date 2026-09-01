@@ -39,6 +39,59 @@ No slide de gabarito, apresentador e participante assinam as respostas do
 **`quiz` de origem** (`resultsSlideId`), não as do próprio slide `answer` — que
 nunca recebe respostas.
 
+### Cronômetro
+
+O documento da sala guarda **um instante final por slide**, não uma contagem:
+
+```ts
+timers: {
+  s4: { endsAt: 1735689600000, remainingMs: 20000 },  // correndo
+  s7: { endsAt: null,          remainingMs: 12000 },  // pausado (fora do slide)
+  s9: { endsAt: null,          remainingMs: 0 },      // esgotado, congelado
+}
+```
+
+Três estados, e a transição entre eles está toda em `advanceTimers`
+([`utils/timer.ts`](../src/utils/timer.ts)), chamada pelo apresentador a cada
+troca de slide:
+
+| Situação | Escrita |
+| --- | --- |
+| Entra num slide pela 1ª vez | `{ endsAt: agora + duração, remainingMs: duração }` |
+| Sai do slide correndo | `{ endsAt: null, remainingMs: o que sobrou }` |
+| Volta a um slide pausado | `{ endsAt: agora + remainingMs, remainingMs }` |
+| Volta a um slide esgotado | nada muda — continua em zero |
+
+Só o apresentador escreve, e sempre junto da troca de slide
+(`setCurrentSlide`) ou ao assumir uma sala parada num slide com tempo
+(`saveSlideTimers`). Cada navegador conta localmente a partir do mesmo
+`endsAt` ([`useSlideTimer`](../src/hooks/useSlideTimer.ts)) — uma escrita por
+troca de slide, e não uma por segundo, que multiplicaria a cota do plano
+gratuito pelo número de segundos da apresentação.
+
+A revelação do gabarito segue a mesma ideia: quando o suspense termina, o
+apresentador acrescenta o id do slide a `revealedSlideIds` (com `arrayUnion`,
+que torna a escrita idempotente). É esse registro que faz voltar ao gabarito —
+ou chegar atrasado nele — mostrar a resposta na hora.
+
+> **Por que pausar em vez de deixar correr.** Se o tempo continuasse passando
+> fora do slide, pular para uma referência no meio da pergunta queimaria o
+> tempo da plateia. E um cronômetro esgotado **não** reinicia ao voltar: a
+> pergunta encerrada é para ser revista, não refeita — daí `frozen` em
+> `useSlideTimer`, que também impede a troca automática para o gabarito
+> disparar de novo.
+
+Duas consequências assumidas:
+
+- **A comparação usa o relógio de cada dispositivo.** Um celular adiantado ou
+  atrasado vê alguns segundos a mais ou a menos; o tempo restante é limitado à
+  duração do slide para nunca começar acima dela. A troca para o gabarito quem
+  decide é o apresentador, então a apresentação continua sincronizada.
+- **O bloqueio é da interface, não das regras.** Ao zerar, os controles do
+  participante travam, mas as regras do Firestore não conhecem o cronômetro —
+  uma resposta já em trânsito ainda pode ser gravada. É o mesmo nível de
+  confiança do resto da sala: quem tem o código participa.
+
 ## Presença
 
 [`src/lib/participants.ts`](../src/lib/participants.ts)

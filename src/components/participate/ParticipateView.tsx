@@ -1,6 +1,8 @@
 import type { PresentationSettings, Slide } from '../../types/presentation'
 import { useMyResponse } from '../../hooks/useMyResponse'
 import { findQuizSlide } from '../../utils/slides'
+import { AnswerSuspense } from '../slides/AnswerSuspense'
+import { SlideCountdown } from '../slides/SlideCountdown'
 import { AnswerReveal } from './AnswerReveal'
 import { WordCloudInput } from './WordCloudInput'
 import { ChoiceInput } from './ChoiceInput'
@@ -14,6 +16,14 @@ interface ParticipateViewProps {
   /** Nome informado ao entrar (null quando a sala não pede). */
   participantName: string | null
   settings: PresentationSettings
+  /** Segundos restantes do cronômetro; `null` quando o slide não tem. */
+  secondsLeft?: number | null
+  /** Tempo esgotado: a resposta não é mais aceita. */
+  timeUp?: boolean
+  /** Gabarito ainda em suspense ("A resposta certa é…"). */
+  revealPending?: boolean
+  /** Pontos já exibidos nas reticências do suspense. */
+  revealDots?: number
 }
 
 /** Controles que o participante vê, conforme o tipo do slide atual. */
@@ -24,6 +34,10 @@ export function ParticipateView({
   participantUid,
   participantName,
   settings,
+  secondsLeft = null,
+  timeUp = false,
+  revealPending = false,
+  revealDots = 0,
 }: ParticipateViewProps) {
   const quiz = findQuizSlide(slide, slides)
   // No slide de gabarito o que interessa é a resposta dada na pergunta.
@@ -41,6 +55,8 @@ export function ParticipateView({
       >
         {slide.type === 'answer' ? (quiz?.title ?? slide.title) : slide.title}
       </h2>
+
+      {secondsLeft !== null && <SlideCountdown seconds={secondsLeft} fontSize={44} />}
 
       {slide.type === 'wordcloud' && (
         <WordCloudInput
@@ -61,12 +77,18 @@ export function ParticipateView({
           participantName={participantName}
           current={current}
           settings={settings}
+          timeUp={timeUp}
         />
       )}
 
-      {slide.type === 'answer' && (
-        <AnswerReveal quiz={quiz} current={current} settings={settings} />
-      )}
+      {slide.type === 'answer' &&
+        // O gabarito só aparece depois do suspense — o atraso garante que
+        // ninguém veja a resposta antes dos colegas.
+        (revealPending ? (
+          <AnswerSuspense dots={revealDots} fontSize={Math.min(settings.bodyFontSize, 24)} />
+        ) : (
+          <AnswerReveal quiz={quiz} current={current} settings={settings} />
+        ))}
 
       {slide.type === 'text' && (
         <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">

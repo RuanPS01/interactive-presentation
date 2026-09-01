@@ -1,5 +1,5 @@
 import { clsx } from 'clsx'
-import { Check, Eraser, Lock } from 'lucide-react'
+import { Check, Eraser, Lock, TimerOff } from 'lucide-react'
 import { useState } from 'react'
 import { clearResponse, saveResponse } from '../../lib/responses'
 import type { ChoiceSlide, PresentationSettings } from '../../types/presentation'
@@ -12,6 +12,8 @@ interface ChoiceInputProps {
   participantName: string | null
   current: string[]
   settings: PresentationSettings
+  /** Cronômetro do slide esgotado: nenhuma resposta é mais aceita. */
+  timeUp?: boolean
 }
 
 /** Voto para barras, pizza e alternativas (radio ou checkbox). */
@@ -22,6 +24,7 @@ export function ChoiceInput({
   participantName,
   current,
   settings,
+  timeUp = false,
 }: ChoiceInputProps) {
   const [busy, setBusy] = useState(false)
   const selected = new Set(current)
@@ -36,6 +39,8 @@ export function ChoiceInput({
    * foi enviado; marcar novas opções continua liberado.
    */
   function isBlocked(optionId: string): boolean {
+    // Tempo esgotado tranca tudo, inclusive quem ainda não respondeu.
+    if (timeUp) return true
     if (settings.allowChangeAnswer || !hasAnswered) return false
     return slide.allowMultiple ? selected.has(optionId) : true
   }
@@ -73,14 +78,20 @@ export function ChoiceInput({
 
   return (
     <div className="space-y-3">
-      <p
-        className="text-neutral-500 dark:text-neutral-400"
-        style={{ fontSize: `${settings.labelFontSize * 0.9}px` }}
-      >
-        {slide.allowMultiple
-          ? 'Você pode escolher mais de uma opção.'
-          : 'Escolha uma opção.'}
-      </p>
+      {timeUp ? (
+        <p className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-3 font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
+          <TimerOff size={18} /> Tempo esgotado — as respostas foram encerradas.
+        </p>
+      ) : (
+        <p
+          className="text-neutral-500 dark:text-neutral-400"
+          style={{ fontSize: `${settings.labelFontSize * 0.9}px` }}
+        >
+          {slide.allowMultiple
+            ? 'Você pode escolher mais de uma opção.'
+            : 'Escolha uma opção.'}
+        </p>
+      )}
 
       <ul className="space-y-2">
         {slide.options.map((option) => {
@@ -124,7 +135,7 @@ export function ChoiceInput({
           <p className="flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
             <Check size={16} strokeWidth={3} /> Voto registrado
           </p>
-          {settings.allowChangeAnswer ? (
+          {timeUp ? null : settings.allowChangeAnswer ? (
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => void clearVote()}>
               <Eraser size={16} /> Limpar resposta
             </Button>

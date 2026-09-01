@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { FONT_SIZE_RANGE } from './settings'
+import { FONT_SIZE_RANGE, QUIZ_TIMER_RANGE } from './settings'
 
 /** Schemas Zod usados para validar apresentações importadas via JSON. */
 
@@ -23,6 +23,11 @@ export const settingsSchema = z
     titleFontSize: fontSizeSchema,
     labelFontSize: fontSizeSchema,
     bodyFontSize: fontSizeSchema,
+    quizTimerSeconds: z
+      .number()
+      .int()
+      .min(QUIZ_TIMER_RANGE.min)
+      .max(QUIZ_TIMER_RANGE.max),
   })
   .partial()
 

@@ -4,7 +4,11 @@ import { useEditorStore } from '../../store/editorStore'
 import type { Slide } from '../../types/presentation'
 import { isInteractiveSlide } from '../../types/presentation'
 import { withDefaults } from '../../utils/settings'
-import { OverrideFontRow, OverrideToggleRow } from './SettingsControls'
+import {
+  OverrideFontRow,
+  OverrideTimerRow,
+  OverrideToggleRow,
+} from './SettingsControls'
 
 interface SlideSettingsSectionProps {
   slide: Slide
@@ -22,6 +26,7 @@ export function SlideSettingsSection({ slide }: SlideSettingsSectionProps) {
 
   const interactive = isInteractiveSlide(slide)
   const isText = slide.type === 'text'
+  const isQuiz = slide.type === 'quiz'
 
   return (
     <section className="rounded-xl border border-neutral-200 dark:border-neutral-800">
@@ -62,6 +67,19 @@ export function SlideSettingsSection({ slide }: SlideSettingsSectionProps) {
                 : 'Ative "Solicitar o nome" nas opções da apresentação.'
             }
             onChange={(v) => setOverride(slide.id, 'identifyResponses', v)}
+          />
+
+          <OverrideTimerRow
+            label="Tempo próprio para esta pergunta"
+            inherited={global.quizTimerSeconds}
+            value={overrides.quizTimerSeconds}
+            disabled={!isQuiz}
+            hint={
+              isQuiz
+                ? '0 deixa esta pergunta sem cronômetro.'
+                : 'O cronômetro só vale para slides de questionário (alternativas).'
+            }
+            onChange={(v) => setOverride(slide.id, 'quizTimerSeconds', v)}
           />
 
           <OverrideFontRow

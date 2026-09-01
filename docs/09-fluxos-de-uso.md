@@ -80,11 +80,15 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
    pergunta, marca a alternativa correta e liga **“Adicionar um slide de
    resposta logo depois”** — o gabarito aparece na lista, recuado.
 2. Na apresentação, o slide da pergunta mostra as alternativas grandes, sem
-   revelar a distribuição (só quantos já votaram).
-3. Os participantes votam pelo celular.
-4. O apresentador avança: o slide de gabarito destaca a correta em verde e
-   mostra votos e porcentagem por alternativa. No celular, cada pessoa vê se
-   acertou.
+   revelar a distribuição (só quantos já votaram), com a contagem regressiva
+   logo abaixo do enunciado.
+3. Os participantes votam pelo celular enquanto há tempo.
+4. **O tempo acaba**: os controles do celular travam e a apresentação passa
+   sozinha para o gabarito. (Sem cronômetro — `0` segundos — o apresentador
+   avança quando quiser.)
+5. Por 3 segundos a tela mostra **“A resposta certa é…”**, ganhando um ponto por
+   segundo, e só então o gabarito destaca a correta em verde com votos e
+   porcentagem por alternativa. No celular, cada pessoa vê se acertou.
 
 ## O que acontece em situações de borda
 
@@ -97,3 +101,9 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Firebase sem configuração (`.env` vazio) | A interface carrega normalmente e mostra um aviso; só as chamadas de rede falham |
 | Encurtador indisponível (ou `localhost`) | O modal mostra o link completo e um botão “Tentar de novo” |
 | Gabarito cuja pergunta foi removida | “A pergunta deste gabarito não existe mais.” (o editor remove órfãos sozinho) |
+| Tempo esgotado sem slide de gabarito depois | A pergunta continua no ar, já travada para novas respostas; o apresentador avança |
+| Apresentador sai de uma pergunta no meio da contagem | O cronômetro pausa; voltar retoma de onde parou |
+| Apresentador volta para uma pergunta que já zerou | Continua zerada: sem contagem nova, respostas congeladas e sem avanço automático |
+| Apresentador volta para um gabarito já revelado | A resposta aparece na hora, sem repetir os 3 s de suspense |
+| Apresentador sai do gabarito antes dos 3 s | Nada foi revelado ainda: voltar refaz o suspense |
+| Apresentador recarrega com o tempo já esgotado | A apresentação passa direto para o gabarito |

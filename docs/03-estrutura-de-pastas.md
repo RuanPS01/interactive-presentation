@@ -54,6 +54,8 @@ src/
       SlideDisplay.tsx        Slide na tela do apresentador (título, corpo, rodapé)
       OptionsBoard.tsx        Quadro de alternativas (quiz e gabarito)
       NamedResponsesList.tsx  "Nome: resposta" quando a identificação está ligada
+      SlideCountdown.tsx      Contagem regressiva grande ("20s"), vermelha no fim
+      AnswerSuspense.tsx      "A resposta certa é…" antes de revelar o gabarito
     participate/
       ParticipateView.tsx  Escolhe o controle conforme o tipo do slide
       ChoiceInput.tsx      Voto em barras/pizza/alternativas + limpar/travar
@@ -72,13 +74,15 @@ src/
       Button.tsx, Card.tsx, Input.tsx   Primitivas visuais
 
   hooks/
-    useRoom.ts          Assina o documento da sala
-    useResponses.ts     Assina as respostas de um slide
-    useMyResponse.ts    Assina só a própria resposta
-    useParticipants.ts  Assina a lista de presentes na sala
-    useParticipant.ts   Garante a sessão anônima e devolve o uid
-    useApplyTheme.ts    Aplica a classe `.dark` no <html>
-    useFullscreen.ts    Fullscreen API
+    useRoom.ts             Assina o documento da sala
+    useResponses.ts        Assina as respostas de um slide
+    useMyResponse.ts       Assina só a própria resposta
+    useParticipants.ts     Assina a lista de presentes na sala
+    useParticipant.ts      Garante a sessão anônima e devolve o uid
+    useSlideTimer.ts       Contagem regressiva do slide, lida da sala
+    useRevealCountdown.ts  Suspense de 3 s antes de revelar o gabarito
+    useApplyTheme.ts       Aplica a classe `.dark` no <html>
+    useFullscreen.ts       Fullscreen API
 
   lib/
     firebase.ts           Inicialização (com config de reserva se faltar .env)
@@ -96,6 +100,7 @@ src/
 
   utils/
     settings.ts      Padrões e resolução global -> slide
+    timer.ts         Duração do cronômetro por slide e atraso da revelação
     slideFactory.ts  Ids, slides padrão e rótulos dos tipos
     slides.ts        Busca o `quiz` de um slide de gabarito
     aggregate.ts     Contagem de palavras/votos, respostas nomeadas
