@@ -3,36 +3,41 @@ import type { PresentationSettings, Room, Slide } from '../types/presentation'
 import { slideTimerSeconds, timerRemainingMs } from '../utils/timer'
 
 export interface SlideTimerState {
-  /** O slide tem cronômetro (mostre a contagem). */
+  /** O slide tem cronômetro. */
   active: boolean
-  /** Segundos que faltam, arredondados para cima (0 quando acabou). */
-  seconds: number
-  /** O tempo acabou — a entrada dos participantes fica bloqueada. */
-  expired: boolean
+  /** Instante final enquanto corre; `null` quando parado (só o projetor usa). */
+  endsAt: number | null
+  /** Tempo restante em ms, amostrado a cada 250 ms enquanto corre. */
+  remainingMs: number
   /**
-   * O cronômetro está parado: pausado porque o apresentador saiu do slide no
-   * meio da contagem, ou esgotado numa passagem anterior. Um cronômetro
-   * congelado em zero **não** dispara a troca automática para o gabarito —
-   * voltar para uma pergunta encerrada é para revê-la, não para avançar.
+   * A **sala** declarou a pergunta encerrada (o apresentador congelou o
+   * cronômetro em zero). É o único sinal que bloqueia a plateia: se cada
+   * celular decidisse pelo próprio relógio, um aparelho adiantado travaria as
+   * opções segundos antes de o tempo acabar no projetor.
    */
-  frozen: boolean
+  closed: boolean
+  /**
+   * A contagem local zerou com o cronômetro ainda correndo. Só o apresentador
+   * age nisso — é o gatilho para encerrar a pergunta para todo mundo.
+   */
+  runOut: boolean
 }
 
 const IDLE: SlideTimerState = {
   active: false,
-  seconds: 0,
-  expired: false,
-  frozen: false,
+  endsAt: null,
+  remainingMs: 0,
+  closed: false,
+  runOut: false,
 }
 
 /**
- * Contagem regressiva do slide atual, lida da sala.
+ * Cronômetro do slide atual, lido da sala.
  *
- * O apresentador grava só o instante final (`timers[slideId].endsAt`); cada
- * navegador conta localmente a partir dele, sem uma escrita por segundo no
- * Firestore. Como a comparação usa o relógio do próprio dispositivo, o tempo
- * restante é limitado à duração do slide: um relógio atrasado não faz a
- * contagem começar acima do que a pergunta vale.
+ * O apresentador grava só o instante final (`timers[slideId].endsAt`) e, ao
+ * zerar, congela o registro em zero. A contagem exibida é local (a partir de
+ * `endsAt`), sem uma escrita por segundo no Firestore; já o **encerramento** é
+ * o estado congelado, que vale igual para todos os aparelhos.
  */
 export function useSlideTimer(
   room: Room | null,
@@ -41,14 +46,15 @@ export function useSlideTimer(
 ): SlideTimerState {
   const total = slideTimerSeconds(slide, settings)
   const entry = total > 0 && slide ? room?.timers?.[slide.id] : undefined
-  // Só um cronômetro correndo precisa de tique: pausado e esgotado são fixos.
+  // Só um cronômetro correndo precisa de tique: parado e encerrado são fixos.
   const endsAt = entry?.endsAt ?? null
 
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (endsAt === null) return
     setNow(Date.now())
-    // 250 ms: o segundo exibido troca sem atraso perceptível e o custo é nulo.
+    // 250 ms basta para a lógica; a exibição em milissegundos é animada pelo
+    // próprio `SlideCountdown`, sem redesenhar o slide inteiro.
     const id = window.setInterval(() => setNow(Date.now()), 250)
     return () => window.clearInterval(id)
   }, [endsAt])
@@ -57,14 +63,15 @@ export function useSlideTimer(
 
   // Sem registro, o apresentador ainda vai gravar o início: mostrar o tempo
   // cheio evita a contagem piscar na tela por uma fração de segundo.
-  const remaining = entry
+  const remainingMs = entry
     ? Math.min(timerRemainingMs(entry, now) ?? 0, total * 1000)
     : total * 1000
 
   return {
     active: true,
-    seconds: Math.ceil(remaining / 1000),
-    expired: entry !== undefined && remaining <= 0,
-    frozen: entry !== undefined && entry.endsAt === null,
+    endsAt,
+    remainingMs,
+    closed: entry !== undefined && entry.endsAt === null && entry.remainingMs <= 0,
+    runOut: endsAt !== null && remainingMs <= 0,
   }
 }

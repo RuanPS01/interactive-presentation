@@ -91,15 +91,24 @@ que mostrar "Ana: Lista" revelaria a resposta do mesmo jeito.
 
 Por padrão a pergunta fica no ar por **20 segundos** (opção global
 `quizTimerSeconds`, com tempo próprio por slide — ver
-[06](06-configuracoes.md#cronômetro-das-perguntas)). A contagem aparece grande
-logo abaixo do enunciado, em vermelho nos últimos 5 segundos, e é a mesma no
-projetor e nos celulares.
+[06](06-configuracoes.md#cronômetro-das-perguntas)).
 
-Ao zerar:
+A contagem aparece **só no projetor**, num card na base do slide (acima do
+rodapé) com os segundos grandes e os milissegundos ao lado, vermelho nos
+últimos 5 segundos. No celular ela não aparece: o relógio de cada aparelho
+diverge do relógio de quem apresenta, e duas contagens diferentes na mesma sala
+confundem mais do que ajudam.
 
-1. os controles do participante travam (“Tempo esgotado — as respostas foram
+Ao zerar **no projetor**:
+
+1. o apresentador encerra a pergunta para a sala inteira;
+2. os controles do participante travam (“Tempo esgotado — as respostas foram
    encerradas”);
-2. se houver um slide `answer` logo depois, a apresentação avança sozinha.
+3. se houver um slide `answer` logo depois, a apresentação avança sozinha.
+
+A ordem importa: quem trava a plateia é o encerramento gravado na sala, nunca a
+conta do próprio celular. Um aparelho adiantado travaria as opções segundos
+antes de o tempo acabar na tela grande.
 
 O cronômetro **acompanha o slide, não a apresentação**:
 

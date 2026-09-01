@@ -60,9 +60,11 @@ export function RoomPage() {
       : undefined
   const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
 
-  // Cronômetro e suspense do gabarito vêm da sala, iguais aos do projetor: a
-  // contagem sai do mesmo instante final e o atraso da revelação é o mesmo
-  // para todo mundo.
+  // A contagem regressiva não aparece no celular: o relógio de cada aparelho
+  // não bate com o do projetor, e duas contagens diferentes na mesma sala
+  // confundem mais do que ajudam. Daqui só interessa o encerramento, que é
+  // declarado pelo apresentador (`closed`) — assim as opções travam junto com
+  // o cronômetro da tela grande, e não segundos antes.
   const timer = useSlideTimer(room, currentSlide, slideSettings)
   const answerSlideId = currentSlide?.type === 'answer' ? currentSlide.id : null
   const reveal = useRevealCountdown(answerSlideId, {
@@ -154,8 +156,7 @@ export function RoomPage() {
                 participantUid={uid}
                 participantName={askName ? name : null}
                 settings={slideSettings}
-                secondsLeft={timer.active ? timer.seconds : null}
-                timeUp={timer.expired}
+                timeUp={timer.closed}
                 revealPending={reveal.pending}
                 revealDots={reveal.dots}
               />

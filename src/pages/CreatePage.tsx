@@ -43,7 +43,7 @@ export function CreatePage() {
   const previewSettings = resolveSlideSettings(settings, selectedSlide)
   // A prévia mostra o cronômetro parado no tempo configurado, para o
   // apresentador conferir como o slide fica com ele na tela.
-  const previewSeconds = slideTimerSeconds(selectedSlide, previewSettings) || null
+  const previewTimerSeconds = slideTimerSeconds(selectedSlide, previewSettings)
 
   async function startPresentation() {
     if (!uid) {
@@ -193,7 +193,11 @@ export function CreatePage() {
                 slides={slides}
                 responses={[]}
                 settings={previewSettings}
-                secondsLeft={previewSeconds}
+                countdown={
+                  previewTimerSeconds > 0
+                    ? { endsAt: null, remainingMs: previewTimerSeconds * 1000 }
+                    : null
+                }
               />
             ) : (
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem slide.</p>

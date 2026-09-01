@@ -60,14 +60,35 @@ troca de slide:
 | Entra num slide pela 1ª vez | `{ endsAt: agora + duração, remainingMs: duração }` |
 | Sai do slide correndo | `{ endsAt: null, remainingMs: o que sobrou }` |
 | Volta a um slide pausado | `{ endsAt: agora + remainingMs, remainingMs }` |
+| A contagem do projetor zera | `{ endsAt: null, remainingMs: 0 }` (`closeTimer`) |
 | Volta a um slide esgotado | nada muda — continua em zero |
 
 Só o apresentador escreve, e sempre junto da troca de slide
-(`setCurrentSlide`) ou ao assumir uma sala parada num slide com tempo
-(`saveSlideTimers`). Cada navegador conta localmente a partir do mesmo
-`endsAt` ([`useSlideTimer`](../src/hooks/useSlideTimer.ts)) — uma escrita por
-troca de slide, e não uma por segundo, que multiplicaria a cota do plano
-gratuito pelo número de segundos da apresentação.
+(`setCurrentSlide`) ou por `saveSlideTimers`, ao assumir uma sala parada num
+slide com tempo e ao encerrar a pergunta. Uma escrita por troca de slide, e não
+uma por segundo, que multiplicaria a cota do plano gratuito pelo número de
+segundos da apresentação.
+
+#### Quem exibe e quem encerra
+
+[`useSlideTimer`](../src/hooks/useSlideTimer.ts) separa duas coisas que parecem
+a mesma:
+
+| Campo | De onde vem | Quem usa |
+| --- | --- | --- |
+| `remainingMs` / `endsAt` | relógio **local**, a partir de `endsAt` | só o projetor, para desenhar a contagem |
+| `closed` | estado **da sala** (`endsAt: null` e `remainingMs: 0`) | todos, para travar as respostas |
+| `runOut` | relógio **local** zerou com o cronômetro correndo | só o apresentador, como gatilho para encerrar |
+
+A separação é o que corrige um erro real: quando cada celular decidia pelo
+próprio relógio, um aparelho poucos segundos adiantado bloqueava as opções
+antes de o tempo acabar no projetor. Agora o aparelho pode até achar que o
+tempo já foi (`runOut`), mas nada trava enquanto a sala não disser `closed`.
+
+A contagem em milissegundos é animada dentro do próprio
+[`SlideCountdown`](../src/components/slides/SlideCountdown.tsx), com
+`requestAnimationFrame`: só o card se redesenha a cada quadro, sem arrastar
+junto o quadro de alternativas e os gráficos do slide.
 
 A revelação do gabarito segue a mesma ideia: quando o suspense termina, o
 apresentador acrescenta o id do slide a `revealedSlideIds` (com `arrayUnion`,

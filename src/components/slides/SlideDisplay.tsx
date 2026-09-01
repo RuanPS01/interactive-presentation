@@ -36,8 +36,12 @@ interface SlideDisplayProps {
   participants?: number
   /** Demais slides, para o gabarito achar o `quiz` que ele revela. */
   slides?: Slide[]
-  /** Segundos restantes do cronômetro; `null` quando o slide não tem. */
-  secondsLeft?: number | null
+  /**
+   * Cronômetro do slide, para o card na base da tela. `null` quando o slide
+   * não tem cronômetro. Só a tela do apresentador mostra a contagem: no
+   * celular ela não teria como bater com a do projetor.
+   */
+  countdown?: { endsAt: number | null; remainingMs: number } | null
   /** Gabarito ainda em suspense ("A resposta certa é…"). */
   revealPending?: boolean
   /** Pontos já exibidos nas reticências do suspense. */
@@ -57,7 +61,7 @@ export function SlideDisplay({
   settings = DEFAULT_SETTINGS,
   participants,
   slides,
-  secondsLeft = null,
+  countdown = null,
   revealPending = false,
   revealDots = 0,
 }: SlideDisplayProps) {
@@ -78,14 +82,6 @@ export function SlideDisplay({
         {slide.type === 'answer' ? (quiz?.title ?? slide.title) : slide.title}
       </h2>
 
-      {secondsLeft !== null && (
-        <SlideCountdown
-          seconds={secondsLeft}
-          fontSize={Math.max(settings.titleFontSize * 1.6, 64)}
-          className="mb-6 shrink-0"
-        />
-      )}
-
       {/* Enquanto o gabarito está em suspense, nada do resultado aparece — nem
           o quadro de alternativas, nem os nomes, nem a contagem do rodapé. */}
       {revealPending ? (
@@ -105,6 +101,14 @@ export function SlideDisplay({
             <NamedResponsesList
               responses={namedResponses(responses, slide)}
               fontSize={settings.labelFontSize}
+            />
+          )}
+
+          {countdown && (
+            <SlideCountdown
+              endsAt={countdown.endsAt}
+              remainingMs={countdown.remainingMs}
+              fontSize={Math.max(settings.titleFontSize * 1.2, 52)}
             />
           )}
 
