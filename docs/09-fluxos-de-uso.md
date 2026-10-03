@@ -35,6 +35,24 @@ relatório sem reabrir a apresentação. Abrir a URL com o token em **outro**
 navegador também funciona: `claimPresenter` prova o token e transfere o
 controle.
 
+### Editar uma sala em andamento
+
+1. Na tela de apresentação, **Editar** abre o mesmo editor da criação, já com o
+   que está no ar: título, opções gerais (botão **Opções**), slides e as opções
+   de cada slide. Uma faixa no topo lembra que a sala está em andamento.
+2. Enquanto o apresentador edita, nada muda para a plateia: cada pessoa continua
+   no slide em que estava.
+3. **Salvar alterações** só fica ativo quando algo mudou. Ao clicar, uma
+   confirmação diz quantos participantes estão na sala e avisa que todos serão
+   redirecionados para o início da apresentação, assim como o apresentador.
+4. Confirmando, a sala é gravada e recomeça do primeiro slide: o apresentador
+   volta para a tela de apresentação no slide 1, e os celulares vão para o
+   slide 1 com o aviso "O apresentador atualizou a apresentação e todos
+   voltaram para o início". Cronômetros recomeçam, gabaritos voltam a ter o
+   suspense, e as respostas já enviadas continuam guardadas.
+5. **Voltar à apresentação** com alterações não salvas pede para descartá-las;
+   descartando, a sala fica como estava e ninguém é redirecionado.
+
 ## Participante: da entrada à resposta
 
 1. **Entra** pelo QR, pelo link curto ou por “Entrar na sala” + código
@@ -109,3 +127,9 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Apresentador volta para um gabarito já revelado | A resposta aparece na hora, sem repetir os 3 s de suspense |
 | Apresentador sai do gabarito antes dos 3 s | Nada foi revelado ainda: voltar refaz o suspense |
 | Apresentador recarrega com o tempo já esgotado | A apresentação passa direto para o gabarito |
+| Apresentador salva uma edição da sala | Todos (inclusive ele) voltam ao primeiro slide; cronômetros e gabaritos recomeçam; respostas ficam |
+| A edição liga "Solicitar o nome" | Quem já estava na sala sem nome vê o pedido de nome antes do primeiro slide |
+| A edição remove o slide em que a plateia estava | Não há problema: todos voltam ao primeiro slide de qualquer forma |
+| Participante entra depois de uma edição | Vê a sala atualizada, sem o aviso de reinício |
+| Alguém abre `/edit/<código>` sem o token | Tela "Acesso de apresentador necessário", igual à da apresentação |
+| A edição esvazia a lista de slides | Salvar é recusado: a apresentação precisa de ao menos um slide |

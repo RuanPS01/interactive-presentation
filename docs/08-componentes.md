@@ -6,7 +6,7 @@ Três lugares, com responsabilidades separadas:
 
 | Onde | O quê | Vive até |
 | --- | --- | --- |
-| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, seleção | Recarregar a página |
+| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, seleção | Recarregar a página (o da edição de sala, até sair da tela) |
 | [`themeStore`](../src/store/themeStore.ts) (Zustand + localStorage) | Tema claro/escuro do usuário | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença | Até ser apagada |
 
@@ -18,6 +18,20 @@ O [encurtador](../src/lib/shortUrl.ts) também guarda ali o link curto de cada
 URL, para não gerar um novo a cada abertura do QR.
 
 ### `editorStore` em detalhe
+
+Não é um estado único: `createEditorStore()` cria um editor independente, e os
+componentes de `components/editor/` usam o que estiver no
+`EditorStoreContext`.
+
+| Tela | Editor |
+| --- | --- |
+| `CreatePage` | O padrão do contexto, criado uma vez e mantido enquanto a aba estiver aberta |
+| `EditRoomPage` | Um editor próprio, criado ao abrir a tela e carregado com a sala |
+
+Assim, editar uma sala em andamento não sobrescreve o rascunho de quem estava
+montando outra apresentação. `useEditorStore(seletor)` tem a mesma assinatura
+de antes; quem precisa ler fora da renderização usa `store.getState()` do
+editor que criou.
 
 ```ts
 {
@@ -37,8 +51,9 @@ Dois auxiliares internos sustentam o resto:
   desloquem o que estava selecionado.
 
 `setOverride(id, chave, valor)` grava em `slide.overrides`; passar `undefined`
-remove a chave, e quando não sobra nenhuma o campo inteiro é apagado — o slide
-volta a herdar tudo.
+remove a chave, e quando não sobra nenhuma o campo inteiro é apagado (a chave
+some do objeto, em vez de ficar `undefined`, que o Firestore recusa ao gravar a
+sala). O slide volta a herdar tudo.
 
 ## Páginas
 
@@ -46,16 +61,19 @@ volta a herdar tudo.
 | --- | --- |
 | [`HomePage`](../src/pages/HomePage.tsx) | Dois caminhos (criar/entrar) e a lista de salas apresentadas neste dispositivo, com “Retomar” e “Exportar PDF” |
 | [`CreatePage`](../src/pages/CreatePage.tsx) | Editor de 3 colunas, barra de ações e criação da sala |
-| [`PresentPage`](../src/pages/PresentPage.tsx) | Controle de acesso, navegação, exibição do slide, QR, PDF e slide final |
+| [`PresentPage`](../src/pages/PresentPage.tsx) | Controle de acesso, navegação, exibição do slide, QR, PDF, slide final e o botão **Editar** |
+| [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Editor da sala em andamento: carrega o que está no ar, detecta alterações, confirma e grava recomeçando do 1º slide |
 | [`JoinPage`](../src/pages/JoinPage.tsx) | Normaliza o código digitado e redireciona |
 | [`RoomPage`](../src/pages/RoomPage.tsx) | Pedido de nome, registro de presença e controles do slide atual |
 
-### Layout do editor (`CreatePage`)
+### Layout do editor (`EditorWorkspace`)
 
-Em telas `lg` ou maiores, o editor ocupa **exatamente a altura da janela**
-(`lg:h-[100dvh] lg:overflow-hidden`) e o grid das três colunas recebe
-`lg:flex-1 lg:min-h-0`. Cada coluna tem um contêiner interno com
-`lg:overflow-y-auto`:
+As três colunas ficam em
+[`EditorWorkspace`](../src/components/editor/EditorWorkspace.tsx), usado pela
+criação e pela edição de sala. Em telas `lg` ou maiores, a página ocupa
+**exatamente a altura da janela** (`lg:h-[100dvh] lg:overflow-hidden`) e o grid
+das três colunas recebe `lg:flex-1 lg:min-h-0`. Cada coluna tem uma
+`ScrollArea` interna, limitada com `lg:min-h-0 lg:flex-1`:
 
 | Coluna | Fixo | Rolagem própria |
 | --- | --- | --- |
@@ -113,8 +131,14 @@ o comportamento certo no celular.
 Formulários por tipo (`WordCloudConfig`, `ChoiceConfig`, `QuizConfig`,
 `AnswerConfig`, `TextConfig`), a lista (`SlideList`), o menu de adição
 (`AddSlideMenu`), os dois painéis de opções (`PresentationSettingsButton` e
-`SlideSettingsSection`, ambos usando os controles de `SettingsControls`) e o
-modal do prompt de IA (`AiPromptButton`).
+`SlideSettingsSection`, ambos usando os controles de `SettingsControls`), o
+modal do prompt de IA (`AiPromptButton`), o editor em 3 colunas
+(`EditorWorkspace`) e os botões de importar/exportar JSON
+(`ImportExportButtons`).
+
+`SettingsControls` monta as linhas de opção sobre os componentes de `ui/`:
+`FontSizeRow` e `OverrideFontRow` usam o `Slider`, `OverrideToggleRow` usa o
+`Select` (herdar, sim, não) e os demais combinam `Checkbox` e campo numérico.
 
 ### `present/`
 
@@ -124,6 +148,9 @@ modal do prompt de IA (`AiPromptButton`).
 - **[`SummarySlide`](../src/components/present/SummarySlide.tsx)** — slide final
   com miniatura de cada slide (gráficos, nuvem ou lista de alternativas com o
   gabarito).
+- **[`PresenterAccessDenied`](../src/components/present/PresenterAccessDenied.tsx)**:
+  tela de quem abre `/present` ou `/edit` sem o token, com atalho para entrar
+  como participante.
 
 ### `charts/`
 
@@ -132,10 +159,51 @@ eixos, legendas e contadores a partir dele. `WordCloudView` implementa o layout
 em espiral. `palette.ts` centraliza as 10 cores categóricas, usadas também no
 PDF.
 
-### `ui/` e `layout/`
+### `ui/`: componentes genéricos
 
-`Button` (4 variantes × 3 tamanhos), `Card`, `Input`/`Textarea`/`Field`,
-`PageShell` e `ThemeToggle`.
+Todo controle de formulário da aplicação sai daqui, para manter a mesma
+identidade visual (azul de destaque, cinzas neutros, cantos arredondados, anel
+de foco azul translúcido) nos temas claro e escuro.
+
+| Componente | Uso | Destaques |
+| --- | --- | --- |
+| [`Button`](../src/components/ui/Button.tsx) | Ações | 4 variantes x 3 tamanhos; aceita `ref` |
+| [`Card`](../src/components/ui/Card.tsx) | Painéis | Borda, fundo e sombra do tema |
+| [`Input`, `Textarea`, `Field`](../src/components/ui/Input.tsx) | Texto | Visual comum em [`fieldStyles.ts`](../src/components/ui/fieldStyles.ts), inclusive o estado desativado |
+| [`Checkbox`, `Radio`](../src/components/ui/Checkbox.tsx) | Marcar opções | Rótulo e dica opcionais; tom `success` (verde) para a alternativa correta; o `<input>` nativo continua no DOM para teclado e leitor de tela |
+| [`ChoiceMark`](../src/components/ui/Checkbox.tsx) | Só o desenho da marcação | Reaproveitado nos botões de voto do participante (`ChoiceInput`) |
+| [`Slider`](../src/components/ui/Slider.tsx) | Valores numéricos em faixa | Rótulo à esquerda e valor à direita; trecho percorrido preenchido |
+| [`Select`](../src/components/ui/Select.tsx) | Lista suspensa | Padrão "select-only combobox" do WAI-ARIA; lista em portal, que abre para cima quando falta espaço |
+| [`ScrollArea`](../src/components/ui/ScrollArea.tsx) | Áreas com rolagem própria | Barra fina nas cores neutras; eixo `y`, `x` ou `both` |
+| [`Modal`](../src/components/ui/Modal.tsx) | Janelas modais | Esc e clique fora fecham; Tab preso no painel; foco volta para quem abriu |
+| [`ConfirmDialog`](../src/components/ui/ConfirmDialog.tsx) | Confirmar ações | Sobre o `Modal`; foco inicial no botão de confirmar; tom `danger` |
+| [`Banner`](../src/components/ui/Banner.tsx) | Avisos no topo da tela | Tons `info`, `warning` e `error`; fechar opcional |
+
+Como o `Select` se comporta no teclado:
+
+| Tecla | Lista fechada | Lista aberta |
+| --- | --- | --- |
+| Setas, Enter, Espaço | Abre na opção escolhida | Setas percorrem; Enter/Espaço escolhem |
+| Home, End | Abre na primeira/última | Vai para a primeira/última |
+| Letras | Abre na opção que começa com elas (sem diferenciar acentos) | Pula para a opção |
+| Esc | Segue para a tela (num modal, fecha o modal) | Fecha só a lista |
+| Tab | Segue o foco | Fecha a lista e segue o foco |
+
+Partes que classes utilitárias não alcançam (trilho e polegar do `Slider`,
+barra do `ScrollArea`, animação da lista do `Select`) ficam no
+[`index.css`](../src/index.css), nas classes `.ui-slider`, `.ui-scroll` e
+`.ui-popover`, usando as variáveis de cor do tema do Tailwind
+(`--color-blue-600`, `--color-neutral-300`...).
+
+> Antes de criar um controle novo numa tela, procure aqui. Um `<select>`,
+> `<input type="checkbox">` ou `<input type="range">` nativo destoa no tema
+> escuro: a lista aberta do `<select>`, por exemplo, é desenhada pelo sistema
+> operacional e ignora as cores da aplicação.
+
+### `layout/`
+
+`PageShell` (contêiner de página), `ThemeToggle` (claro/escuro) e
+`FullScreenMessage` (mensagem centralizada: carregando, erro, sem acesso).
 
 ## Hooks
 
@@ -143,6 +211,7 @@ PDF.
 | --- | --- |
 | `useRoom`, `useResponses`, `useMyResponse`, `useParticipants` | Assinaturas do Firestore ([07](07-tempo-real-e-comunicacao.md)) |
 | `useParticipant` | Sessão anônima e uid |
+| `usePresenterAccess` | Se este navegador controla a sala: dono atual ou token na URL (reivindica o controle); lembra a sala para "Retomar" |
 | `useSlideTimer` | Cronômetro do slide: contagem local para exibir e `closed` (estado da sala) para travar as respostas |
 | `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito — pulados num gabarito já revelado |
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
@@ -152,6 +221,9 @@ PDF.
 
 Tailwind v4 com `@custom-variant dark (&:where(.dark, .dark *))`: o tema é
 controlado pela classe no `<html>`, não pelo `prefers-color-scheme` — assim a
-escolha do usuário vence a do sistema. O
-[`index.css`](../src/index.css) também traz as animações da nuvem de palavras e
-os ajustes de cor dos textos e tooltips do Recharts nos dois temas.
+escolha do usuário vence a do sistema. O `color-scheme` do `<html>` acompanha a
+classe, para os controles que continuam nativos (setas do campo numérico, barra
+de rolagem da página) também seguirem o tema escolhido. O
+[`index.css`](../src/index.css) também traz as animações da nuvem de palavras,
+os ajustes de cor dos textos e tooltips do Recharts nos dois temas e as partes
+dos componentes genéricos descritas acima.

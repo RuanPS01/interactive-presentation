@@ -21,7 +21,7 @@ Duas características definem o projeto:
 
 | Papel | Como entra | O que pode fazer |
 | --- | --- | --- |
-| **Apresentador** | Cria a sala em `/create` e vai para `/present/<código>/<token>` | Monta slides, controla a navegação, vê os resultados, exporta PDF |
+| **Apresentador** | Cria a sala em `/create` e vai para `/present/<código>/<token>` | Monta slides, controla a navegação, edita a sala em andamento, vê os resultados, exporta PDF |
 | **Participante** | Abre `/room/<código>` (link, QR ou digitando o código) | Responde ao slide atual; a tela acompanha o apresentador |
 
 Não há administrador, moderador nem limite de participantes por sala.
@@ -57,6 +57,13 @@ Não há administrador, moderador nem limite de participantes por sala.
 - **Contagem separada** de *participantes conectados* e de *quem já respondeu*.
 - **Compartilhamento**: código grande, QR Code ampliado e **link curto** para
   quem prefere digitar.
+- **Edição da sala em andamento**: o apresentador reabre o editor com o que
+  está no ar (opções gerais, slides e opções de cada slide). Ao salvar, depois
+  de uma confirmação, a apresentação recomeça do primeiro slide para todos os
+  participantes conectados e para ele mesmo.
+- **Componentes de formulário próprios** (caixa de seleção, opção única,
+  controle deslizante, lista suspensa, área com rolagem e janelas modais), com
+  a mesma identidade visual nos temas claro e escuro.
 - **Importar/exportar JSON** da apresentação e **exportar PDF** dos resultados.
 - **Prompt de IA** pronto para gerar o JSON de uma apresentação inteira.
 - **Tema claro/escuro** por usuário, salvo no navegador.

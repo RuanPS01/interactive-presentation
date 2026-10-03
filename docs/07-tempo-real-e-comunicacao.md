@@ -172,6 +172,56 @@ O token também fica no `localStorage`
 inicial oferecer “Retomar” e “Exportar PDF” das salas apresentadas naquele
 dispositivo.
 
+## Edição de uma sala em andamento
+
+[`EditRoomPage`](../src/pages/EditRoomPage.tsx) ·
+[`saveAndRestartRoom`](../src/lib/rooms.ts)
+
+O botão **Editar** da tela do apresentador abre `/edit/<código>/<token>`, com a
+mesma verificação de acesso da apresentação
+([`usePresenterAccess`](../src/hooks/usePresenterAccess.ts)). O editor é
+carregado **uma única vez** com o que está no ar; os snapshots seguintes do
+documento (troca de slide, cronômetro) não atropelam o que está sendo editado.
+
+Enquanto o apresentador edita, nada é gravado e a plateia continua no slide em
+que estava. Se uma pergunta com cronômetro estiver no ar, ela não é encerrada
+durante a edição, porque quem encerra é a tela de apresentação: descartando, o
+encerramento acontece assim que essa tela volta a abrir; salvando, os
+cronômetros recomeçam com o tempo cheio.
+
+Ao salvar, depois da confirmação, uma única escrita grava:
+
+| Campo | Valor |
+| --- | --- |
+| `title`, `slides`, `settings` | A versão editada (opções completadas com os padrões) |
+| `currentSlideIndex` | `0`: todos voltam ao primeiro slide |
+| `timers` | `{}`: os cronômetros recomeçam |
+| `revealedSlideIds` | `[]`: os gabaritos voltam a ter o suspense |
+| `status` | `live` |
+| `revision` | `increment(1)` |
+
+Não existe mensagem direta para "redirecionar" ninguém: cada navegador segue
+`currentSlideIndex`, então zerar o índice leva todos ao início ao mesmo tempo,
+inclusive quem estava no slide final de agradecimento. O apresentador também
+volta: a tela de edição navega para `/present/...`, que abre no primeiro slide.
+
+Na tela do participante, a [`RoomPage`](../src/pages/RoomPage.tsx) guarda o
+`revision` que encontrou ao abrir. Quando chega um maior, mostra por 10
+segundos (ou até ser fechado) o aviso "O apresentador atualizou a apresentação
+e todos voltaram para o início". Quem entra depois da edição não vê aviso.
+
+Decisões:
+
+- **As respostas ficam.** Cada resposta pertence a um slide pelo id, que o
+  editor preserva, e as regras só deixam o próprio autor apagá-la. Respostas de
+  um slide removido ficam órfãs e não aparecem em lugar nenhum; votos em uma
+  opção removida deixam de ser contados.
+- **As regras não mudam.** Gravar a edição é um `update` comum no documento da
+  sala, já permitido ao dono atual.
+- **O editor é só da tela de edição.** Ela cria o próprio `editorStore` (ver
+  [08](08-componentes.md#editorstore-em-detalhe)), então o rascunho da tela de
+  criação não é tocado.
+
 ## Regras de segurança
 
 [`firestore.rules`](../firestore.rules) — a pipeline as publica sozinha sempre

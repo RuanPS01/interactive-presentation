@@ -21,6 +21,8 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
   5. **Resposta correta** — slide de gabarito **criado automaticamente** depois de uma pergunta, destacando a alternativa certa e os votos de cada uma. Aparece depois de 3 segundos de “A resposta certa é…”, para todo mundo ver a revelação junto.
   6. **Texto simples** — alinhamento (esquerda/centro/direita) e tamanho da fonte.
 - **Opções globais e por slide** (ver [docs/06](docs/06-configuracoes.md)): permitir limpar/trocar a resposta, pedir o nome antes de entrar, identificar cada resposta pelo nome, definir os tamanhos de título, rótulos e corpo e o **tempo do cronômetro** das perguntas (0 desliga).
+- **Edição da sala em andamento**: o botão **Editar** da tela de apresentação reabre o editor com as opções gerais, os slides e as opções de cada slide. Ao salvar, uma confirmação avisa que todos os participantes conectados (e o próprio apresentador) serão redirecionados para o início da apresentação; os celulares mostram um aviso explicando o reinício. Ver [docs/09](docs/09-fluxos-de-uso.md#editar-uma-sala-em-andamento).
+- **Componentes de formulário próprios** (caixa de seleção, opção única, controle deslizante, lista suspensa, área com rolagem e janelas modais), com a mesma identidade visual nos temas claro e escuro. Ver [docs/08](docs/08-componentes.md#ui-componentes-genéricos).
 - **Contagem de participantes** separada de quem já respondeu: quem abre a sala já conta como participante.
 - **Compartilhamento**: código grande, QR Code ampliado e **link curto** para quem prefere digitar.
 - **Tema claro/escuro** como **preferência de cada usuário**, salva no navegador (localStorage). Apresentador e participantes escolhem o seu de forma independente; não é sincronizado pela sala.
@@ -53,7 +55,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
 
 ```
 src/
-  pages/          Páginas/rotas (Home, Create, Present, Join, Room)
+  pages/          Páginas/rotas (Home, Create, Present, EditRoom, Join, Room)
   components/
     layout/       Cabeçalho, alternador de tema, casca de página
     editor/       Editor: lista de slides, menu e formulários por tipo
@@ -61,8 +63,8 @@ src/
     participate/  Controles do participante (nuvem, votação, gabarito, nome)
     present/      QR Code / link curto e slide final de resumo
     charts/       Gráficos (Recharts) e nuvem de palavras
-    ui/           Botão, input, card...
-  hooks/          useRoom, useResponses, useMyResponse, useParticipants, useParticipant, useApplyTheme
+    ui/           Componentes genéricos: botão, campos, checkbox, slider, select, rolagem, modal...
+  hooks/          useRoom, useResponses, useMyResponse, useParticipants, useParticipant, usePresenterAccess, useApplyTheme
   lib/            firebase, rooms, responses, participants, roomCode, shortUrl
   store/          editorStore (Zustand)
   types/          Tipos do domínio

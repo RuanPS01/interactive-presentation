@@ -29,14 +29,18 @@ src/
     HomePage.tsx      Entrada, sessões salvas neste dispositivo (retomar/reexportar)
     CreatePage.tsx    Editor em 3 colunas com rolagem independente
     PresentPage.tsx   Tela do apresentador (projetor): slide, navegação, QR, PDF
+    EditRoomPage.tsx  Edição de uma sala já iniciada; salvar recomeça do 1º slide
     JoinPage.tsx      Formulário do código da sala
     RoomPage.tsx      Tela do participante: pedido de nome, presença e controles
 
   components/
     layout/
-      PageShell.tsx       Contêiner de página com largura máxima
-      ThemeToggle.tsx     Botão claro/escuro
+      PageShell.tsx         Contêiner de página com largura máxima
+      FullScreenMessage.tsx Mensagem centralizada (carregando, erro, sem acesso)
+      ThemeToggle.tsx       Botão claro/escuro
     editor/
+      EditorWorkspace.tsx           Editor em 3 colunas (criação e edição de sala)
+      ImportExportButtons.tsx       Botões "Importar JSON" e "Exportar JSON"
       AddSlideMenu.tsx              Botões de "adicionar slide" (tipos criáveis)
       SlideList.tsx                 Lista ordenável; marca o gabarito como vinculado
       SlideEditor.tsx               Dispatcher por tipo + seção de opções do slide
@@ -63,15 +67,26 @@ src/
       AnswerReveal.tsx     Gabarito na tela do participante ("você acertou!")
       NamePrompt.tsx       Pedido de nome antes de entrar
     present/
-      ShareRoom.tsx     QR Code, código grande e link curto
-      SummarySlide.tsx  Slide final: grade de miniaturas de todos os slides
+      ShareRoom.tsx              QR Code, código grande e link curto
+      SummarySlide.tsx           Slide final: grade de miniaturas de todos os slides
+      PresenterAccessDenied.tsx  Aviso para quem abre /present ou /edit sem o token
     charts/
       BarChartView.tsx   Barras (Recharts) com rótulos quebrados em linhas
       PieChartView.tsx   Pizza (Recharts) com legenda
       WordCloudView.tsx  Nuvem de palavras (layout em espiral próprio, SVG)
       palette.ts         Paleta categórica compartilhada
-    ui/
-      Button.tsx, Card.tsx, Input.tsx   Primitivas visuais
+    ui/                Componentes genéricos, com a identidade visual da aplicação
+      Button.tsx         Botão (4 variantes x 3 tamanhos)
+      Card.tsx           Painel com borda e sombra
+      Input.tsx          Input, Textarea e Field (rótulo + controle + dica)
+      fieldStyles.ts     Visual compartilhado dos campos (borda, foco, desativado)
+      Checkbox.tsx       Checkbox, Radio e ChoiceMark (o desenho da marcação)
+      Slider.tsx         Controle deslizante com trecho preenchido
+      Select.tsx         Lista suspensa acessível (substitui o <select> nativo)
+      ScrollArea.tsx     Área com rolagem própria e barra fina
+      Modal.tsx          Janela modal (Esc, foco preso, rolagem do corpo)
+      ConfirmDialog.tsx  Pergunta de confirmação sobre o Modal
+      Banner.tsx         Faixa de aviso: informação, alerta ou erro
 
   hooks/
     useRoom.ts             Assina o documento da sala
@@ -79,6 +94,7 @@ src/
     useMyResponse.ts       Assina só a própria resposta
     useParticipants.ts     Assina a lista de presentes na sala
     useParticipant.ts      Garante a sessão anônima e devolve o uid
+    usePresenterAccess.ts  Decide se este navegador controla a sala (uid ou token)
     useSlideTimer.ts       Contagem regressiva do slide, lida da sala
     useRevealCountdown.ts  Suspense de 3 s antes de revelar o gabarito
     useApplyTheme.ts       Aplica a classe `.dark` no <html>
@@ -95,7 +111,7 @@ src/
     shortUrl.ts           Encurtador do link de entrada
 
   store/
-    editorStore.ts   Apresentação em edição (Zustand)
+    editorStore.ts   Apresentação em edição (Zustand), um editor por contexto
     themeStore.ts    Tema claro/escuro do usuário (Zustand + localStorage)
 
   utils/

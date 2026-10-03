@@ -100,10 +100,22 @@ a tela pequena: título até 30 px, corpo até 22–28 px conforme o controle.
 - **No editor**: dentro do `editorStore` (memória). Some ao recarregar a página
   — exporte o JSON para não perder.
 - **Na sala**: gravadas em `room.settings` na criação (`createRoom` completa os
-  padrões, porque o Firestore rejeita `undefined`). `updateSettings` em
-  [`src/lib/rooms.ts`](../src/lib/rooms.ts) permite alterá-las numa sala já
-  criada.
+  padrões, porque o Firestore rejeita `undefined`). Numa sala já iniciada, o
+  apresentador muda as opções (globais e por slide) pelo botão **Editar** da
+  tela de apresentação; `saveAndRestartRoom` em
+  [`src/lib/rooms.ts`](../src/lib/rooms.ts) grava tudo e recomeça a
+  apresentação do primeiro slide, depois de uma confirmação. Ver
+  [09](09-fluxos-de-uso.md#editar-uma-sala-em-andamento).
 - **No JSON**: opcional e parcial; a importação completa o que faltar.
 
 Uma mudança em `room.settings` chega a todos os navegadores conectados pela
-mesma assinatura da sala, sem ninguém precisar recarregar.
+mesma assinatura da sala, sem ninguém precisar recarregar. Se a edição ligar
+**Solicitar o nome**, quem já estava na sala sem nome passa a ver o pedido de
+nome antes do primeiro slide.
+
+### Por que salvar recomeça a apresentação
+
+Um tempo de cronômetro novo só valeria para as perguntas que ainda não
+começaram, e uma pergunta já encerrada continuaria congelada com a regra
+antiga. Recomeçar zera os cronômetros e os gabaritos revelados, então a
+configuração salva vale igual para todos os slides, do primeiro ao último.

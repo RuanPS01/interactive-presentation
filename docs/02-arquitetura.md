@@ -65,6 +65,8 @@ para `index.html`.
 | `/create` | [`CreatePage`](../src/pages/CreatePage.tsx) | Público (editor local) |
 | `/present/:code` | [`PresentPage`](../src/pages/PresentPage.tsx) | Só o dono atual (mesmo uid) |
 | `/present/:code/:token` | [`PresentPage`](../src/pages/PresentPage.tsx) | Quem tem o token secreto |
+| `/edit/:code` | [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Só o dono atual (mesmo uid) |
+| `/edit/:code/:token` | [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Quem tem o token secreto |
 | `/join` | [`JoinPage`](../src/pages/JoinPage.tsx) | Público |
 | `/room/:code` | [`RoomPage`](../src/pages/RoomPage.tsx) | Quem tem o código |
 | `*` | Redireciona para `/` | — |
@@ -78,6 +80,15 @@ entre apresentador e plateia: o documento da sala é o único canal.
 
 O índice `currentSlideIndex === slides.length` é reservado ao **slide final
 automático** de agradecimento, que também dispara o download do PDF.
+
+É o mesmo canal que leva todos de volta ao início quando o apresentador edita
+uma sala em andamento: a gravação da edição zera `currentSlideIndex`, e cada
+navegador conectado simplesmente segue o documento. Detalhes em
+[07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento).
+
+As telas `/present` e `/edit` usam a mesma verificação de acesso
+([`usePresenterAccess`](../src/hooks/usePresenterAccess.ts)): dono atual ou
+token secreto na URL.
 
 ## Build e bundle
 

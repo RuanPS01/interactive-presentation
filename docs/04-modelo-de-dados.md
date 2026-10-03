@@ -21,6 +21,7 @@ interface Room extends Presentation {
   updatedAt: number
   timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
   revealedSlideIds?: string[]          // gabaritos cujo suspense já terminou
+  revision?: number                    // quantas vezes a sala foi editada depois de iniciada
 }
 
 interface SlideTimer {
@@ -31,6 +32,12 @@ interface SlideTimer {
 
 `Presentation` é a estrutura **serializável** (import/export JSON).
 `Room` é ela mais os campos que só existem depois de publicada.
+
+`revision` começa ausente (vale 0) e soma 1 a cada edição feita pelo
+apresentador numa sala já iniciada. A edição recomeça a apresentação do
+primeiro slide; é por esse número que a tela do participante percebe a mudança
+e mostra o aviso "O apresentador atualizou a apresentação". Ver
+[07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento).
 
 `timers` guarda **um registro por slide**, e não um cronômetro só: o
 apresentador pode sair de uma pergunta no meio da contagem e voltar depois, e

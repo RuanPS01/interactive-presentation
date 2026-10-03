@@ -155,6 +155,8 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
   do ESLint reclama do contrário).
 - **Nunca grave `undefined` no Firestore** — omita o campo com spread
   condicional.
+- **Controles de formulário vêm de `components/ui/`.** Nada de `<select>`,
+  checkbox, radio ou range nativos nas telas: eles destoam no tema escuro.
 - **Efeitos com dependências estáveis.** Documentos do Firestore mudam de
   identidade a cada snapshot; dependa de um valor derivado (um booleano, um id)
   em vez do objeto, para não disparar escritas em cascata.
@@ -181,5 +183,7 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 | Criar um novo tipo de slide | `types/presentation.ts` → `utils/slideFactory.ts` → `utils/validation.ts` → `components/editor/` → `SlideDisplay` → `ParticipateView` → `exportPdf` → `aiPrompt` |
 | Adicionar uma opção global | `types/presentation.ts` (`PresentationSettings`) → `utils/settings.ts` → `utils/validation.ts` → `PresentationSettingsButton` → `SlideSettingsSection` |
 | Mudar as cores dos gráficos | `components/charts/palette.ts` (vale também para o PDF) |
+| Adicionar um controle de formulário numa tela | Use os componentes de `components/ui/` (`Checkbox`, `Radio`, `Slider`, `Select`, `ScrollArea`, `Modal`); ver [08](08-componentes.md#ui-componentes-genéricos) |
+| Mudar o que a edição de sala grava ou reinicia | `saveAndRestartRoom` em `lib/rooms.ts` + [07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento) |
 | Ajustar o relatório | `utils/exportPdf.ts` |
 | Mexer nas regras de acesso | `firestore.rules` + [07](07-tempo-real-e-comunicacao.md) |

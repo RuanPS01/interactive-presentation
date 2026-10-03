@@ -37,3 +37,5 @@ atualize o documento correspondente:
 | `firestore.rules` | [07](07-tempo-real-e-comunicacao.md) (e a pipeline republica sozinha) |
 | `.github/workflows/deploy.yml` | [02](02-arquitetura.md) e [11](11-desenvolvimento.md) |
 | Novo componente/hook | [03](03-estrutura-de-pastas.md) e [08](08-componentes.md) |
+| `src/components/ui/` (componentes genéricos) | [08](08-componentes.md#ui-componentes-genéricos) |
+| `src/lib/rooms.ts` (`saveAndRestartRoom`) | [07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento) e [09](09-fluxos-de-uso.md#editar-uma-sala-em-andamento) |
