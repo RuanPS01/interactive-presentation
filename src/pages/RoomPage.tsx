@@ -1,4 +1,4 @@
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
@@ -12,8 +12,12 @@ import { resolveSlideSettings, withDefaults } from '../utils/settings'
 import { ParticipateView } from '../components/participate/ParticipateView'
 import { NamePrompt } from '../components/participate/NamePrompt'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
+import { Banner } from '../components/ui/Banner'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+
+/** Tempo que o aviso de "a apresentação recomeçou" fica na tela. */
+const RESTART_NOTICE_MS = 10_000
 
 export function RoomPage() {
   const { code } = useParams<{ code: string }>()
@@ -44,6 +48,23 @@ export function RoomPage() {
       /* falha de presença não impede participar */
     })
   }, [code, uid, roomExists, needsName, name, askName])
+
+  // Quando o apresentador edita a sala, ela recomeça do primeiro slide e
+  // `revision` sobe. A troca de slide já acontece sozinha (esta tela segue
+  // `currentSlideIndex`); o aviso explica por que todo mundo voltou ao início.
+  // A tela guarda a revisão que encontrou ao abrir, então quem chega depois
+  // da edição não vê aviso nenhum.
+  const revision = room?.revision ?? 0
+  const [seenRevision, setSeenRevision] = useState<number | null>(null)
+  useEffect(() => {
+    if (roomExists && seenRevision === null) setSeenRevision(revision)
+  }, [roomExists, seenRevision, revision])
+  const restarted = seenRevision !== null && revision > seenRevision
+  useEffect(() => {
+    if (!restarted) return
+    const id = window.setTimeout(() => setSeenRevision(revision), RESTART_NOTICE_MS)
+    return () => window.clearTimeout(id)
+  }, [restarted, revision])
 
   function confirmName(value: string) {
     if (!code) return
@@ -93,6 +114,17 @@ export function RoomPage() {
       </header>
 
       <main className="flex-1">
+        {restarted && (
+          <Banner
+            tone="info"
+            icon={<RotateCcw size={16} />}
+            onDismiss={() => setSeenRevision(revision)}
+            className="mb-4"
+          >
+            O apresentador atualizou a apresentação e todos voltaram para o início.
+          </Banner>
+        )}
+
         {loading && <Info>Entrando na sala…</Info>}
 
         {!loading && error && <Info>Erro de conexão: {error}</Info>}

@@ -2,6 +2,7 @@ import {
   arrayUnion,
   doc,
   getDoc,
+  increment,
   onSnapshot,
   updateDoc,
   writeBatch,
@@ -9,14 +10,7 @@ import {
 import { db } from './firebase'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
 import { withDefaults } from '../utils/settings'
-import type {
-  Presentation,
-  PresentationSettings,
-  Room,
-  RoomStatus,
-  Slide,
-  SlideTimers,
-} from '../types/presentation'
+import type { Presentation, Room, RoomStatus, SlideTimers } from '../types/presentation'
 
 const ROOMS = 'rooms'
 
@@ -169,15 +163,35 @@ export async function setStatus(code: string, status: RoomStatus): Promise<void>
   await updateDoc(roomRef(code), { status, updatedAt: Date.now() })
 }
 
-/** Atualiza os slides de uma sala já criada (edição durante a apresentação). */
-export async function updateSlides(code: string, slides: Slide[]): Promise<void> {
-  await updateDoc(roomRef(code), { slides, updatedAt: Date.now() })
-}
-
-/** Atualiza as opções globais de uma sala já criada. */
-export async function updateSettings(
+/**
+ * Grava a apresentação editada numa sala já iniciada e a recomeça do primeiro
+ * slide, numa escrita só.
+ *
+ * Recomeçar é o que mantém a sala coerente depois da edição: o slide no ar
+ * pode ter mudado de lugar ou deixado de existir, e os cronômetros e gabaritos
+ * já revelados se referem à versão anterior (um tempo novo nas opções, por
+ * exemplo, só vale para cronômetros que ainda não começaram). Como todos os
+ * navegadores seguem `currentSlideIndex`, a plateia volta ao início junto com
+ * o apresentador, sem mensagem direta a ninguém.
+ *
+ * As respostas já enviadas ficam guardadas: cada uma pertence a um slide pelo
+ * id, que a edição preserva, e só o próprio participante pode apagá-la.
+ */
+export async function saveAndRestartRoom(
   code: string,
-  settings: PresentationSettings,
+  presentation: Presentation,
 ): Promise<void> {
-  await updateDoc(roomRef(code), { settings, updatedAt: Date.now() })
+  await updateDoc(roomRef(code), {
+    title: presentation.title,
+    slides: presentation.slides,
+    // O Firestore rejeita `undefined`: grava a configuração completa.
+    settings: withDefaults(presentation.settings),
+    currentSlideIndex: 0,
+    status: 'live',
+    timers: {},
+    revealedSlideIds: [],
+    // Avisa quem está na sala que a apresentação mudou (ver `RoomPage`).
+    revision: increment(1),
+    updatedAt: Date.now(),
+  })
 }

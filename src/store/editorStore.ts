@@ -1,4 +1,6 @@
-import { create } from 'zustand'
+import { createContext, useContext } from 'react'
+import { createStore, useStore } from 'zustand'
+import type { StoreApi } from 'zustand'
 import type {
   AnswerSlide,
   Presentation,
@@ -10,7 +12,7 @@ import type {
 import { createAnswerSlide, createDefaultSlide } from '../utils/slideFactory'
 import { DEFAULT_SETTINGS, withDefaults } from '../utils/settings'
 
-interface EditorState {
+export interface EditorState {
   title: string
   slides: Slide[]
   settings: PresentationSettings
@@ -88,83 +90,104 @@ function applySlides(
   }
 }
 
-export const useEditorStore = create<EditorState>((set, get) => ({
-  ...INITIAL,
+export type EditorStore = StoreApi<EditorState>
 
-  setTitle: (title) => set({ title }),
+/**
+ * Cria um editor independente. A tela de criação usa um que vive enquanto a
+ * aba estiver aberta; a edição de uma sala em andamento cria o seu, para não
+ * sobrescrever o rascunho de quem estava montando outra apresentação.
+ */
+export function createEditorStore(): EditorStore {
+  return createStore<EditorState>()((set, get) => ({
+    ...INITIAL,
 
-  updateSettings: (patch) =>
-    set((s) => ({ settings: { ...s.settings, ...patch } })),
+    setTitle: (title) => set({ title }),
 
-  setOverride: (id, key, value) =>
-    set((s) => ({
-      slides: s.slides.map((slide) => {
-        if (slide.id !== id) return slide
-        const overrides = { ...(slide.overrides ?? {}) }
-        if (value === undefined) delete overrides[key]
-        else overrides[key] = value
-        return (
-          Object.keys(overrides).length > 0
-            ? { ...slide, overrides }
-            : // Sem sobrescritas o campo some, e o slide volta a herdar tudo.
-              { ...slide, overrides: undefined }
-        ) as Slide
+    updateSettings: (patch) =>
+      set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+    setOverride: (id, key, value) =>
+      set((s) => ({
+        slides: s.slides.map((slide) => {
+          if (slide.id !== id) return slide
+          const overrides = { ...(slide.overrides ?? {}) }
+          if (value === undefined) delete overrides[key]
+          else overrides[key] = value
+          if (Object.keys(overrides).length > 0) return { ...slide, overrides } as Slide
+          // Sem sobrescritas o campo some, e o slide volta a herdar tudo. Apagar
+          // a chave (em vez de deixá-la `undefined`) importa: o Firestore recusa
+          // `undefined` ao gravar a sala.
+          const inheriting = { ...slide }
+          delete inheriting.overrides
+          return inheriting
+        }),
+      })),
+
+    addSlide: (type) =>
+      set((s) => {
+        const slide = createDefaultSlide(type)
+        return applySlides([...s.slides, slide], slide.id, s.slides.length)
       }),
-    })),
 
-  addSlide: (type) =>
-    set((s) => {
-      const slide = createDefaultSlide(type)
-      return applySlides([...s.slides, slide], slide.id, s.slides.length)
-    }),
+    updateSlide: (id, patch) =>
+      set((s) => {
+        const slides = s.slides.map((slide) =>
+          slide.id === id ? ({ ...slide, ...patch } as Slide) : slide,
+        )
+        return applySlides(slides, id, s.selectedIndex)
+      }),
 
-  updateSlide: (id, patch) =>
-    set((s) => {
-      const slides = s.slides.map((slide) =>
-        slide.id === id ? ({ ...slide, ...patch } as Slide) : slide,
-      )
-      return applySlides(slides, id, s.selectedIndex)
-    }),
+    removeSlide: (id) =>
+      set((s) => {
+        const target = s.slides.find((slide) => slide.id === id)
+        // Apagar um gabarito equivale a desligar a revelação no quiz de origem.
+        const slides =
+          target?.type === 'answer'
+            ? s.slides.map((slide) =>
+                slide.id === target.quizSlideId && slide.type === 'quiz'
+                  ? { ...slide, revealAnswer: false }
+                  : slide,
+              )
+            : s.slides.filter((slide) => slide.id !== id)
+        return applySlides(slides, undefined, s.selectedIndex)
+      }),
 
-  removeSlide: (id) =>
-    set((s) => {
-      const target = s.slides.find((slide) => slide.id === id)
-      // Apagar um gabarito equivale a desligar a revelação no quiz de origem.
-      const slides =
-        target?.type === 'answer'
-          ? s.slides.map((slide) =>
-              slide.id === target.quizSlideId && slide.type === 'quiz'
-                ? { ...slide, revealAnswer: false }
-                : slide,
-            )
-          : s.slides.filter((slide) => slide.id !== id)
-      return applySlides(slides, undefined, s.selectedIndex)
-    }),
+    moveSlide: (from, to) =>
+      set((s) => {
+        if (to < 0 || to >= s.slides.length) return s
+        const slides = [...s.slides]
+        const [moved] = slides.splice(from, 1)
+        slides.splice(to, 0, moved)
+        // O gabarito acompanha o quiz: `syncAnswerSlides` o recoloca em seguida.
+        return applySlides(slides, moved.id, to)
+      }),
 
-  moveSlide: (from, to) =>
-    set((s) => {
-      if (to < 0 || to >= s.slides.length) return s
-      const slides = [...s.slides]
-      const [moved] = slides.splice(from, 1)
-      slides.splice(to, 0, moved)
-      // O gabarito acompanha o quiz: `syncAnswerSlides` o recoloca em seguida.
-      return applySlides(slides, moved.id, to)
-    }),
+    select: (index) => set((s) => ({ selectedIndex: clampIndex(index, s.slides.length) })),
 
-  select: (index) => set((s) => ({ selectedIndex: clampIndex(index, s.slides.length) })),
+    loadPresentation: (presentation) =>
+      set({
+        title: presentation.title,
+        settings: withDefaults(presentation.settings),
+        ...applySlides(presentation.slides, undefined, 0),
+        selectedIndex: 0,
+      }),
 
-  loadPresentation: (presentation) =>
-    set({
-      title: presentation.title,
-      settings: withDefaults(presentation.settings),
-      ...applySlides(presentation.slides, undefined, 0),
-      selectedIndex: 0,
-    }),
+    getPresentation: () => {
+      const { title, slides, settings } = get()
+      return { title, slides, settings }
+    },
 
-  getPresentation: () => {
-    const { title, slides, settings } = get()
-    return { title, slides, settings }
-  },
+    reset: () => set({ ...INITIAL, slides: [] }),
+  }))
+}
 
-  reset: () => set({ ...INITIAL, slides: [] }),
-}))
+/**
+ * Editor que os componentes de `components/editor/` enxergam. Sem provedor em
+ * volta, é o da tela de criação; a edição de sala troca por um editor próprio.
+ */
+export const EditorStoreContext = createContext<EditorStore>(createEditorStore())
+
+/** Lê (e assina) uma parte do editor em uso. */
+export function useEditorStore<T>(selector: (state: EditorState) => T): T {
+  return useStore(useContext(EditorStoreContext), selector)
+}

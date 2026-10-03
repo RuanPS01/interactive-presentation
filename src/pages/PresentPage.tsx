@@ -9,6 +9,7 @@ import {
   LogOut,
   Maximize2,
   Minimize2,
+  Pencil,
   Users,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -18,16 +19,11 @@ import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
 import { useParticipants } from '../hooks/useParticipants'
+import { usePresenterAccess } from '../hooks/usePresenterAccess'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
-import {
-  claimPresenter,
-  markAnswerRevealed,
-  saveSlideTimers,
-  setCurrentSlide,
-} from '../lib/rooms'
-import { savePresenterSession } from '../lib/presenterSessions'
+import { markAnswerRevealed, saveSlideTimers, setCurrentSlide } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
@@ -36,7 +32,9 @@ import type { ResponseDoc } from '../types/presentation'
 import { SlideDisplay } from '../components/slides/SlideDisplay'
 import { ShareRoom } from '../components/present/ShareRoom'
 import { SummarySlide } from '../components/present/SummarySlide'
+import { FullScreenMessage } from '../components/layout/FullScreenMessage'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
+import { PresenterAccessDenied } from '../components/present/PresenterAccessDenied'
 import { Button } from '../components/ui/Button'
 
 export function PresentPage() {
@@ -54,8 +52,7 @@ export function PresentPage() {
 
   // Controle de acesso do apresentador. Só quem é dono (mesmo uid) ou tem o
   // token secreto (na URL) apresenta; a plateia (só com o código) não entra.
-  const [access, setAccess] = useState<'checking' | 'granted' | 'denied'>('checking')
-  const claimTriedRef = useRef(false)
+  const access = usePresenterAccess(code, token, room, uid)
 
   const currentSlide =
     room && room.slides.length > 0 ? room.slides[room.currentSlideIndex] : undefined
@@ -221,36 +218,6 @@ export function PresentPage() {
     })
   }, [access, code, revealToRecord])
 
-  // Decide o acesso assim que a sala e o uid estiverem prontos.
-  const creatorUid = room?.creatorUid
-  useEffect(() => {
-    if (!code || !creatorUid || !uid) return // ainda carregando
-    if (access !== 'checking') return // já decidido
-    if (creatorUid === uid) {
-      // Já é o dono neste navegador (criou a sala ou já reivindicou).
-      setAccess('granted')
-      return
-    }
-    if (!token) {
-      setAccess('denied')
-      return
-    }
-    if (claimTriedRef.current) return
-    claimTriedRef.current = true
-    // Recarregou ou trocou de navegador: prova o token e reassume o controle.
-    claimPresenter(code, uid, token)
-      .then(() => setAccess('granted'))
-      .catch(() => setAccess('denied'))
-  }, [code, creatorUid, uid, token, access])
-
-  // Concedido o acesso: lembra a sessão (retomar/reexportar pela tela inicial).
-  const roomTitle = room?.title
-  useEffect(() => {
-    if (access === 'granted' && code && token) {
-      savePresenterSession({ code, token, title: roomTitle ?? '' })
-    }
-  }, [access, code, token, roomTitle])
-
   if (loading) {
     return <FullScreenMessage>Carregando sala…</FullScreenMessage>
   }
@@ -271,23 +238,7 @@ export function PresentPage() {
     return <FullScreenMessage>Verificando acesso de apresentador…</FullScreenMessage>
   }
   if (access === 'denied') {
-    return (
-      <FullScreenMessage>
-        <p className="text-lg font-semibold text-neutral-900 dark:text-neutral-50">
-          Acesso de apresentador necessário
-        </p>
-        <p className="mt-1 max-w-md text-sm text-neutral-500 dark:text-neutral-400">
-          Este link não tem o token de apresentador desta sala. Se você é da
-          plateia, entre como participante usando o código.
-        </p>
-        <div className="mt-4 flex gap-2">
-          <Button onClick={() => navigate(`/room/${code}`)}>Entrar como participante</Button>
-          <Button variant="secondary" onClick={() => navigate('/')}>
-            Início
-          </Button>
-        </div>
-      </FullScreenMessage>
-    )
+    return <PresenterAccessDenied code={code} />
   }
 
   const total = room.slides.length
@@ -371,6 +322,16 @@ export function PresentPage() {
           <Users size={14} /> {participants.length}
         </span>
         <div className="ml-auto flex items-center gap-2">
+          {/* Editar recomeça a apresentação para todos ao salvar; a tela de
+              edição pede confirmação antes. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => navigate(`/edit/${code}${token ? `/${token}` : ''}`)}
+            title="Editar opções e slides desta sala"
+          >
+            <Pencil size={16} /> Editar
+          </Button>
           <Button
             variant="secondary"
             size="sm"
@@ -463,14 +424,6 @@ export function PresentPage() {
           </div>
         )}
       </main>
-    </div>
-  )
-}
-
-function FullScreenMessage({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-6 text-center text-neutral-600 dark:text-neutral-300">
-      {children}
     </div>
   )
 }

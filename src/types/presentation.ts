@@ -186,6 +186,12 @@ export interface Room extends Presentation {
    * primeira revelação, não para atrasar a revisão.
    */
   revealedSlideIds?: string[]
+  /**
+   * Quantas vezes o apresentador editou a sala depois de iniciada. Cada edição
+   * recomeça a apresentação do primeiro slide e soma 1 aqui; é por esse número
+   * que a tela do participante percebe a mudança e avisa. Ausente = 0.
+   */
+  revision?: number
 }
 
 export type ResponseType = 'word' | 'choice'
