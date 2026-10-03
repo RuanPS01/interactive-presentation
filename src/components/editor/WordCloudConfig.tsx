@@ -1,5 +1,6 @@
 import { useEditorStore } from '../../store/editorStore'
 import type { WordCloudSlide, WordLimitMode } from '../../types/presentation'
+import { Radio } from '../ui/Checkbox'
 import { Field, Input } from '../ui/Input'
 
 interface WordCloudConfigProps {
@@ -29,18 +30,13 @@ export function WordCloudConfig({ slide }: WordCloudConfigProps) {
           Quantas palavras cada participante pode enviar?
         </legend>
         {MODES.map((mode) => (
-          <label
+          <Radio
             key={mode.value}
-            className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-200"
-          >
-            <input
-              type="radio"
-              name={`wordmode-${slide.id}`}
-              checked={slide.wordLimitMode === mode.value}
-              onChange={() => updateSlide(slide.id, { wordLimitMode: mode.value })}
-            />
-            {mode.label}
-          </label>
+            name={`wordmode-${slide.id}`}
+            label={mode.label}
+            checked={slide.wordLimitMode === mode.value}
+            onChange={() => updateSlide(slide.id, { wordLimitMode: mode.value })}
+          />
         ))}
       </fieldset>
 

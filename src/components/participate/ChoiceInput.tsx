@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { clearResponse, saveResponse } from '../../lib/responses'
 import type { ChoiceSlide, PresentationSettings } from '../../types/presentation'
 import { Button } from '../ui/Button'
+import { ChoiceMark } from '../ui/Checkbox'
 
 interface ChoiceInputProps {
   code: string
@@ -112,17 +113,10 @@ export function ChoiceInput({
                 )}
                 style={{ fontSize: `${size}px` }}
               >
-                <span
-                  className={clsx(
-                    'flex h-5 w-5 shrink-0 items-center justify-center border',
-                    slide.allowMultiple ? 'rounded-md' : 'rounded-full',
-                    isSelected
-                      ? 'border-blue-600 bg-blue-600 text-white'
-                      : 'border-neutral-400',
-                  )}
-                >
-                  {isSelected && <Check size={14} strokeWidth={3} />}
-                </span>
+                <ChoiceMark
+                  checked={isSelected}
+                  shape={slide.allowMultiple ? 'square' : 'round'}
+                />
                 <span className="min-w-0 break-words">{option.label}</span>
               </button>
             </li>

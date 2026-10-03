@@ -3,6 +3,7 @@ import { aggregateChoices, aggregateWords } from '../../utils/aggregate'
 import { BarChartView } from '../charts/BarChartView'
 import { PieChartView } from '../charts/PieChartView'
 import { WordCloudView } from '../charts/WordCloudView'
+import { ScrollArea } from '../ui/ScrollArea'
 
 interface SummarySlideProps {
   room: Room
@@ -40,7 +41,7 @@ export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
         </p>
       </div>
 
-      <div className="grid min-h-0 flex-1 auto-rows-[220px] grid-cols-2 gap-4 overflow-y-auto pr-1 md:grid-cols-3">
+      <ScrollArea className="grid min-h-0 flex-1 auto-rows-[220px] grid-cols-2 gap-4 pr-1 md:grid-cols-3">
         {room.slides.map((slide, i) => (
           <div
             key={slide.id}
@@ -60,7 +61,7 @@ export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
             </div>
           </div>
         ))}
-      </div>
+      </ScrollArea>
     </div>
   )
 }
@@ -128,21 +129,23 @@ function AnswerList({
   const tallies = aggregateChoices(responses, slide.options)
   const correct = new Set(correctIds)
   return (
-    <ul className="h-full space-y-1 overflow-y-auto text-xs">
-      {tallies.map((t) => (
-        <li
-          key={t.id}
-          className={
-            correct.has(t.id)
-              ? 'flex justify-between gap-2 rounded bg-green-100 px-2 py-1 font-semibold text-green-900 dark:bg-green-950 dark:text-green-100'
-              : 'flex justify-between gap-2 rounded px-2 py-1 text-neutral-600 dark:text-neutral-300'
-          }
-        >
-          <span className="truncate">{t.label}</span>
-          <span className="shrink-0 tabular-nums">{t.votes}</span>
-        </li>
-      ))}
-    </ul>
+    <ScrollArea className="h-full">
+      <ul className="space-y-1 text-xs">
+        {tallies.map((t) => (
+          <li
+            key={t.id}
+            className={
+              correct.has(t.id)
+                ? 'flex justify-between gap-2 rounded bg-green-100 px-2 py-1 font-semibold text-green-900 dark:bg-green-950 dark:text-green-100'
+                : 'flex justify-between gap-2 rounded px-2 py-1 text-neutral-600 dark:text-neutral-300'
+            }
+          >
+            <span className="truncate">{t.label}</span>
+            <span className="shrink-0 tabular-nums">{t.votes}</span>
+          </li>
+        ))}
+      </ul>
+    </ScrollArea>
   )
 }
 

@@ -1,4 +1,5 @@
 import type { NamedResponse } from '../../utils/aggregate'
+import { ScrollArea } from '../ui/ScrollArea'
 
 interface NamedResponsesListProps {
   responses: NamedResponse[]
@@ -14,7 +15,7 @@ export function NamedResponsesList({ responses, fontSize }: NamedResponsesListPr
   if (responses.length === 0) return null
 
   return (
-    <div className="mt-3 max-h-[22vh] overflow-y-auto rounded-xl border border-neutral-200 bg-white/60 p-3 dark:border-neutral-800 dark:bg-neutral-900/60">
+    <ScrollArea className="mt-3 max-h-[22vh] rounded-xl border border-neutral-200 bg-white/60 p-3 dark:border-neutral-800 dark:bg-neutral-900/60">
       <ul className="flex flex-wrap gap-2" style={{ fontSize: `${fontSize * 0.85}px` }}>
         {responses.map((r) => (
           <li
@@ -30,6 +31,6 @@ export function NamedResponsesList({ responses, fontSize }: NamedResponsesListPr
           </li>
         ))}
       </ul>
-    </div>
+    </ScrollArea>
   )
 }

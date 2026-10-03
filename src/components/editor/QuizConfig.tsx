@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/editorStore'
 import type { ChoiceOption, QuizSlide } from '../../types/presentation'
 import { newId } from '../../utils/slideFactory'
 import { Button } from '../ui/Button'
+import { Checkbox, Radio } from '../ui/Checkbox'
 import { Field, Input } from '../ui/Input'
 
 interface QuizConfigProps {
@@ -61,20 +62,29 @@ export function QuizConfig({ slide }: QuizConfigProps) {
 
         {slide.options.map((option, index) => (
           <div key={option.id} className="flex items-center gap-2">
-            <input
-              type={slide.allowMultiple ? 'checkbox' : 'radio'}
-              name={`correct-${slide.id}`}
-              checked={correct.has(option.id)}
-              onChange={() => toggleCorrect(option.id)}
-              onClick={() => {
-                // Radio não dispara `change` ao clicar no já marcado; o clique
-                // permite desmarcar e voltar a "sem gabarito".
-                if (!slide.allowMultiple && correct.has(option.id)) toggleCorrect(option.id)
-              }}
-              title="Marcar como resposta correta"
-              aria-label={`Alternativa ${index + 1} é a correta`}
-              className="accent-green-600"
-            />
+            {slide.allowMultiple ? (
+              <Checkbox
+                tone="success"
+                checked={correct.has(option.id)}
+                onChange={() => toggleCorrect(option.id)}
+                title="Marcar como resposta correta"
+                aria-label={`Alternativa ${index + 1} é a correta`}
+              />
+            ) : (
+              <Radio
+                tone="success"
+                name={`correct-${slide.id}`}
+                checked={correct.has(option.id)}
+                onChange={() => toggleCorrect(option.id)}
+                onClick={() => {
+                  // Radio não dispara `change` ao clicar no já marcado; o clique
+                  // permite desmarcar e voltar a "sem gabarito".
+                  if (correct.has(option.id)) toggleCorrect(option.id)
+                }}
+                title="Marcar como resposta correta"
+                aria-label={`Alternativa ${index + 1} é a correta`}
+              />
+            )}
             <Input
               value={option.label}
               placeholder={`Alternativa ${index + 1}`}
@@ -108,55 +118,33 @@ export function QuizConfig({ slide }: QuizConfigProps) {
         </Button>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
-          checked={slide.allowMultiple}
-          onChange={(e) =>
-            updateSlide(slide.id, {
-              allowMultiple: e.target.checked,
-              // Voltando para resposta única, sobra no máximo um gabarito.
-              correctOptionIds: e.target.checked
-                ? slide.correctOptionIds
-                : slide.correctOptionIds.slice(0, 1),
-            })
-          }
-        />
-        Permitir escolher mais de uma alternativa
-      </label>
+      <Checkbox
+        label="Permitir escolher mais de uma alternativa"
+        checked={slide.allowMultiple}
+        onChange={(allowMultiple) =>
+          updateSlide(slide.id, {
+            allowMultiple,
+            // Voltando para resposta única, sobra no máximo um gabarito.
+            correctOptionIds: allowMultiple
+              ? slide.correctOptionIds
+              : slide.correctOptionIds.slice(0, 1),
+          })
+        }
+      />
 
-      <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={slide.showResponses}
-          onChange={(e) => updateSlide(slide.id, { showResponses: e.target.checked })}
-        />
-        <span>
-          Mostrar as respostas dos participantes na tela do apresentador
-          <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-            Desligado (padrão), a pergunta fica no ar sem entregar o resultado —
-            só o total de quem já respondeu. Ligado, cada alternativa mostra
-            votos e porcentagem (e os nomes, se a sala identificar as respostas).
-          </span>
-        </span>
-      </label>
+      <Checkbox
+        label="Mostrar as respostas dos participantes na tela do apresentador"
+        hint="Desligado (padrão), a pergunta fica no ar sem entregar o resultado: só o total de quem já respondeu. Ligado, cada alternativa mostra votos e porcentagem (e os nomes, se a sala identificar as respostas)."
+        checked={slide.showResponses}
+        onChange={(showResponses) => updateSlide(slide.id, { showResponses })}
+      />
 
-      <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={slide.revealAnswer}
-          onChange={(e) => updateSlide(slide.id, { revealAnswer: e.target.checked })}
-        />
-        <span>
-          Adicionar um slide de resposta logo depois
-          <span className="block text-xs text-neutral-500 dark:text-neutral-400">
-            O slide é criado (e removido) automaticamente e mostra a alternativa
-            correta com a distribuição dos votos.
-          </span>
-        </span>
-      </label>
+      <Checkbox
+        label="Adicionar um slide de resposta logo depois"
+        hint="O slide é criado (e removido) automaticamente e mostra a alternativa correta com a distribuição dos votos."
+        checked={slide.revealAnswer}
+        onChange={(revealAnswer) => updateSlide(slide.id, { revealAnswer })}
+      />
     </div>
   )
 }
