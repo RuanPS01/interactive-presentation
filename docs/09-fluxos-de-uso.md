@@ -28,8 +28,9 @@
 8. **Acompanha ao vivo**: gráficos e nuvem se atualizam a cada resposta; o
    rodapé mostra “N participantes · M responderam · …”.
 9. **Passa do último slide** → slide final de agradecimento, com a grade de
-   miniaturas, e o **PDF de resultados baixa automaticamente** (uma vez por
-   sessão). O botão **Exportar PDF** gera o mesmo relatório a qualquer momento.
+   miniaturas e, no centro, o botão **Baixar resultados (PDF)**. Nada baixa
+   sozinho: o PDF só é gerado quando o apresentador pede. O botão **Exportar
+   PDF** do cabeçalho gera o mesmo relatório a qualquer momento.
 
 ### Importar um PowerPoint
 

@@ -79,7 +79,7 @@ outros navegadores **assinam** o documento e reagem. Não há mensagens diretas
 entre apresentador e plateia: o documento da sala é o único canal.
 
 O índice `currentSlideIndex === slides.length` é reservado ao **slide final
-automático** de agradecimento, que também dispara o download do PDF.
+automático** de agradecimento, com o botão para baixar o PDF dos resultados.
 
 É o mesmo canal que leva todos de volta ao início quando o apresentador edita
 uma sala em andamento: a gravação da edição zera `currentSlideIndex`, e cada

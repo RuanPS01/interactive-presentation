@@ -62,7 +62,8 @@ Não há administrador, moderador nem limite de participantes por sala.
   no editor, no projetor, no celular e no PDF.
 - **Exportar PowerPoint (.pptx)**: a apresentação vira um arquivo para abrir
   no PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as
-  fontes embutidas; as perguntas viram slides estáticos com as alternativas.
+  fontes embutidas; as perguntas viram slides estáticos com as alternativas,
+  no tema da página (claro ou escuro).
 - **Opções globais e por slide**: troca de resposta, pedido de nome,
   identificação das respostas, tamanhos de fonte (título, rótulos, corpo) e o
   tempo do cronômetro das perguntas. O formato dos slides (16:9 ou 4:3) é só

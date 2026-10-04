@@ -95,10 +95,15 @@ no formato dela (16:9 ou 4:3).
 | Caixa de texto do slide livre | Caixa de texto editável: trechos com fonte, tamanho, cor, realce, negrito, itálico, sublinhado e tachado; parágrafos com alinhamento, marcadores (caractere ou numeração automática), recuos, espaçamentos e altura da linha; margem interna, fundo, posição vertical, rotação e transparência |
 | Imagem do slide livre | Imagem, com "preencher" virando recorte, "conter" ajustando a moldura, cantos arredondados e transparência; WebP vira PNG |
 | Cor de fundo do slide livre | Fundo do slide |
-| Texto simples | Título e o texto, com o alinhamento e o tamanho do slide |
-| Alternativas, barras e pizza | Título, as alternativas em cartões (com letras nas alternativas) e a instrução "Responda pelo celular" |
-| Resposta correta | Título e as alternativas, com a correta destacada em verde |
-| Nuvem de palavras | Título e a instrução para enviar a resposta pelo celular |
+| Texto simples | Título e o texto, com o alinhamento e o tamanho do slide, no tema da página |
+| Alternativas, barras e pizza | Título, as alternativas em cartões (com letras nas alternativas) e a instrução "Responda pelo celular", no tema da página |
+| Resposta correta | Título e as alternativas, com a correta destacada em verde, no tema da página |
+| Nuvem de palavras | Título e a instrução para enviar a resposta pelo celular, no tema da página |
+
+**Tema.** Os slides comuns (perguntas, gabarito, nuvem, barras, pizza e texto
+simples) saem com as cores do tema escolhido na página no momento da
+exportação, claro ou escuro, as mesmas da tela do projetor: fundo, texto,
+cartões e destaque do gabarito. Os slides livres mantêm as próprias cores.
 
 As unidades são o inverso das do importador: 1 px da moldura vale 6350 EMU
 (0,5 pt), e a altura de linha "simples" do PowerPoint (100%) equivale a 1,2
@@ -183,11 +188,12 @@ Estrutura:
 
 Quando é gerado:
 
-- automaticamente ao chegar no slide final (uma vez por sessão);
+- pelo botão **Baixar resultados (PDF)**, no centro do slide final;
 - pelo botão **Exportar PDF** no cabeçalho do apresentador;
 - pela tela inicial, em qualquer sala apresentada naquele dispositivo.
 
-Nos três casos, as imagens dos slides livres são lidas da sala antes de gerar
+O PDF não baixa sozinho ao chegar no slide final: só quando o apresentador
+pede. Nos três casos, as imagens dos slides livres são lidas da sala antes de gerar
 o relatório; uma imagem que falhar fica de fora do desenho, sem impedir o PDF.
 
 ## Prompt de IA

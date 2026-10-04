@@ -218,7 +218,8 @@ fontes do painel de texto começa pelas fontes embutidas da apresentação.
 
 `ExportDialog` oferece "Apresentação (.json)", que baixa na hora, e
 "PowerPoint (.pptx)", que carrega o gerador só nessa hora (`import()`
-dinâmico), mostra "Gerando…" e, no fim, os avisos (perguntas viraram slides
+dinâmico), passa o tema atual da página (claro ou escuro) para os slides
+comuns, mostra "Gerando…" e, no fim, os avisos (perguntas viraram slides
 estáticos, fonte que não pôde ser embutida).
 
 `ImportExportButtons` abre o modal "Importar" com duas opções: "Apresentação
@@ -237,8 +238,9 @@ mostra o progresso, o resultado (slides, imagens, avisos) ou o erro.
   na barra; o modal traz o QR ampliado, o **link curto em texto grande**, o
   código da sala e o link completo com botão de copiar.
 - **[`SummarySlide`](../src/components/present/SummarySlide.tsx)** — slide final
-  com miniatura de cada slide (gráficos, nuvem, lista de alternativas com o
-  gabarito ou o próprio slide livre reduzido).
+  com o botão central **Baixar resultados (PDF)** e a miniatura de cada slide
+  (gráficos, nuvem, lista de alternativas com o gabarito ou o próprio slide
+  livre reduzido).
 - **[`PresenterAccessDenied`](../src/components/present/PresenterAccessDenied.tsx)**:
   tela de quem abre `/present` ou `/edit` sem o token, com atalho para entrar
   como participante.
