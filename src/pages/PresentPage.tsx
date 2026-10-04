@@ -91,11 +91,9 @@ export function PresentPage() {
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  // Estado do slide final automático (grade de miniaturas + download do PDF).
+  // Estado do slide final automático (grade de miniaturas com os resultados).
   const [allResponses, setAllResponses] = useState<ResponseDoc[]>([])
   const [summaryLoading, setSummaryLoading] = useState(false)
-  // Baixa o PDF só uma vez por sessão, mesmo que se volte ao slide final.
-  const pdfDownloadedRef = useRef(false)
   // Referência sempre atual da sala, para o efeito não depender da identidade
   // do objeto (que muda a cada atualização do Firestore).
   const roomRef = useRef(room)
@@ -146,8 +144,8 @@ export function PresentPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [goTo])
 
-  // Ao chegar no slide final: busca todas as respostas (para a grade) e,
-  // no apresentador, dispara o download do PDF de resultados automaticamente.
+  // Ao chegar no slide final: busca todas as respostas (para a grade). O PDF
+  // não baixa sozinho: o slide final tem um botão para isso.
   const slideCount = room?.slides.length ?? 0
   const activeIndex = room?.currentSlideIndex ?? -1
   useEffect(() => {
@@ -160,15 +158,6 @@ export function PresentPage() {
         if (cancelled) return
         setAllResponses(all)
         setSummaryLoading(false)
-        const currentRoom = roomRef.current
-        if (currentRoom && !pdfDownloadedRef.current) {
-          pdfDownloadedRef.current = true
-          // As fontes precisam estar carregadas: os slides livres são desenhados em canvas.
-          void Promise.all([
-            fetchAssets(code, collectAssetIds(currentRoom.slides)),
-            loadRoomFonts(code, currentRoom.revision ?? 0).catch(() => {}),
-          ]).then(([loaded]) => exportResultsPdf(currentRoom, all, loaded))
-        }
       })
       .catch(() => {
         if (!cancelled) setSummaryLoading(false)
@@ -421,7 +410,14 @@ export function PresentPage() {
       <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
         {isSummary ? (
           <div className="flex h-full w-full flex-1 flex-col">
-            <SummarySlide room={room} responses={allResponses} loading={summaryLoading} assets={assets} />
+            <SummarySlide
+              room={room}
+              responses={allResponses}
+              loading={summaryLoading}
+              assets={assets}
+              exporting={exporting}
+              onExportPdf={() => void exportPdf()}
+            />
           </div>
         ) : currentSlide ? (
           // Largura total: a nuvem de palavras e os gráficos aproveitam a tela

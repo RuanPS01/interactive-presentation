@@ -22,7 +22,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
   6. **Texto simples** — alinhamento (esquerda/centro/direita) e tamanho da fonte.
   7. **Slide livre**: só exibição, montado com caixas de texto e imagens soltas. Cada texto tem fonte, tamanho, cor, realce, negrito, itálico, sublinhado, tachado, alinhamento e marcadores por trecho; cada elemento pode ser arrastado, redimensionado e girado direto na prévia, com guias de alinhamento e um editor ampliado.
 - **Importar PowerPoint (.pptx)**: cada slide vira um slide livre. Os textos continuam editáveis, as fotos continuam imagens, e formas, fundos, SVG, tabelas, gráficos e SmartArt viram imagem. As **fontes embutidas** no arquivo (inclusive as comprimidas pelo PowerPoint) são aproveitadas e valem no editor, no projetor, no celular e no PDF. Tudo é lido no próprio navegador. Ver [docs/09](docs/09-fluxos-de-uso.md#importar-um-powerpoint).
-- **Exportar PowerPoint (.pptx)**: a apresentação vira um arquivo para o PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as fontes embutidas; as perguntas viram slides estáticos com as alternativas. Ver [docs/10](docs/10-exportacoes.md#exportar-powerpoint).
+- **Exportar PowerPoint (.pptx)**: a apresentação vira um arquivo para o PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as fontes embutidas; as perguntas viram slides estáticos com as alternativas, no tema da página (claro ou escuro). Ver [docs/10](docs/10-exportacoes.md#exportar-powerpoint).
 - **Formato dos slides 16:9 (padrão) ou 4:3**: a prévia do editor mostra o slide na proporção escolhida, e o editor ocupa a tela inteira.
 - **Opções globais e por slide** (ver [docs/06](docs/06-configuracoes.md)): permitir limpar/trocar a resposta, pedir o nome antes de entrar, identificar cada resposta pelo nome, definir os tamanhos de título, rótulos e corpo e o **tempo do cronômetro** das perguntas (0 desliga).
 - **Edição da sala em andamento**: o botão **Editar** da tela de apresentação reabre o editor com as opções gerais, os slides e as opções de cada slide. Ao salvar, uma confirmação avisa que todos os participantes conectados (e o próprio apresentador) serão redirecionados para o início da apresentação; os celulares mostram um aviso explicando o reinício. Ver [docs/09](docs/09-fluxos-de-uso.md#editar-uma-sala-em-andamento).
@@ -204,7 +204,7 @@ Durante a apresentação, o botão **Exportar PDF** gera um relatório com os re
 de cada slide (votos, percentuais e palavras enviadas pelos participantes). O PDF é
 desenhado no próprio navegador (`src/utils/exportPdf.ts`), sem servidor. Ao final há
 um **slide automático de agradecimento** com uma grade de miniaturas de todos os
-slides; ao chegar nele, o PDF é baixado automaticamente.
+slides e, no centro, o botão **Baixar resultados (PDF)**.
 
 ## Apresentador: token e reentrada
 

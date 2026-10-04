@@ -77,7 +77,7 @@ src/
       NamePrompt.tsx       Pedido de nome antes de entrar
     present/
       ShareRoom.tsx              QR Code, código grande e link curto
-      SummarySlide.tsx           Slide final: grade de miniaturas de todos os slides
+      SummarySlide.tsx           Slide final: botão de baixar o PDF e grade de miniaturas
       PresenterAccessDenied.tsx  Aviso para quem abre /present ou /edit sem o token
     charts/
       BarChartView.tsx   Barras (Recharts) com rótulos quebrados em linhas
