@@ -7,7 +7,9 @@ import { useParticipants } from '../hooks/useParticipants'
 import { usePresenterAccess } from '../hooks/usePresenterAccess'
 import { useRoom } from '../hooks/useRoom'
 import { saveAndRestartRoom } from '../lib/rooms'
+import type { StoredRoomFiles } from '../lib/rooms'
 import { fetchAssets } from '../lib/assets'
+import { fetchRoomFonts } from '../lib/fonts'
 import { collectAssetIds } from '../utils/freeSlide'
 import { createEditorStore, EditorStoreContext } from '../store/editorStore'
 import { useThemeStore } from '../store/themeStore'
@@ -68,15 +70,19 @@ export function EditRoomPage() {
   const roomRef = useRef(room)
   roomRef.current = room
   const [baseline, setBaseline] = useState<string | null>(null)
-  // Imagens que a sala já tem: ao salvar, só as novas são enviadas.
-  const storedAssetIds = useRef<string[]>([])
+  // Imagens e fontes que a sala já tem: ao salvar, só as novas são enviadas.
+  const stored = useRef<StoredRoomFiles>({ assetIds: [], fontDocIds: {} })
   const canLoad = access === 'granted' && room !== null
   useEffect(() => {
     const current = roomRef.current
     if (!canLoad || baseline !== null || !current || !code) return
     let cancelled = false
-    // As imagens dos slides livres vêm da subcoleção da sala.
-    void fetchAssets(code, collectAssetIds(current.slides)).then((assets) => {
+    // As imagens e as fontes dos slides livres vêm das subcoleções da sala.
+    // Sem as fontes (falha de rede), o editor abre assim mesmo.
+    void Promise.all([
+      fetchAssets(code, collectAssetIds(current.slides)),
+      fetchRoomFonts(code, current.revision ?? 0).catch(() => ({ fonts: {}, docIds: {} })),
+    ]).then(([assets, roomFonts]) => {
       if (cancelled) return
       const { loadPresentation, getPresentation } = store.getState()
       loadPresentation({
@@ -84,8 +90,9 @@ export function EditRoomPage() {
         slides: current.slides,
         settings: current.settings,
         assets,
+        fonts: roomFonts.fonts,
       })
-      storedAssetIds.current = Object.keys(assets)
+      stored.current = { assetIds: Object.keys(assets), fontDocIds: roomFonts.docIds }
       setBaseline(snapshot(getPresentation()))
     })
     return () => {
@@ -109,7 +116,7 @@ export function EditRoomPage() {
     if (!code) return
     setSaving(true)
     try {
-      await saveAndRestartRoom(code, store.getState().getPresentation(), storedAssetIds.current)
+      await saveAndRestartRoom(code, store.getState().getPresentation(), stored.current)
       // O apresentador também volta ao início: a tela de apresentação já abre
       // no primeiro slide, que é o que a sala diz agora.
       navigate(presentPath)

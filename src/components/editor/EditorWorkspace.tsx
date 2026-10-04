@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditorStore } from '../../store/editorStore'
 import type { FreeSlide, SlideAspect } from '../../types/presentation'
+import { registerFonts } from '../../utils/fonts/faces'
 import { resolveSlideSettings, SLIDE_ASPECTS, SLIDE_FRAMES } from '../../utils/settings'
 import { slideTimerSeconds } from '../../utils/timer'
 import { FreeSlideCanvas } from '../free/FreeSlideCanvas'
@@ -38,6 +39,12 @@ export function EditorWorkspace() {
   const settings = useEditorStore((s) => s.settings)
   const selectedIndex = useEditorStore((s) => s.selectedIndex)
   const assets = useEditorStore((s) => s.assets)
+  const fonts = useEditorStore((s) => s.fonts)
+  // Fontes embutidas (de um PowerPoint ou de um JSON): registradas no
+  // documento, os textos que as citam passam a usá-las sozinhos.
+  useEffect(() => {
+    void registerFonts(Object.values(fonts))
+  }, [fonts])
   const updateSettings = useEditorStore((s) => s.updateSettings)
   const [expanded, setExpanded] = useState(false)
 
@@ -169,6 +176,12 @@ function ExpandedFreeEditor({
   onClose: () => void
 }) {
   const assets = useEditorStore((s) => s.assets)
+  const fonts = useEditorStore((s) => s.fonts)
+  // Fontes embutidas (de um PowerPoint ou de um JSON): registradas no
+  // documento, os textos que as citam passam a usá-las sozinhos.
+  useEffect(() => {
+    void registerFonts(Object.values(fonts))
+  }, [fonts])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

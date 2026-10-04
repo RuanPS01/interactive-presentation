@@ -1,18 +1,30 @@
 import type { Presentation } from '../types/presentation'
 import { presentationSchema } from './validation'
 
-/** Serializa a apresentação e dispara o download de um arquivo .json. */
-export function exportPresentation(presentation: Presentation, filename?: string): void {
-  const data = JSON.stringify(presentation, null, 2)
-  const blob = new Blob([data], { type: 'application/json' })
+/** Dispara o download de um arquivo gerado no navegador. */
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = filename ?? `${slugify(presentation.title) || 'apresentacao'}.json`
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
+}
+
+/** Nome de arquivo a partir do título da apresentação. */
+export function presentationFileName(title: string, extension: string): string {
+  return `${slugify(title) || 'apresentacao'}.${extension}`
+}
+
+/** Serializa a apresentação e dispara o download de um arquivo .json. */
+export function exportPresentation(presentation: Presentation, filename?: string): void {
+  const data = JSON.stringify(presentation, null, 2)
+  downloadBlob(
+    new Blob([data], { type: 'application/json' }),
+    filename ?? presentationFileName(presentation.title, 'json'),
+  )
 }
 
 export type ImportResult =

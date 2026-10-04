@@ -40,7 +40,8 @@ src/
       ThemeToggle.tsx       Botão claro/escuro
     editor/
       EditorWorkspace.tsx           Editor em 3 colunas (criação e edição de sala)
-      ImportExportButtons.tsx       "Importar" (modal: JSON ou PowerPoint) e "Exportar JSON"
+      ImportExportButtons.tsx       "Importar" e "Exportar" (modais: JSON ou PowerPoint)
+      ExportDialog.tsx              Modal "Exportar": baixa o JSON ou gera o PowerPoint
       AddSlideMenu.tsx              Botões de "adicionar slide" (tipos criáveis)
       SlideList.tsx                 Lista ordenável; marca o gabarito como vinculado
       SlideEditor.tsx               Dispatcher por tipo + seção de opções do slide
@@ -111,6 +112,7 @@ src/
     useApplyTheme.ts       Aplica a classe `.dark` no <html>
     useFullscreen.ts       Fullscreen API
     useRoomAssets.ts       Busca as imagens que os slides livres de uma sala usam
+    useRoomFonts.ts        Registra as fontes embutidas da sala neste navegador
     useFreeSlideActions.ts Ações do slide livre (adicionar texto e imagem, excluir...)
 
   lib/
@@ -123,6 +125,7 @@ src/
     participantName.ts    Nome do participante por sala (localStorage)
     shortUrl.ts           Encurtador do link de entrada
     assets.ts             Imagens da sala (subcoleção `assets`): ler, enviar, apagar
+    fonts.ts              Fontes da sala (subcoleção `fonts`, em partes): ler, enviar, apagar
 
   store/
     editorStore.ts   Apresentação em edição (Zustand), um editor por contexto
@@ -145,8 +148,17 @@ src/
     images.ts        Comprime imagens para data URL (tamanho e formato)
     canvasText.ts    Desenha texto rico num canvas (PDF, tabelas, SmartArt)
     freeSlideRaster.ts Desenha um slide livre inteiro numa imagem (PDF)
+    fonts/           Fontes: formatos, conversões e registro no navegador
+      sfnt.ts        Lê e monta fontes TrueType/OpenType (tabelas, somas de verificação)
+      lzcomp.ts      Descompressor LZCOMP (Huffman adaptativo) do MicroType Express
+      mtx.ts         MicroType Express: reconstrói o TrueType (glifos, instruções, cvt)
+      eot.ts         Embedded OpenType: tira a fonte de um .fntdata e gera um para exportar
+      woff.ts        TrueType/OpenType para WOFF (como as fontes ficam guardadas) e de volta
+      faces.ts       Registro via FontFace e escolha das fontes que os slides usam
+      convert.ts     Arquivo de fonte para fonte da apresentação (só no importador e exportador)
     pptx/            Leitor de PowerPoint, carregado só quando usado
-      index.ts       importPptx: slides, imagens, formato e avisos
+      index.ts       importPptx: slides, imagens, fontes, formato e avisos
+      fonts.ts       Fontes embutidas do arquivo (p:embeddedFontLst)
       package.ts     Abre o .pptx (zip) e resolve as relações entre as partes
       xml.ts         Atalhos de leitura de XML por nome local
       colors.ts      Cores do tema, mapa de cores e modificadores
@@ -155,6 +167,12 @@ src/
       text.ts        Texto com herança de estilos (slide, layout, mestre, tema)
       table.ts       Tabelas desenhadas em canvas
       chart.ts       Gráficos desenhados a partir dos dados salvos no arquivo
+    pptxExport/      Gerador de PowerPoint, carregado só quando usado
+      index.ts       exportPptx: monta o pacote (slides, mídias, fontes em EOT)
+      slide.ts       Slide livre em XML: caixas de texto, trechos, marcadores, imagens
+      standard.ts    Versão estática dos slides comuns (enunciado e alternativas)
+      parts.ts       Partes fixas: tema, mestre, layout, propriedades, tipos
+      xml.ts         Escape, cores e unidades (6350 EMU por px)
 ```
 
 ## Convenções

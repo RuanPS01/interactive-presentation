@@ -21,7 +21,8 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
   5. **Resposta correta** — slide de gabarito **criado automaticamente** depois de uma pergunta, destacando a alternativa certa e os votos de cada uma. Aparece depois de 3 segundos de “A resposta certa é…”, para todo mundo ver a revelação junto.
   6. **Texto simples** — alinhamento (esquerda/centro/direita) e tamanho da fonte.
   7. **Slide livre**: só exibição, montado com caixas de texto e imagens soltas. Cada texto tem fonte, tamanho, cor, realce, negrito, itálico, sublinhado, tachado, alinhamento e marcadores por trecho; cada elemento pode ser arrastado, redimensionado e girado direto na prévia, com guias de alinhamento e um editor ampliado.
-- **Importar PowerPoint (.pptx)**: cada slide vira um slide livre. Os textos continuam editáveis, as fotos continuam imagens, e formas, fundos, SVG, tabelas, gráficos e SmartArt viram imagem. Tudo é lido no próprio navegador. Ver [docs/09](docs/09-fluxos-de-uso.md#importar-um-powerpoint).
+- **Importar PowerPoint (.pptx)**: cada slide vira um slide livre. Os textos continuam editáveis, as fotos continuam imagens, e formas, fundos, SVG, tabelas, gráficos e SmartArt viram imagem. As **fontes embutidas** no arquivo (inclusive as comprimidas pelo PowerPoint) são aproveitadas e valem no editor, no projetor, no celular e no PDF. Tudo é lido no próprio navegador. Ver [docs/09](docs/09-fluxos-de-uso.md#importar-um-powerpoint).
+- **Exportar PowerPoint (.pptx)**: a apresentação vira um arquivo para o PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as fontes embutidas; as perguntas viram slides estáticos com as alternativas. Ver [docs/10](docs/10-exportacoes.md#exportar-powerpoint).
 - **Formato dos slides 16:9 (padrão) ou 4:3**: a prévia do editor mostra o slide na proporção escolhida, e o editor ocupa a tela inteira.
 - **Opções globais e por slide** (ver [docs/06](docs/06-configuracoes.md)): permitir limpar/trocar a resposta, pedir o nome antes de entrar, identificar cada resposta pelo nome, definir os tamanhos de título, rótulos e corpo e o **tempo do cronômetro** das perguntas (0 desliga).
 - **Edição da sala em andamento**: o botão **Editar** da tela de apresentação reabre o editor com as opções gerais, os slides e as opções de cada slide. Ao salvar, uma confirmação avisa que todos os participantes conectados (e o próprio apresentador) serão redirecionados para o início da apresentação; os celulares mostram um aviso explicando o reinício. Ver [docs/09](docs/09-fluxos-de-uso.md#editar-uma-sala-em-andamento).
@@ -29,7 +30,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
 - **Contagem de participantes** separada de quem já respondeu: quem abre a sala já conta como participante.
 - **Compartilhamento**: código grande, QR Code ampliado e **link curto** para quem prefere digitar.
 - **Tema claro/escuro** como **preferência de cada usuário**, salva no navegador (localStorage). Apresentador e participantes escolhem o seu de forma independente; não é sincronizado pela sala.
-- **Importar** (JSON ou PowerPoint) e **Exportar** a apresentação completa em **JSON**, com as imagens dos slides livres embutidas.
+- **Importar** e **Exportar** a apresentação em **JSON** (completa, com imagens e fontes) ou **PowerPoint**.
 - **Exportar resultados em PDF** (relatório com os dados enviados pelos participantes, gerado no navegador).
 - **Sem limite de participantes** por sala; sincronização em tempo real via Firestore.
 
@@ -69,12 +70,14 @@ src/
     present/      QR Code / link curto e slide final de resumo
     charts/       Gráficos (Recharts) e nuvem de palavras
     ui/           Componentes genéricos: botão, campos, checkbox, slider, select, rolagem, modal...
-  hooks/          useRoom, useResponses, useMyResponse, useParticipants, useParticipant, usePresenterAccess, useRoomAssets, useFreeSlideActions, useApplyTheme
-  lib/            firebase, rooms, responses, participants, assets, roomCode, shortUrl
+  hooks/          useRoom, useResponses, useMyResponse, useParticipants, useParticipant, usePresenterAccess, useRoomAssets, useRoomFonts, useFreeSlideActions, useApplyTheme
+  lib/            firebase, rooms, responses, participants, assets, fonts, roomCode, shortUrl
   store/          editorStore (Zustand)
   types/          Tipos do domínio
   utils/          Agregação, configurações, import/export JSON, validação (Zod), fábrica de slides, texto rico, imagens
     pptx/         Leitor de PowerPoint (slides livres a partir de um .pptx)
+    pptxExport/   Gerador de PowerPoint (a apresentação em .pptx)
+    fonts/        Fontes embutidas: EOT, MicroType Express, WOFF e registro no navegador
 docs/             Documentação técnica por assunto
 firestore.rules   Regras de segurança do Firestore
 .github/workflows/deploy.yml   Pipeline de deploy (GitHub Pages e Firebase Hosting)
@@ -173,9 +176,16 @@ regras vêm antes para o app nunca ir ao ar sem as regras de que ele depende.
 
 ## Importar / Exportar
 
-Na tela de criação, use **Exportar JSON** para baixar toda a apresentação (título,
-opções globais, slides com suas configurações e as imagens dos slides livres) e
-**Importar** para carregá-la de volta. O botão **Importar** abre a escolha entre:
+Na tela de criação, o botão **Exportar** abre a escolha entre:
+
+- **Apresentação (.json)**: toda a apresentação (título, opções globais, slides
+  com suas configurações e as imagens e fontes dos slides livres), para
+  importar de volta aqui.
+- **PowerPoint (.pptx)**: um arquivo para abrir em outros programas, gerado no
+  navegador, com textos e imagens editáveis e as fontes embutidas. Detalhes em
+  [docs/10](docs/10-exportacoes.md#exportar-powerpoint).
+
+O botão **Importar** abre a escolha entre:
 
 - **Apresentação (.json)**: substitui o conteúdo do editor. O JSON é validado no
   import (schema em `src/utils/validation.ts`) e aceita arquivos gerados por
@@ -185,9 +195,10 @@ opções globais, slides com suas configurações e as imagens dos slides livres
   no fim da apresentação ou no lugar dela. Detalhes e limitações em
   [docs/10](docs/10-exportacoes.md#importar).
 
-As imagens dos slides livres ficam numa subcoleção da sala no Firestore
-(`rooms/<código>/assets`), comprimidas para caber num documento. O Cloud Storage
-não é usado porque exige o plano pago do Firebase.
+As imagens e as fontes dos slides livres ficam em subcoleções da sala no
+Firestore (`rooms/<código>/assets` e `rooms/<código>/fonts`): as imagens
+comprimidas para caber num documento, e as fontes divididas em partes quando
+são maiores. O Cloud Storage não é usado porque exige o plano pago do Firebase.
 
 Durante a apresentação, o botão **Exportar PDF** gera um relatório com os resultados
 de cada slide (votos, percentuais e palavras enviadas pelos participantes). O PDF é
@@ -211,6 +222,6 @@ resultados de novo).
 As chaves `VITE_FIREBASE_*` são **identificadores públicos** do projeto (não são
 segredo). A proteção real dos dados é feita pelas **Firestore Security Rules**
 ([`firestore.rules`](firestore.rules)): qualquer um com o código lê a sala, mas só o
-**dono atual** (quem criou ou reivindicou com o token) altera a apresentação e as
-imagens dela, e cada participante só edita a própria resposta. O token do apresentador fica num subdocumento
+**dono atual** (quem criou ou reivindicou com o token) altera a apresentação, as
+imagens e as fontes dela, e cada participante só edita a própria resposta. O token do apresentador fica num subdocumento
 privado, sem leitura por clientes.

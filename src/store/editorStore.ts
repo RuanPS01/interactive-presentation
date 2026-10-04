@@ -8,11 +8,14 @@ import type {
   Presentation,
   PresentationAsset,
   PresentationAssets,
+  PresentationFont,
+  PresentationFonts,
   PresentationSettings,
   Slide,
   SlideOverrides,
   SlideType,
 } from '../types/presentation'
+import { pickFonts } from '../utils/fonts/faces'
 import { fitFreeSlideToFrame, pickAssets } from '../utils/freeSlide'
 import { createAnswerSlide, createDefaultSlide } from '../utils/slideFactory'
 import { DEFAULT_SETTINGS, SLIDE_FRAMES, withDefaults } from '../utils/settings'
@@ -31,6 +34,8 @@ export interface EditorState {
   selectedIndex: number
   /** Imagens dos slides livres, pelo id. */
   assets: PresentationAssets
+  /** Fontes embutidas (de PowerPoints importados), pelo id. */
+  fonts: PresentationFonts
   /** Elemento selecionado no slide livre aberto. */
   selectedElementId: string | null
   /** Caixa de texto com edição aberta (cursor dentro dela). */
@@ -62,7 +67,7 @@ export interface EditorState {
   /** Troca a lista de elementos de um slide livre (adicionar, remover, reordenar). */
   setElements: (slideId: string, elements: FreeElement[]) => void
   /** Acrescenta slides (de um PPTX importado) depois dos existentes. */
-  appendSlides: (slides: Slide[], assets: PresentationAsset[]) => void
+  appendSlides: (slides: Slide[], assets: PresentationAsset[], fonts?: PresentationFont[]) => void
 
   loadPresentation: (presentation: Presentation) => void
   getPresentation: () => Presentation
@@ -75,6 +80,7 @@ const INITIAL = {
   settings: DEFAULT_SETTINGS,
   selectedIndex: 0,
   assets: {} as PresentationAssets,
+  fonts: {} as PresentationFonts,
   selectedElementId: null,
   editingElementId: null,
   textSelection: null,
@@ -272,13 +278,16 @@ export function createEditorStore(): EditorStore {
         }
       }),
 
-    appendSlides: (slides, assets) =>
+    appendSlides: (slides, assets, fonts = []) =>
       set((s) => {
         const nextAssets = { ...s.assets }
         for (const asset of assets) nextAssets[asset.id] = asset
+        const nextFonts = { ...s.fonts }
+        for (const font of fonts) nextFonts[font.id] = font
         const first = slides[0]
         return {
           assets: nextAssets,
+          fonts: nextFonts,
           ...applySlides([...s.slides, ...slides], first?.id, s.slides.length),
           ...NO_ELEMENT,
         }
@@ -291,16 +300,20 @@ export function createEditorStore(): EditorStore {
         ...applySlides(presentation.slides, undefined, 0),
         selectedIndex: 0,
         assets: presentation.assets ?? {},
+        fonts: presentation.fonts ?? {},
         ...NO_ELEMENT,
       }),
 
     getPresentation: () => {
-      const { title, slides, settings, assets } = get()
-      // Só as imagens ainda em uso; sem nenhuma, o campo nem aparece no JSON.
-      const used = pickAssets(assets, slides)
-      return Object.keys(used).length > 0
-        ? { title, slides, settings, assets: used }
-        : { title, slides, settings }
+      const { title, slides, settings, assets, fonts } = get()
+      // Só as imagens e as fontes ainda em uso; sem nenhuma, o campo nem
+      // aparece no JSON.
+      const presentation: Presentation = { title, slides, settings }
+      const usedAssets = pickAssets(assets, slides)
+      if (Object.keys(usedAssets).length > 0) presentation.assets = usedAssets
+      const usedFonts = pickFonts(fonts, slides)
+      if (Object.keys(usedFonts).length > 0) presentation.fonts = usedFonts
+      return presentation
     },
 
     reset: () => set({ ...INITIAL, slides: [] }),

@@ -38,6 +38,7 @@ Não há administrador, moderador nem limite de participantes por sala.
 | **Slide livre** | Slide só de exibição montado com caixas de texto e imagens soltas, cada uma com posição, tamanho e formatação próprios. É o que um PowerPoint importado vira. |
 | **Formato dos slides** | Proporção 16:9 (padrão) ou 4:3. Define a moldura dos slides livres e a prévia do editor, e vale para a apresentação inteira. |
 | **Imagem da apresentação** (`PresentationAsset`) | Imagem usada por um slide livre, guardada como data URL comprimido e identificada pelo conteúdo. |
+| **Fonte embutida** (`PresentationFont`) | Fonte que veio dentro de um PowerPoint, guardada com a apresentação para o texto aparecer igual em qualquer aparelho. |
 | **Resposta** (`ResponseDoc`) | O que um participante enviou num slide. Um documento por participante **por slide**. |
 | **Participante** (`ParticipantDoc`) | Registro de presença: existe assim que a pessoa abre a sala, mesmo sem responder. |
 | **Gabarito** | Slide `answer`, gerado automaticamente, que revela a alternativa correta de um `quiz`. |
@@ -56,7 +57,12 @@ Não há administrador, moderador nem limite de participantes por sala.
   alinhamento, camadas e um editor ampliado.
 - **Importar PowerPoint (.pptx)**: cada slide vira um slide livre. Textos
   continuam editáveis, fotos continuam imagens, e formas, fundos, SVG,
-  tabelas, gráficos e SmartArt viram imagem.
+  tabelas, gráficos e SmartArt viram imagem. As fontes embutidas no arquivo
+  são aproveitadas (inclusive as comprimidas pelo PowerPoint) e passam a valer
+  no editor, no projetor, no celular e no PDF.
+- **Exportar PowerPoint (.pptx)**: a apresentação vira um arquivo para abrir
+  no PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as
+  fontes embutidas; as perguntas viram slides estáticos com as alternativas.
 - **Opções globais e por slide**: troca de resposta, pedido de nome,
   identificação das respostas, tamanhos de fonte (título, rótulos, corpo) e o
   tempo do cronômetro das perguntas. O formato dos slides (16:9 ou 4:3) é só
@@ -77,8 +83,8 @@ Não há administrador, moderador nem limite de participantes por sala.
   controle deslizante, lista suspensa, área com rolagem, janelas modais,
   seletor de cor, controle segmentado e botão de alternância), com a mesma
   identidade visual nos temas claro e escuro.
-- **Importar** (JSON ou PowerPoint) e **exportar JSON** da apresentação, com
-  as imagens dos slides livres embutidas, e **exportar PDF** dos resultados.
+- **Importar** e **exportar** a apresentação em JSON (com as imagens e as
+  fontes embutidas) ou PowerPoint, e **exportar PDF** dos resultados.
 - **Prompt de IA** pronto para gerar o JSON de uma apresentação inteira.
 - **Tema claro/escuro** por usuário, salvo no navegador.
 - **Retomada da sala**: o dispositivo lembra as salas apresentadas e oferece

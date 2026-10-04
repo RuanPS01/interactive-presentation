@@ -11,8 +11,9 @@
    slide” (individuais) — ver [06](06-configuracoes.md).
 4. *(Opcional)* **Prompt de IA** → cola num assistente, salva a resposta como
    `.json` e usa **Importar**, opção "Apresentação (.json)". Ou importa um
-   PowerPoint (ver abaixo). **Exportar JSON** guarda o que montou, com as
-   imagens (o editor não persiste ao recarregar).
+   PowerPoint (ver abaixo). **Exportar** guarda o que montou: em JSON, com as
+   imagens e as fontes, para importar de volta; ou em PowerPoint, para abrir
+   em outros programas (o editor não persiste ao recarregar).
 5. **Iniciar apresentação**:
    - autentica anonimamente (se ainda não estiver);
    - `createRoom` sorteia um código livre e grava sala + token, e depois as
@@ -66,9 +67,32 @@ Avisos que podem aparecer:
 | SmartArt virou imagem (ou ficou de fora, sem desenho salvo) | O desenho salvo pelo PowerPoint é usado; sem ele, não há o que desenhar |
 | Alguns objetos ficaram de fora | Objetos OLE, controles e afins |
 | N slide(s) oculto(s) ficaram de fora | Slides marcados como ocultos não entram |
+| Não foi possível usar a(s) fonte(s) embutida(s) X | O arquivo da fonte está corrompido ou num formato que o navegador recusa |
 
-As fontes do arquivo são mantidas pelo nome; se o aparelho não tiver a fonte,
-o navegador usa uma parecida, e as quebras de linha podem mudar um pouco.
+**Fontes.** As fontes que o PowerPoint embutiu no arquivo (Arquivo, Opções,
+Salvar, "Incorporar fontes no arquivo") são aproveitadas: o modal lista as
+famílias no resultado, e o texto passa a usá-las no editor, no projetor, no
+celular e no PDF. O PowerPoint guarda essas fontes em EOT, quase sempre
+comprimidas no formato MicroType Express; o leitor descomprime tudo no próprio
+navegador ([`src/utils/fonts/`](../src/utils/fonts/mtx.ts)). Com "Incorporar
+somente os caracteres usados", a fonte vem só com as letras do arquivo:
+letras novas digitadas depois aparecem numa fonte parecida.
+
+As fontes que não vieram embutidas são mantidas só pelo nome; se o aparelho
+não tiver a fonte, o navegador usa uma parecida, e as quebras de linha podem
+mudar um pouco.
+
+### Exportar um PowerPoint
+
+1. **Exportar** abre o modal com as duas opções. "Apresentação (.json)" baixa
+   na hora; "PowerPoint (.pptx)" gera o arquivo no navegador (o gerador é
+   baixado nessa hora) e começa o download.
+2. O arquivo sai no formato da apresentação (16:9 ou 4:3). Slides livres em
+   outra proporção são reenquadrados para caber, sem distorcer.
+3. No fim, o modal mostra os avisos: as perguntas viraram slides estáticos e,
+   se for o caso, alguma fonte não pôde ser embutida.
+
+O que cada slide vira está em [10](10-exportacoes.md#exportar-powerpoint).
 
 ### Montar um slide livre do zero
 
@@ -198,4 +222,8 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Arquivo .ppt antigo, ou outro arquivo na opção de PowerPoint | Recusado, com a orientação de salvar como .pptx |
 | Arquivo .pptx na opção de JSON | É lido como PowerPoint |
 | PowerPoint sem slides visíveis | "O arquivo não tem slides visíveis para importar." |
+| Fonte embutida que o navegador recusa | Fica de fora com um aviso; o texto usa uma fonte parecida |
+| Fonte maior que um documento do Firestore | É dividida em partes na sala e remontada em cada aparelho |
+| Texto com uma fonte embutida apagado na edição da sala | A fonte deixa de ser usada e é apagada da sala ao salvar |
+| Fonte OpenType (CFF) na exportação para PowerPoint | Não é embutida (o PowerPoint só embute TrueType); o modal avisa |
 | Troca de formato com slides livres | Os slides livres no formato antigo são reenquadrados para caber, sem distorcer |

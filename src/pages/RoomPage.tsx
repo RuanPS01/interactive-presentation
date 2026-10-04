@@ -5,6 +5,7 @@ import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useRoomAssets } from '../hooks/useRoomAssets'
+import { useRoomFonts } from '../hooks/useRoomFonts'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
 import { joinRoom } from '../lib/participants'
@@ -89,6 +90,8 @@ export function RoomPage() {
     code,
     collectAssetIds([currentSlide, nextSlide].filter((s): s is NonNullable<typeof s> => Boolean(s))),
   )
+  // Fontes embutidas dos slides livres (de um PowerPoint importado).
+  useRoomFonts(code, room?.revision ?? 0, Boolean(room?.slides.some((s) => s.type === 'free')))
 
   // A contagem regressiva não aparece no celular: o relógio de cada aparelho
   // não bate com o do projetor, e duas contagens diferentes na mesma sala
