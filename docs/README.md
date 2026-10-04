@@ -23,6 +23,7 @@ arquivo.
 | [09 — Fluxos de uso](09-fluxos-de-uso.md) | Passo a passo do apresentador e do participante |
 | [10 - Exportações e integrações](10-exportacoes.md) | Importar e exportar (JSON e PowerPoint, com fontes embutidas), PDF, prompt de IA e encurtador de URL |
 | [11 — Desenvolvimento](11-desenvolvimento.md) | Rodar localmente, scripts, convenções e solução de problemas |
+| [Especificação completa](especificacao-completa.md) | Documento único que reúne todos os anteriores, com requisitos, exemplos de execução por tipo de slide, algoritmos, apêndices com código de referência e guia para embutir a funcionalidade em outro projeto |
 
 ## Como manter esta documentação
 
