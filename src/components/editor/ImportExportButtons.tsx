@@ -19,7 +19,7 @@ type PptxMode = 'append' | 'replace'
 type Status =
   | { kind: 'idle' }
   | { kind: 'working'; progress: PptxProgress }
-  | { kind: 'done'; slides: number; images: number; warnings: string[]; note: string | null }
+  | { kind: 'done'; slides: number; images: number; fonts: string[]; warnings: string[]; note: string | null }
   | { kind: 'error'; message: string }
 
 /**
@@ -78,10 +78,11 @@ export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
           slides: result.slides,
           settings: { ...state.settings, slideAspect: result.aspect ?? current },
           assets: Object.fromEntries(result.assets.map((a) => [a.id, a])),
+          fonts: Object.fromEntries(result.fonts.map((f) => [f.id, f])),
         })
         if (result.aspect && result.aspect !== current) note = `O formato da apresentação passou para ${result.aspect}, o mesmo do arquivo.`
       } else {
-        state.appendSlides(result.slides, result.assets)
+        state.appendSlides(result.slides, result.assets, result.fonts)
         if (result.aspect !== current) {
           note = `O arquivo está em ${result.aspect ?? 'outro formato'} e a apresentação em ${current}: os slides importados aparecem com faixas nas bordas. Troque o formato nas Opções para ajustar.`
         }
@@ -91,6 +92,7 @@ export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
         kind: 'done',
         slides: result.slides.length,
         images: result.assets.length,
+        fonts: [...new Set(result.fonts.map((f) => f.family))],
         warnings: result.warnings,
         note,
       })
@@ -280,6 +282,11 @@ function ImportStatus({ status }: { status: Status }) {
       <p className="flex items-center gap-2 font-medium">
         <CheckCircle2 size={16} /> {status.slides} slide(s) importado(s), com {status.images} imagem(ns).
       </p>
+      {status.fonts.length > 0 && (
+        <p>
+          Fonte(s) embutida(s) aproveitada(s): {status.fonts.join(', ')}. Elas aparecem iguais em qualquer aparelho.
+        </p>
+      )}
       {status.note && <p>{status.note}</p>}
       {status.warnings.length > 0 && (
         <ul className="list-disc space-y-1 pl-5 text-xs text-green-800 dark:text-green-200">

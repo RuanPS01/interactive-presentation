@@ -118,6 +118,26 @@ export const assetSchema = z.object({
   height: z.number().int().min(1).max(20_000),
 })
 
+/**
+ * Fonte embutida. O nome vai para o CSS e para o FontFace, então não aceita
+ * aspas, sinais de marcação nem caracteres de controle; o arquivo só pode ser
+ * uma fonte em base64.
+ */
+export const fontSchema = z.object({
+  id: z.string().min(1).max(200),
+  family: z
+    .string()
+    .min(1)
+    .max(200)
+    .refine(
+      (v) => !/["\\<>;{}]/.test(v) && [...v].every((c) => c.charCodeAt(0) >= 32),
+      'nome de fonte inválido',
+    ),
+  weight: z.enum(['normal', 'bold']),
+  style: z.enum(['normal', 'italic']),
+  dataUrl: z.string().regex(/^data:font\/(woff|woff2|ttf|otf);base64,[A-Za-z0-9+/=]+$/, 'fonte inválida'),
+})
+
 /** Campos comuns a todos os slides. */
 const baseFields = {
   id: z.string().min(1),
@@ -181,6 +201,7 @@ export const presentationSchema = z
     slides: z.array(slideSchema),
     settings: settingsSchema.optional(),
     assets: z.record(z.string(), assetSchema).optional(),
+    fonts: z.record(z.string(), fontSchema).optional(),
   })
   .superRefine((presentation, ctx) => {
     // Toda imagem citada por um slide livre precisa vir no arquivo.

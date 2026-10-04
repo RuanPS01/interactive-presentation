@@ -158,8 +158,9 @@ TIPOS DE SLIDE
        "bullet" ({ "kind": "char", "char": "•" } para marcadores);
      - opcionais: "verticalAlign" ("top", "middle" ou "bottom") e
        "background" (cor de fundo da caixa).
-   NÃO gere imagens ("kind": "image"): elas dependem de arquivos que a IA não
-   consegue embutir. O apresentador pode incluí-las depois no editor.
+   NÃO gere imagens ("kind": "image") nem os campos "assets" e "fonts": eles
+   dependem de arquivos que a IA não consegue embutir. O apresentador pode
+   incluir imagens depois no editor.
 
    {
      "id": "s6",

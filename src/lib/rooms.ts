@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { deleteAssets, uploadAssets } from './assets'
+import { deleteFontDocs, uploadFonts } from './fonts'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
 import { withDefaults } from '../utils/settings'
 import type { Presentation, Room, RoomStatus, SlideTimers } from '../types/presentation'
@@ -45,6 +46,13 @@ function assertRoomFits(data: object): void {
   }
 }
 
+/** O que a sala já tem guardado nas subcoleções (para a edição só enviar o novo). */
+export interface StoredRoomFiles {
+  assetIds: string[]
+  /** Documentos de cada fonte, pelo id da fonte. */
+  fontDocIds: Record<string, string[]>
+}
+
 export interface CreatedRoom {
   code: string
   /** Token secreto do apresentador (vai na URL de apresentação). */
@@ -67,8 +75,8 @@ export async function createRoom(
 
     const now = Date.now()
     const token = generatePresenterToken()
-    // As imagens não entram no documento da sala: vão para a subcoleção.
-    const { assets = {}, ...content } = presentation
+    // Imagens e fontes não entram no documento da sala: vão para as subcoleções.
+    const { assets = {}, fonts = {}, ...content } = presentation
     const room: Room = {
       ...content,
       // O Firestore rejeita `undefined`: a sala sempre nasce com a configuração
@@ -90,11 +98,11 @@ export async function createRoom(
     batch.set(ref, room)
     batch.set(presenterRef(code), { token, ownerUid: creatorUid, createdAt: now })
     await batch.commit()
-    // Depois da sala, porque as regras só deixam o dono dela gravar imagens.
+    // Depois da sala, porque as regras só deixam o dono dela gravar imagens e fontes.
     try {
-      await uploadAssets(code, Object.values(assets))
+      await Promise.all([uploadAssets(code, Object.values(assets)), uploadFonts(code, Object.values(fonts))])
     } catch (e) {
-      throw new Error(`A sala foi criada, mas as imagens não foram enviadas: ${(e as Error).message}`)
+      throw new Error(`A sala foi criada, mas as imagens ou fontes não foram enviadas: ${(e as Error).message}`)
     }
     return { code, token }
   }
@@ -203,17 +211,17 @@ export async function setStatus(code: string, status: RoomStatus): Promise<void>
  * As respostas já enviadas ficam guardadas: cada uma pertence a um slide pelo
  * id, que a edição preserva, e só o próprio participante pode apagá-la.
  *
- * Imagens: `storedAssetIds` são as que a sala já tem. Só as novas são
- * enviadas (antes do documento, para nenhum aparelho ver um slide sem a
- * imagem), e as que deixaram de ser usadas são apagadas no fim.
+ * Imagens e fontes: `stored` diz o que a sala já tem. Só as novas são
+ * enviadas (antes do documento, para nenhum aparelho ver um slide sem elas),
+ * e as que deixaram de ser usadas são apagadas no fim.
  */
 export async function saveAndRestartRoom(
   code: string,
   presentation: Presentation,
-  storedAssetIds: string[] = [],
+  stored: StoredRoomFiles = { assetIds: [], fontDocIds: {} },
 ): Promise<void> {
-  const { assets = {}, ...content } = presentation
-  const stored = new Set(storedAssetIds)
+  const { assets = {}, fonts = {}, ...content } = presentation
+  const storedAssets = new Set(stored.assetIds)
   const data = {
     title: content.title,
     slides: content.slides,
@@ -226,18 +234,26 @@ export async function saveAndRestartRoom(
     updatedAt: Date.now(),
   }
   assertRoomFits(data)
-  await uploadAssets(
-    code,
-    Object.values(assets).filter((asset) => !stored.has(asset.id)),
-  )
+  await Promise.all([
+    uploadAssets(
+      code,
+      Object.values(assets).filter((asset) => !storedAssets.has(asset.id)),
+    ),
+    uploadFonts(
+      code,
+      Object.values(fonts).filter((font) => !stored.fontDocIds[font.id]),
+    ),
+  ])
   await updateDoc(roomRef(code), {
     ...data,
     // Avisa quem está na sala que a apresentação mudou (ver `RoomPage`).
     revision: increment(1),
   })
-  const unused = storedAssetIds.filter((id) => !assets[id])
-  if (unused.length > 0) {
-    // Limpeza: falhar aqui só deixa uma imagem sobrando, nada quebra.
-    await deleteAssets(code, unused).catch(() => {})
-  }
+  // Limpeza: falhar aqui só deixa uma imagem ou fonte sobrando, nada quebra.
+  const unusedAssets = stored.assetIds.filter((id) => !assets[id])
+  if (unusedAssets.length > 0) await deleteAssets(code, unusedAssets).catch(() => {})
+  const unusedFontDocs = Object.entries(stored.fontDocIds)
+    .filter(([id]) => !fonts[id])
+    .flatMap(([, ids]) => ids)
+  if (unusedFontDocs.length > 0) await deleteFontDocs(code, unusedFontDocs).catch(() => {})
 }

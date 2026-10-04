@@ -10,6 +10,7 @@ import {
 import { getRoom } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
 import { fetchAssets } from '../lib/assets'
+import { loadRoomFonts } from '../lib/fonts'
 import { collectAssetIds } from '../utils/freeSlide'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { PageShell } from '../components/layout/PageShell'
@@ -39,6 +40,7 @@ export function HomePage() {
       const [all, assets] = await Promise.all([
         getAllResponses(s.code),
         fetchAssets(s.code, collectAssetIds(room.slides)),
+        loadRoomFonts(s.code, room.revision ?? 0).catch(() => {}),
       ])
       await exportResultsPdf(room, all, assets)
     } catch (e) {

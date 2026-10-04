@@ -328,6 +328,7 @@ function TextPanel({ slide, element }: { slide: FreeSlide; element: FreeTextElem
   const updateElement = useEditorStore((s) => s.updateElement)
   const editingId = useEditorStore((s) => s.editingElementId)
   const selection = useEditorStore((s) => s.textSelection)
+  const presentationFonts = useEditorStore((s) => s.fonts)
   const editing = editingId === element.id
   // Com a edição aberta, vale o trecho selecionado no texto; senão, a caixa toda.
   const range: TextRange | null = editing && selection?.elementId === element.id ? selection : null
@@ -342,7 +343,11 @@ function TextPanel({ slide, element }: { slide: FreeSlide; element: FreeTextElem
   const highlight = value('highlight')
   const align = paragraphValue(element, range, 'align')
   const bullet = paragraphValue(element, range, 'bullet')
-  const fonts = [...new Set([...FONT_CHOICES, ...(typeof font === 'string' && font !== 'misto' ? [font] : [])])]
+  // As fontes embutidas (de um PowerPoint) vêm primeiro e funcionam em qualquer aparelho.
+  const embedded = [...new Set(Object.values(presentationFonts).map((f) => f.family))].sort()
+  const fonts = [
+    ...new Set([...embedded, ...FONT_CHOICES, ...(typeof font === 'string' && font !== 'misto' ? [font] : [])]),
+  ]
 
   const flag = (key: 'bold' | 'italic' | 'underline' | 'strike') => {
     const current = value(key)
@@ -368,7 +373,7 @@ function TextPanel({ slide, element }: { slide: FreeSlide; element: FreeTextElem
             aria-label="Fonte"
             value={font === 'misto' ? '' : (font ?? 'Arial')}
             placeholder="Várias fontes"
-            options={fonts.map((f) => ({ value: f, label: f }))}
+            options={fonts.map((f) => ({ value: f, label: embedded.includes(f) ? `${f} (embutida)` : f }))}
             onChange={(fontFamily) => apply(formatTextStyle(element, range, 'fontFamily', fontFamily))}
           />
         </div>

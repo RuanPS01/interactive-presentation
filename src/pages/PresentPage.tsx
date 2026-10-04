@@ -21,12 +21,14 @@ import { useResponses } from '../hooks/useResponses'
 import { useParticipants } from '../hooks/useParticipants'
 import { usePresenterAccess } from '../hooks/usePresenterAccess'
 import { useRoomAssets } from '../hooks/useRoomAssets'
+import { useRoomFonts } from '../hooks/useRoomFonts'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
 import { markAnswerRevealed, saveSlideTimers, setCurrentSlide } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
 import { fetchAssets } from '../lib/assets'
+import { loadRoomFonts } from '../lib/fonts'
 import { collectAssetIds } from '../utils/freeSlide'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
@@ -84,6 +86,7 @@ export function PresentPage() {
       : room.slides.slice(room.currentSlideIndex, room.currentSlideIndex + 2)
     : []
   const assets = useRoomAssets(code, collectAssetIds(assetSlides))
+  useRoomFonts(code, room?.revision ?? 0, Boolean(room?.slides.some((s) => s.type === 'free')))
 
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -160,9 +163,11 @@ export function PresentPage() {
         const currentRoom = roomRef.current
         if (currentRoom && !pdfDownloadedRef.current) {
           pdfDownloadedRef.current = true
-          void fetchAssets(code, collectAssetIds(currentRoom.slides)).then((loaded) =>
-            exportResultsPdf(currentRoom, all, loaded),
-          )
+          // As fontes precisam estar carregadas: os slides livres são desenhados em canvas.
+          void Promise.all([
+            fetchAssets(code, collectAssetIds(currentRoom.slides)),
+            loadRoomFonts(code, currentRoom.revision ?? 0).catch(() => {}),
+          ]).then(([loaded]) => exportResultsPdf(currentRoom, all, loaded))
         }
       })
       .catch(() => {
@@ -277,10 +282,12 @@ export function PresentPage() {
     if (!room || !code) return
     setExporting(true)
     try {
-      // Busca todas as respostas da sala (de todos os slides) para o relatório.
+      // Busca todas as respostas da sala (de todos os slides) para o relatório,
+      // e as imagens e fontes dos slides livres, que são desenhados em canvas.
       const [all, loaded] = await Promise.all([
         getAllResponses(code),
         fetchAssets(code, collectAssetIds(room.slides)),
+        loadRoomFonts(code, room.revision ?? 0).catch(() => {}),
       ])
       await exportResultsPdf(room, all, loaded)
     } finally {

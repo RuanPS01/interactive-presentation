@@ -247,6 +247,24 @@ export interface PresentationAsset {
 
 export type PresentationAssets = Record<string, PresentationAsset>
 
+/**
+ * Fonte que veio embutida num PowerPoint. Os textos a usam pelo nome da
+ * família, como qualquer outra fonte; ela só precisa estar registrada no
+ * navegador (ver `utils/fonts/faces.ts`). Cada estilo (negrito, itálico) é
+ * um arquivo e um registro.
+ */
+export interface PresentationFont {
+  id: string
+  /** Nome usado em `fontFamily` nos textos (o "typeface" do PowerPoint). */
+  family: string
+  weight: 'normal' | 'bold'
+  style: 'normal' | 'italic'
+  /** `data:font/woff;base64,...` */
+  dataUrl: string
+}
+
+export type PresentationFonts = Record<string, PresentationFont>
+
 export type Slide =
   | WordCloudSlide
   | BarSlide
@@ -285,6 +303,11 @@ export interface Presentation {
    * ficam numa subcoleção própria (ver `lib/assets.ts`).
    */
   assets?: PresentationAssets
+  /**
+   * Fontes embutidas usadas pelos slides livres, pelo id. Vão junto no JSON;
+   * na sala ficam em `rooms/{code}/fonts` (ver `lib/fonts.ts`).
+   */
+  fonts?: PresentationFonts
 }
 
 export type RoomStatus = 'live' | 'ended'
@@ -307,10 +330,11 @@ export interface SlideTimer {
 export type SlideTimers = Record<string, SlideTimer>
 
 /**
- * Documento salvo em `rooms/{roomCode}` no Firestore. As imagens não vão nele
- * (ficam em `rooms/{roomCode}/assets`), por isso `assets` fica de fora.
+ * Documento salvo em `rooms/{roomCode}` no Firestore. As imagens e as fontes
+ * não vão nele (ficam em `rooms/{roomCode}/assets` e `rooms/{roomCode}/fonts`),
+ * por isso `assets` e `fonts` ficam de fora.
  */
-export interface Room extends Omit<Presentation, 'assets'> {
+export interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
   creatorUid: string
   currentSlideIndex: number
   status: RoomStatus

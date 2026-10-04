@@ -12,8 +12,8 @@ rules_version = '2';
 //  - Só o dono atual da sala altera/exclui a sala.
 //  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta e o
 //    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}).
-//  - As imagens dos slides livres (rooms/{code}/assets) são lidas por todos
-//    na sala e gravadas só pelo dono.
+//  - As imagens e as fontes dos slides livres (rooms/{code}/assets e
+//    rooms/{code}/fonts) são lidas por todos na sala e gravadas só pelo dono.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -67,6 +67,12 @@ service cloud.firestore {
       // Imagens dos slides livres. Ficam fora do documento da sala (limite de
       // 1 MiB por documento) e são gravadas depois que ela existe.
       match /assets/{assetId} {
+        allow read: if true;
+        allow create, update, delete: if isSignedIn() && isRoomOwner(code);
+      }
+
+      // Fontes embutidas (de PowerPoints importados), divididas em partes.
+      match /fonts/{fontId} {
         allow read: if true;
         allow create, update, delete: if isSignedIn() && isRoomOwner(code);
       }

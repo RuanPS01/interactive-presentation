@@ -3,6 +3,7 @@ import type {
   FreeSlide,
   FreeTextElement,
   PresentationAsset,
+  PresentationFont,
   SlideAspect,
 } from '../../types/presentation'
 import { drawRichText } from '../canvasText'
@@ -24,6 +25,7 @@ import {
 import type { DrawableShape, Fill, Shadow, StyleContext, Stroke } from './draw'
 import { buildGeometry, toPath2D } from './geometry'
 import { isDrawableImage, PptxPackage } from './package'
+import { readEmbeddedFonts } from './fonts'
 import { drawTable } from './table'
 import { parseTextBody, readBodyProps } from './text'
 import type { TextContext } from './text'
@@ -50,6 +52,8 @@ export interface PptxImportResult {
   title: string
   slides: FreeSlide[]
   assets: PresentationAsset[]
+  /** Fontes embutidas no arquivo que o navegador conseguiu usar. */
+  fonts: PresentationFont[]
   /** Formato reconhecido do arquivo; `null` quando não é 16:9 nem 4:3. */
   aspect: SlideAspect | null
   warnings: string[]
@@ -908,6 +912,11 @@ export async function importPptx(file: Blob, onProgress?: (progress: PptxProgres
     images: new Map(),
   }
 
+  // As fontes vêm antes dos slides: tabelas, gráficos e SmartArt são
+  // desenhados em canvas, e o texto deles já deve sair com a fonte certa.
+  onProgress?.({ done: 0, total: 1, message: 'Lendo as fontes embutidas…' })
+  const fonts = await readEmbeddedFonts(pkg, presPath, pres, env.warnings)
+
   const presRels = pkg.rels(presPath)
   const slidePaths = children(child(pres, 'sldIdLst'), 'sldId')
     .map((s) => presRels.get(relAttr(s, 'id') ?? '')?.target)
@@ -1016,6 +1025,7 @@ export async function importPptx(file: Blob, onProgress?: (progress: PptxProgres
     title: presentationTitle(pkg),
     slides,
     assets: [...assets.values()],
+    fonts,
     aspect,
     warnings: [...env.warnings],
   }
