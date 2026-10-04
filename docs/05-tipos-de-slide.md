@@ -1,6 +1,6 @@
 # 05 — Tipos de slide
 
-Seis tipos. Cinco são adicionados pelo apresentador; o `answer` é gerado
+Sete tipos. Seis são adicionados pelo apresentador; o `answer` é gerado
 automaticamente.
 
 | Tipo | Rótulo na interface | Interativo | Criável no menu |
@@ -11,6 +11,7 @@ automaticamente.
 | `quiz` | Alternativas (sem gráfico) | sim | sim |
 | `answer` | Resposta correta | não (usa os dados do `quiz`) | **não** — automático |
 | `text` | Texto simples | não | sim |
+| `free` | Slide livre | não | sim (e pela importação de PowerPoint) |
 
 Valores padrão: [`src/utils/slideFactory.ts`](../src/utils/slideFactory.ts).
 Exibição no projetor: [`src/components/slides/SlideDisplay.tsx`](../src/components/slides/SlideDisplay.tsx).
@@ -195,3 +196,76 @@ O participante vê o texto na tela do celular.
 O `fontSize` do próprio slide **é** o tamanho do corpo: neste tipo, a opção
 global/por slide “Tamanho do corpo” fica desativada e cede lugar ao controle
 existente (ver [06](06-configuracoes.md)).
+
+## `free` - Slide livre
+
+```ts
+{ type: 'free', width: number, height: number, background: string, elements: FreeElement[] }
+```
+
+Slide só de exibição, como o de texto, mas montado à mão: caixas de texto e
+imagens soltas, cada uma com posição, tamanho, rotação e opacidade. É também o
+que cada slide de um PowerPoint importado vira. O modelo completo está em
+[04](04-modelo-de-dados.md#slide-livre).
+
+A moldura tem o tamanho do formato da apresentação (1920 x 1080 no 16:9, 1440
+x 1080 no 4:3) e é escalada inteira para a tela, com faixas nas bordas quando
+a proporção da tela é outra. Assim o slide fica igual no projetor, na prévia,
+no celular, na miniatura do resumo e no PDF. O título do slide não é desenhado na
+moldura: serve para a lista de slides, o resumo final e o PDF. O rodapé de
+respostas também não aparece, porque o slide não recebe respostas.
+
+### Edição
+
+A prévia do editor vira a área de trabalho
+([`FreeSlideCanvas`](../src/components/free/FreeSlideCanvas.tsx)) e o painel
+do meio, o painel do slide
+([`FreeSlideConfig`](../src/components/editor/FreeSlideConfig.tsx)):
+
+| Ação | Como |
+| --- | --- |
+| Selecionar | Clique no elemento ou na lista de camadas |
+| Mover | Arrastar; guias de alinhamento aparecem nas bordas e centros do slide e dos outros elementos (Alt desliga o encaixe); setas movem 1 px, com Shift 10 px |
+| Redimensionar | 8 alças, que respeitam a rotação. Imagens mantêm a proporção (Shift inverte); textos não |
+| Editar texto | Clique duplo, ou Enter com a caixa selecionada; Esc sai da edição |
+| Formatar | Barra do painel ou Ctrl+B, Ctrl+I, Ctrl+U. Com texto selecionado, vale para a seleção; sem seleção, para a caixa inteira |
+| Duplicar e excluir | Ctrl+D e Delete, ou os botões do painel |
+| Ordem | Lista de camadas (uma posição por vez) ou "Trazer para a frente" e "Enviar para trás" no painel do elemento |
+| Imagens | Botão "Adicionar imagem", arrastar arquivos para a prévia ou colar com Ctrl+V |
+| Editor ampliado | Botão "Ampliar": a mesma área de trabalho ocupando a tela inteira |
+
+O painel de texto tem fonte, tamanho, negrito, itálico, sublinhado, tachado,
+alinhamento, cor, realce, marcadores (caractere ou numeração), posição
+vertical, altura da linha, margem interna e fundo da caixa, mais "Uniformizar
+formatação", que limpa as exceções de cada trecho. Quando a seleção mistura
+valores diferentes, o controle fica vazio ("Misto", "Várias fontes"). O painel de imagem tem o
+encaixe (esticar, conter ou cobrir), os cantos arredondados, "Trocar imagem"
+e "Proporção original".
+
+Como o slide não recebe respostas, a seção "Opções deste slide" não aparece
+para ele.
+
+### Imagens
+
+As imagens não ficam dentro do slide: o elemento guarda só o `assetId`, e a
+imagem fica em `Presentation.assets` no editor e no JSON, e na subcoleção
+`rooms/{code}/assets` depois que a sala é criada (ver
+[07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres)). Toda imagem é
+comprimida antes de entrar (no máximo 1920 px no lado maior). Enquanto uma
+imagem ainda não chegou, o lugar dela mostra um espaço reservado cinza com o
+ícone de imagem, sem quebrar o slide.
+
+### O que vem de um PowerPoint
+
+| No .pptx | No slide livre |
+| --- | --- |
+| Caixa de texto, espaço reservado com texto, texto dentro de forma | Caixa de texto editável, com fonte, tamanho, cor, negrito, itálico, sublinhado, tachado, realce, alinhamento, marcadores, recuos, espaçamentos e posição vertical |
+| Foto (com recorte, máscara ou SVG) | Imagem |
+| Fundo do slide (cor, gradiente, imagem, ladrilho, padrão) | Cor de fundo, ou imagem do slide inteiro quando não é cor sólida |
+| Forma, linha, conector, forma livre | Imagem; o texto da forma continua texto por cima |
+| Tabela, gráfico, SmartArt | Imagem |
+| Grupo | Os itens do grupo, um a um, com a transformação do grupo aplicada |
+| Itens gráficos vizinhos na ordem de desenho | Uma imagem só, para o slide não ficar com dezenas de camadas |
+| Slide oculto | Ignorado |
+
+O passo a passo da importação está em [09](09-fluxos-de-uso.md#importar-um-powerpoint).

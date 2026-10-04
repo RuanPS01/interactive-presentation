@@ -15,6 +15,197 @@
   body {
     @apply bg-neutral-50 text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100;
   }
+
+  /* Controles que continuam nativos (setas do campo numérico, barra de rolagem
+     da página) acompanham o tema escolhido, e não o do sistema. */
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+}
+
+/* ------------------------------------------------------------------------
+   Componentes genéricos (src/components/ui). Ficam aqui as partes que classes
+   utilitárias não alcançam: pseudo-elementos de cada navegador e animações.
+   ------------------------------------------------------------------------ */
+
+/* Slider: trilho neutro, trecho percorrido e polegar em azul. O componente
+   informa a porcentagem preenchida em --slider-fill. */
+.ui-slider {
+  --slider-track: var(--color-neutral-200);
+  --slider-active: var(--color-blue-600);
+  --slider-thumb: var(--color-white);
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+.dark .ui-slider {
+  --slider-track: var(--color-neutral-700);
+  --slider-active: var(--color-blue-500);
+  --slider-thumb: var(--color-neutral-100);
+}
+.ui-slider:disabled {
+  cursor: not-allowed;
+}
+.ui-slider:focus {
+  outline: none;
+}
+
+.ui-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--slider-active) var(--slider-fill, 0%),
+    var(--slider-track) var(--slider-fill, 0%)
+  );
+}
+.ui-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
+  border-radius: 9999px;
+  border: 2px solid var(--slider-active);
+  background: var(--slider-thumb);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ui-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--slider-track);
+}
+.ui-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--slider-active);
+}
+.ui-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  border: 2px solid var(--slider-active);
+  background: var(--slider-thumb);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.ui-slider:not(:disabled):hover::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.ui-slider:not(:disabled):hover::-moz-range-thumb {
+  transform: scale(1.12);
+}
+/* Mesmo anel azul translúcido do foco dos campos de texto. */
+.ui-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-blue-500) 35%, transparent);
+}
+.ui-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-blue-500) 35%, transparent);
+}
+
+/* ScrollArea: barra fina e discreta, nas cores neutras da interface. As
+   propriedades padrão valem no Firefox e no Chrome; os pseudo-elementos
+   -webkit- cobrem o Safari. */
+.ui-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-neutral-300) transparent;
+}
+.dark .ui-scroll {
+  scrollbar-color: var(--color-neutral-600) transparent;
+}
+.ui-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ui-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ui-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 9999px;
+  background-color: var(--color-neutral-300);
+  background-clip: content-box;
+}
+.ui-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-neutral-400);
+}
+.dark .ui-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--color-neutral-600);
+}
+.dark .ui-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-neutral-500);
+}
+
+/* Texto do slide livre (utils/richTextDom.ts). Quebras de linha do texto são
+   respeitadas, e o marcador de lista fica pendurado à esquerda da margem do
+   parágrafo, como no PowerPoint; ele vem de um atributo, então não entra no
+   texto editável nem na seleção. */
+.ft-text {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.ft-text p {
+  margin: 0;
+}
+.ft-text p[data-marker]::before {
+  content: attr(data-marker);
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--ft-hang, 1.1em);
+  margin-left: calc(-1 * var(--ft-hang, 1.1em));
+  color: var(--ft-marker-color, inherit);
+  white-space: nowrap;
+  text-indent: 0;
+}
+
+/* Editor do slide livre: contorno tracejado ao passar o mouse sobre um
+   elemento. --inv é o inverso da escala da moldura, para a linha ter 1 px na
+   tela em qualquer zoom. */
+.free-el:hover {
+  outline: calc(1px * var(--inv, 1)) dashed rgb(96 165 250 / 0.9);
+}
+
+/* Lista do Select: surge com um leve deslocamento, sem atrasar a escolha. */
+.ui-popover {
+  animation: ui-popover-in 0.12s ease-out;
+}
+@keyframes ui-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-popover {
+    animation: none;
+  }
+  /* Uma regra por navegador: numa lista de seletores, um pseudo-elemento
+     desconhecido invalida a regra inteira. */
+  .ui-slider::-webkit-slider-thumb {
+    transition: none;
+  }
+  .ui-slider::-moz-range-thumb {
+    transition: none;
+  }
 }
 
 /* Nuvem de palavras: o layout é refeito a cada atualização, então tanto a

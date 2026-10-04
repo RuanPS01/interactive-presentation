@@ -2,6 +2,7 @@ import { clsx } from 'clsx'
 import { useEditorStore } from '../../store/editorStore'
 import type { TextAlign, TextSlide } from '../../types/presentation'
 import { Field, Input, Textarea } from '../ui/Input'
+import { Slider } from '../ui/Slider'
 
 interface TextConfigProps {
   slide: TextSlide
@@ -56,17 +57,15 @@ export function TextConfig({ slide }: TextConfigProps) {
         </div>
       </div>
 
-      <Field label={`Tamanho da fonte: ${slide.fontSize}px`}>
-        <input
-          type="range"
-          min={16}
-          max={120}
-          step={2}
-          value={slide.fontSize}
-          onChange={(e) => updateSlide(slide.id, { fontSize: Number(e.target.value) })}
-          className="w-full"
-        />
-      </Field>
+      <Slider
+        label="Tamanho da fonte"
+        valueLabel={`${slide.fontSize}px`}
+        min={16}
+        max={120}
+        step={2}
+        value={slide.fontSize}
+        onChange={(fontSize) => updateSlide(slide.id, { fontSize })}
+      />
     </div>
   )
 }

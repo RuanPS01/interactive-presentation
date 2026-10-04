@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCode from 'react-qr-code'
 import { displayShortUrl, getCachedShortUrl, shortenUrl } from '../../lib/shortUrl'
 import { Button } from '../ui/Button'
+import { ScrollArea } from '../ui/ScrollArea'
 
 interface ShareRoomProps {
   code: string
@@ -112,8 +113,9 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
           aria-label="QR Code da sala"
           onClick={() => setOpen(false)}
         >
-          <div
-            className="relative flex max-h-[95vh] w-full max-w-3xl flex-col items-center overflow-auto rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-neutral-900 md:p-8"
+          <ScrollArea
+            axis="both"
+            className="relative flex max-h-[95vh] w-full max-w-3xl flex-col items-center rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-neutral-900 md:p-8"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -208,7 +210,7 @@ export function ShareRoom({ code, joinUrl }: ShareRoomProps) {
                 </p>
               )}
             </div>
-          </div>
+          </ScrollArea>
         </div>
       )}
     </>

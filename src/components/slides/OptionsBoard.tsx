@@ -2,6 +2,7 @@ import { clsx } from 'clsx'
 import { Check } from 'lucide-react'
 import type { ChoiceOption } from '../../types/presentation'
 import type { ChoiceTally } from '../../utils/aggregate'
+import { ScrollArea } from '../ui/ScrollArea'
 
 interface OptionsBoardProps {
   options: ChoiceOption[]
@@ -42,7 +43,7 @@ export function OptionsBoard({
   const twoColumns = options.length > 4
 
   return (
-    <div className="flex h-full items-center justify-center overflow-y-auto py-2">
+    <ScrollArea className="flex h-full items-center justify-center py-2">
       <ul
         className={clsx(
           'grid w-full max-w-6xl gap-3',
@@ -99,6 +100,6 @@ export function OptionsBoard({
           )
         })}
       </ul>
-    </div>
+    </ScrollArea>
   )
 }

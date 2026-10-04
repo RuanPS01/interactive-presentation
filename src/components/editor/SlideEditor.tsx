@@ -4,6 +4,7 @@ import { ChoiceConfig } from './ChoiceConfig'
 import { QuizConfig } from './QuizConfig'
 import { AnswerConfig } from './AnswerConfig'
 import { TextConfig } from './TextConfig'
+import { FreeSlideConfig } from './FreeSlideConfig'
 import { SlideSettingsSection } from './SlideSettingsSection'
 
 interface SlideEditorProps {
@@ -15,7 +16,9 @@ export function SlideEditor({ slide }: SlideEditorProps) {
   return (
     <div className="space-y-5">
       <TypeConfig slide={slide} />
-      <SlideSettingsSection slide={slide} />
+      {/* No slide livre nada das opções se aplica: não há título padrão nem
+          respostas, e cada texto tem o próprio tamanho. */}
+      {slide.type !== 'free' && <SlideSettingsSection slide={slide} />}
     </div>
   )
 }
@@ -34,5 +37,7 @@ function TypeConfig({ slide }: SlideEditorProps) {
       return <AnswerConfig slide={slide} />
     case 'text':
       return <TextConfig slide={slide} />
+    case 'free':
+      return <FreeSlideConfig slide={slide} />
   }
 }

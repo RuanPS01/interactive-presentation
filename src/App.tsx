@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { CreatePage } from './pages/CreatePage'
 import { PresentPage } from './pages/PresentPage'
+import { EditRoomPage } from './pages/EditRoomPage'
 import { JoinPage } from './pages/JoinPage'
 import { RoomPage } from './pages/RoomPage'
 import { useApplyTheme } from './hooks/useApplyTheme'
@@ -17,6 +18,8 @@ export default function App() {
       <Route path="/create" element={<CreatePage />} />
       <Route path="/present/:code" element={<PresentPage />} />
       <Route path="/present/:code/:token" element={<PresentPage />} />
+      <Route path="/edit/:code" element={<EditRoomPage />} />
+      <Route path="/edit/:code/:token" element={<EditRoomPage />} />
       <Route path="/join" element={<JoinPage />} />
       <Route path="/room/:code" element={<RoomPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />

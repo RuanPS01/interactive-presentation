@@ -1,13 +1,59 @@
 # 10 — Exportações e integrações
 
+## Importar
+
+O botão **Importar** do editor abre um modal com duas opções, e as duas aceitam
+o arquivo escolhido ou arrastado:
+
+| Opção | O que faz |
+| --- | --- |
+| **Apresentação (.json)** | Lê um JSON exportado daqui ou gerado pelo prompt de IA e **substitui** todo o conteúdo do editor |
+| **PowerPoint (.pptx)** | Converte cada slide visível num slide livre e o **adiciona ao fim** ou **substitui tudo**, conforme a escolha |
+
+O passo a passo do PowerPoint e os avisos que ele pode mostrar estão em
+[09](09-fluxos-de-uso.md#importar-um-powerpoint); o que cada objeto do arquivo
+vira está em [05](05-tipos-de-slide.md#o-que-vem-de-um-powerpoint).
+
+### Como o PowerPoint é lido
+
+[`src/utils/pptx/`](../src/utils/pptx/index.ts), carregado só quando alguém
+importa um PowerPoint (`import()` dinâmico), lê o arquivo inteiro no
+navegador:
+
+- **Pacote.** O `.pptx` é um zip de XMLs; o `fflate` o descompacta e
+  [`package.ts`](../src/utils/pptx/package.ts) resolve as relações entre slide,
+  layout, mestre, tema e mídias.
+- **Herança.** Posição, tamanho e estilos de texto de um espaço reservado vêm
+  do slide, do layout e do mestre, nessa ordem, mais os estilos padrão da
+  apresentação e as referências de fonte e de estilo do tema.
+- **Cores.** Cores do tema passam pelo mapa de cores do mestre e pelos
+  modificadores (luminosidade, tom, transparência...).
+- **Formas.** As formas pré-definidas são calculadas a partir das definições
+  oficiais (pacote `modern-openxml`), com as fórmulas avaliadas para o tamanho
+  e os ajustes de cada forma; formas livres usam o próprio caminho do arquivo.
+  Preenchimento sólido, gradiente, imagem, ladrilho e padrão, contorno com
+  tracejado e pontas, e sombra externa são desenhados em canvas.
+- **Tabelas, gráficos e SmartArt** são desenhados em canvas: tabelas com o
+  estilo do arquivo (ou uma aproximação do estilo padrão), gráficos a partir
+  dos dados salvos no arquivo (barras, colunas, linhas, áreas, dispersão, pizza
+  e rosca) e SmartArt a partir do desenho que o PowerPoint salva junto.
+- **Imagens** passam por recorte, máscara da forma e conversão de SVG antes de
+  serem comprimidas.
+
+Os itens que viram imagem e estão vizinhos na ordem de desenho são desenhados
+juntos numa imagem só, do tamanho da área que ocupam. Assim um slide com
+dezenas de formas decorativas fica com poucas camadas, e o texto continua
+editável por cima.
+
 ## Exportar / importar JSON
 
 [`src/utils/importExport.ts`](../src/utils/importExport.ts) ·
 [`src/utils/validation.ts`](../src/utils/validation.ts)
 
-- **Exportar JSON** serializa o `Presentation` inteiro (título, slides e opções
-  globais) e baixa um arquivo com nome derivado do título (sem acentos nem
-  símbolos).
+- **Exportar JSON** serializa o `Presentation` inteiro (título, slides, opções
+  globais e as imagens usadas pelos slides livres, em `assets`) e baixa um
+  arquivo com nome derivado do título (sem acentos nem símbolos). Com imagens,
+  o arquivo pode passar de alguns megabytes.
 - **Importar JSON** lê o arquivo, valida com Zod e carrega no editor. Erros são
   mostrados no formato `caminho: mensagem`, apontando o campo problemático.
 
@@ -34,6 +80,10 @@ Estrutura:
      `[correta]`;
    - `wordcloud`: os textos enviados, com tamanho proporcional à frequência;
    - `text`: o conteúdo, respeitando o alinhamento;
+   - `free`: o slide inteiro como imagem JPEG, desenhado em canvas
+     ([`freeSlideRaster.ts`](../src/utils/freeSlideRaster.ts), com o texto
+     rico de [`canvasText.ts`](../src/utils/canvasText.ts)), na largura da
+     página;
    - `answer`: **não vira página** — a página da pergunta já traz o gabarito.
 3. **Uma página de tabela logo depois de cada slide interativo que recebeu
    respostas**, com o que cada pessoa respondeu:
@@ -64,15 +114,23 @@ Quando é gerado:
 - pelo botão **Exportar PDF** no cabeçalho do apresentador;
 - pela tela inicial, em qualquer sala apresentada naquele dispositivo.
 
+Nos três casos, as imagens dos slides livres são lidas da sala antes de gerar
+o relatório; uma imagem que falhar fica de fora do desenho, sem impedir o PDF.
+
 ## Prompt de IA
 
 [`src/utils/aiPrompt.ts`](../src/utils/aiPrompt.ts) ·
 [`AiPromptButton`](../src/components/editor/AiPromptButton.tsx)
 
 Texto pronto que descreve **todo o formato JSON aceito** — campos comuns, os
-seis tipos de slide, as opções globais, as sobrescritas por slide, as regras de
-preenchimento e um exemplo completo válido. O fluxo é: copiar → colar no
-assistente → trocar o tema → salvar a resposta como `.json` → **Importar JSON**.
+tipos de slide, as opções globais (inclusive o formato 16:9 ou 4:3), as
+sobrescritas por slide, as regras de preenchimento e um exemplo completo
+válido. O fluxo é: copiar, colar no assistente, trocar o tema, salvar a
+resposta como `.json` e usar **Importar**, opção "Apresentação (.json)".
+
+O slide livre também está descrito, mas só com caixas de texto: uma imagem
+precisa vir embutida em `assets`, e a IA não tem como gerar esse conteúdo. As
+imagens podem ser incluídas depois, no editor.
 
 O prompt instrui explicitamente a IA a **não** gerar slides `answer`: eles são
 criados pela plataforma a partir do `revealAnswer` do `quiz`.

@@ -1,4 +1,4 @@
-name: Deploy no GitHub Pages
+name: Deploy (GitHub Pages e Firebase Hosting)
 
 on:
   push:
@@ -19,6 +19,16 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # Chaves do Firebase, definidas nos secrets do repositório
+      # (Settings, Secrets and variables, Actions).
+      # Valem para os dois builds abaixo.
+      VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,26 +42,33 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Build
+      - name: Build (GitHub Pages)
         run: npm run build
         env:
-          # Chaves do Firebase, definidas em Settings -> Secrets and variables -> Actions.
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           # base = "/<nome-do-repo>/" para os assets resolverem no Pages.
           VITE_BASE: /${{ github.event.repository.name }}/
+
+      # O Firebase Hosting serve o site na raiz do domínio, então precisa de
+      # um build próprio, com base "/" (ver vite.config.ts). O type-check já
+      # rodou no passo anterior; aqui é só o empacotamento, em dist-firebase/.
+      - name: Build (Firebase Hosting)
+        run: npx vite build --mode firebase
 
       - name: Configurar Pages
         uses: actions/configure-pages@v5
 
-      - name: Enviar artefato
+      - name: Enviar artefato do Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
+
+      - name: Enviar artefato do Firebase Hosting
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-firebase
+          path: ./dist-firebase
+          if-no-files-found: error
+          retention-days: 1
 
   # Publica as regras de segurança do Firestore (firestore.rules).
   #
@@ -154,3 +171,70 @@ jobs:
       - name: Publicar no GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # Publica o mesmo site no Firebase Hosting (https://<projeto>.web.app e
+  # https://<projeto>.firebaseapp.com), em paralelo com o GitHub Pages.
+  #
+  # Espera as regras pelo mesmo motivo do Pages: o código novo não vai ao ar
+  # antes das regras de que ele depende. Os dois deploys são independentes
+  # entre si: uma falha aqui não impede o Pages, e vice-versa.
+  #
+  # Usa a mesma conta de serviço das regras, que precisa também do papel
+  # Firebase Hosting Admin (ver docs/11-desenvolvimento.md).
+  hosting-firebase:
+    name: Publicar no Firebase Hosting
+    needs: [build, regras-firestore]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar credenciais
+        id: verificar
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ] || [ -z "$PROJECT_ID" ]; then
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Credenciais ausentes (FIREBASE_SERVICE_ACCOUNT e/ou VITE_FIREBASE_PROJECT_ID). O site NÃO foi publicado no Firebase Hosting; o GitHub Pages segue normalmente."
+          else
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Só para o firebase.json, que diz à CLI o que publicar e com quais
+      # cabeçalhos de cache.
+      - name: Checkout
+        if: steps.verificar.outputs.publicar == 'true'
+        uses: actions/checkout@v4
+
+      - name: Baixar o build do Firebase Hosting
+        if: steps.verificar.outputs.publicar == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: site-firebase
+          path: ./dist-firebase
+
+      - name: Configurar Node
+        if: steps.verificar.outputs.publicar == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Gravar credencial da conta de serviço
+        if: steps.verificar.outputs.publicar == 'true'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-service-account.json" >> "$GITHUB_ENV"
+
+      - name: Publicar no Firebase Hosting
+        if: steps.verificar.outputs.publicar == 'true'
+        env:
+          PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        # Só `hosting`: as regras já foram tratadas pelo job acima, que só as
+        # republica quando o arquivo muda.
+        run: |
+          npx --yes firebase-tools@15 deploy \
+            --only hosting \
+            --project "$PROJECT_ID" \
+            --message "Commit ${GITHUB_SHA::7} (GitHub Actions, execução $GITHUB_RUN_NUMBER)" \
+            --non-interactive

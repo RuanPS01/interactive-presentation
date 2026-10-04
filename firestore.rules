@@ -12,6 +12,8 @@ rules_version = '2';
 //  - Só o dono atual da sala altera/exclui a sala.
 //  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta e o
 //    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}).
+//  - As imagens dos slides livres (rooms/{code}/assets) são lidas por todos
+//    na sala e gravadas só pelo dono.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -22,6 +24,12 @@ service cloud.firestore {
     // Uid dono registrado no doc privado da sala (fonte da verdade do controle).
     function presenterOwner(code) {
       return get(/databases/$(database)/documents/rooms/$(code)/private/presenter).data.ownerUid;
+    }
+
+    // Dono atual da sala: o mesmo critério que autoriza alterar o documento dela.
+    function isRoomOwner(code) {
+      return get(/databases/$(database)/documents/rooms/$(code)).data.creatorUid == request.auth.uid
+        || presenterOwner(code) == request.auth.uid;
     }
 
     match /rooms/{code} {
@@ -54,6 +62,13 @@ service cloud.firestore {
           && participantUid == request.auth.uid
           && request.resource.data.uid == request.auth.uid;
         allow delete: if isSignedIn() && participantUid == request.auth.uid;
+      }
+
+      // Imagens dos slides livres. Ficam fora do documento da sala (limite de
+      // 1 MiB por documento) e são gravadas depois que ela existe.
+      match /assets/{assetId} {
+        allow read: if true;
+        allow create, update, delete: if isSignedIn() && isRoomOwner(code);
       }
 
       match /responses/{responseId} {

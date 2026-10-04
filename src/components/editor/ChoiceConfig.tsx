@@ -3,6 +3,7 @@ import { useEditorStore } from '../../store/editorStore'
 import type { ChoiceSlide } from '../../types/presentation'
 import { newId } from '../../utils/slideFactory'
 import { Button } from '../ui/Button'
+import { Checkbox } from '../ui/Checkbox'
 import { Field, Input } from '../ui/Input'
 
 interface ChoiceConfigProps {
@@ -64,14 +65,11 @@ export function ChoiceConfig({ slide }: ChoiceConfigProps) {
         </Button>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
-          checked={slide.allowMultiple}
-          onChange={(e) => updateSlide(slide.id, { allowMultiple: e.target.checked })}
-        />
-        Permitir escolher mais de uma opção
-      </label>
+      <Checkbox
+        label="Permitir escolher mais de uma opção"
+        checked={slide.allowMultiple}
+        onChange={(allowMultiple) => updateSlide(slide.id, { allowMultiple })}
+      />
     </div>
   )
 }

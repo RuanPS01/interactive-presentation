@@ -16,12 +16,12 @@ arquivo.
 | [02 — Arquitetura](02-arquitetura.md) | Stack, camadas, roteamento, build e deploy |
 | [03 — Estrutura de pastas](03-estrutura-de-pastas.md) | Mapa de cada pasta e arquivo de `src/` |
 | [04 — Modelo de dados](04-modelo-de-dados.md) | Tipos do domínio, coleções do Firestore e formato JSON |
-| [05 — Tipos de slide](05-tipos-de-slide.md) | Os 6 tipos, seus campos e como cada um se comporta |
+| [05 - Tipos de slide](05-tipos-de-slide.md) | Os 7 tipos, seus campos e como cada um se comporta (inclusive a edição do slide livre) |
 | [06 — Configurações](06-configuracoes.md) | Opções globais, sobrescritas por slide e resolução |
 | [07 — Tempo real e comunicação](07-tempo-real-e-comunicacao.md) | Assinaturas, presença, autenticação e regras de segurança |
 | [08 — Componentes e estado](08-componentes.md) | Catálogo de componentes, hooks e stores |
 | [09 — Fluxos de uso](09-fluxos-de-uso.md) | Passo a passo do apresentador e do participante |
-| [10 — Exportações e integrações](10-exportacoes.md) | JSON, PDF, prompt de IA e encurtador de URL |
+| [10 - Exportações e integrações](10-exportacoes.md) | Importar (JSON e PowerPoint), exportar JSON e PDF, prompt de IA e encurtador de URL |
 | [11 — Desenvolvimento](11-desenvolvimento.md) | Rodar localmente, scripts, convenções e solução de problemas |
 
 ## Como manter esta documentação
@@ -37,3 +37,8 @@ atualize o documento correspondente:
 | `firestore.rules` | [07](07-tempo-real-e-comunicacao.md) (e a pipeline republica sozinha) |
 | `.github/workflows/deploy.yml` | [02](02-arquitetura.md) e [11](11-desenvolvimento.md) |
 | Novo componente/hook | [03](03-estrutura-de-pastas.md) e [08](08-componentes.md) |
+| `src/components/ui/` (componentes genéricos) | [08](08-componentes.md#ui-componentes-genéricos) |
+| `src/lib/rooms.ts` (`saveAndRestartRoom`) | [07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento) e [09](09-fluxos-de-uso.md#editar-uma-sala-em-andamento) |
+| `src/lib/assets.ts` (imagens) | [04](04-modelo-de-dados.md) e [07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres) |
+| `src/components/free/`, `src/utils/richText*.ts` | [05](05-tipos-de-slide.md#free---slide-livre) e [08](08-componentes.md#free-slide-livre) |
+| `src/utils/pptx/` | [05](05-tipos-de-slide.md#o-que-vem-de-um-powerpoint), [09](09-fluxos-de-uso.md#importar-um-powerpoint) e [10](10-exportacoes.md#importar) |

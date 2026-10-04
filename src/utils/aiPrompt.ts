@@ -26,10 +26,10 @@ FORMATO GERAL
 CAMPOS COMUNS A TODO SLIDE
 
 - "id": identificador único no arquivo, texto não vazio (ex.: "s1", "s2").
-- "type": um de "wordcloud", "bar", "pie", "quiz", "answer", "text".
+- "type": um de "wordcloud", "bar", "pie", "quiz", "answer", "text", "free".
 - "title": título exibido no slide e para os participantes.
 - "overrides": opcional. Objeto com as mesmas chaves de "settings" (menos
-  "askName") para valer só neste slide. Omita se não precisar.
+  "askName" e "slideAspect") para valer só neste slide. Omita se não precisar.
 
 TIPOS DE SLIDE
 
@@ -135,6 +135,61 @@ TIPOS DE SLIDE
      "fontSize": 56
    }
 
+7) "free" - slide livre, sem interação. É uma tela em branco onde cada texto
+   fica numa caixa com posição, tamanho e formatação próprios. Use só quando
+   precisar de um layout especial (duas colunas, destaques coloridos); para
+   texto corrido, prefira "text".
+   Campos adicionais:
+   - "width" e "height": tamanho da tela em pixels. Use 1920 e 1080 (formato
+     16:9, o padrão) ou 1440 e 1080 se "settings.slideAspect" for "4:3".
+   - "background": cor de fundo em "#rrggbb".
+   - "elements": lista de caixas de texto, desenhadas na ordem (a última fica
+     por cima). Cada caixa tem:
+     - "id": texto único dentro do slide; "kind": "text";
+     - "x", "y", "width", "height": posição do canto superior esquerdo e
+       tamanho, em pixels da tela acima (números, podem ter decimais);
+     - "style": formatação padrão da caixa, com qualquer uma das chaves
+       "fontFamily" (ex.: "Arial", "Georgia"), "fontSize" (px), "color"
+       ("#rrggbb"), "bold", "italic", "underline", "strike" (booleanos) e
+       "highlight" (cor de realce "#rrggbb");
+     - "paragraphs": lista de parágrafos, cada um com "runs" (lista de trechos
+       { "text": "...", "style": { ...opcional, só o que muda... } }) e,
+       opcionalmente, "align" ("left", "center", "right" ou "justify") e
+       "bullet" ({ "kind": "char", "char": "•" } para marcadores);
+     - opcionais: "verticalAlign" ("top", "middle" ou "bottom") e
+       "background" (cor de fundo da caixa).
+   NÃO gere imagens ("kind": "image"): elas dependem de arquivos que a IA não
+   consegue embutir. O apresentador pode incluí-las depois no editor.
+
+   {
+     "id": "s6",
+     "type": "free",
+     "title": "Dois lados",
+     "width": 1920,
+     "height": 1080,
+     "background": "#0f172a",
+     "elements": [
+       {
+         "id": "e1",
+         "kind": "text",
+         "x": 160, "y": 120, "width": 1600, "height": 180,
+         "style": { "fontFamily": "Arial", "fontSize": 96, "color": "#ffffff", "bold": true },
+         "paragraphs": [{ "runs": [{ "text": "Dados contam histórias" }], "align": "center" }]
+       },
+       {
+         "id": "e2",
+         "kind": "text",
+         "x": 160, "y": 400, "width": 1600, "height": 500,
+         "style": { "fontFamily": "Arial", "fontSize": 48, "color": "#e2e8f0" },
+         "verticalAlign": "top",
+         "paragraphs": [
+           { "runs": [{ "text": "Números " }, { "text": "sem contexto", "style": { "color": "#facc15", "bold": true } }, { "text": " confundem" }], "bullet": { "kind": "char", "char": "•" } },
+           { "runs": [{ "text": "Gráficos certos esclarecem" }], "bullet": { "kind": "char", "char": "•" } }
+         ]
+       }
+     ]
+   }
+
 OPÇÕES GLOBAIS ("settings")
 
 Todas opcionais; inclua apenas as que quiser mudar.
@@ -149,6 +204,9 @@ Todas opcionais; inclua apenas as que quiser mudar.
   "quiz" (padrão 20). Ao acabar o tempo, as respostas são encerradas e a
   apresentação passa sozinha para o slide de resposta. Use 0 para deixar as
   perguntas sem cronômetro.
+- "slideAspect": "16:9" (padrão) ou "4:3". Formato dos slides: define o
+  tamanho dos slides "free" e a prévia no editor. Vale para a apresentação
+  inteira (não use em "overrides").
 
   "settings": {
     "allowChangeAnswer": true,
@@ -157,14 +215,17 @@ Todas opcionais; inclua apenas as que quiser mudar.
     "titleFontSize": 36,
     "labelFontSize": 16,
     "bodyFontSize": 24,
-    "quizTimerSeconds": 20
+    "quizTimerSeconds": 20,
+    "slideAspect": "16:9"
   }
 
 REGRAS
 
 - Use exatamente esses nomes de campo e esses valores permitidos. Qualquer campo
   extra ou faltando faz a importação falhar.
-- Números devem ser números JSON (sem aspas) e inteiros.
+- Números devem ser números JSON (sem aspas) e inteiros, exceto as posições e
+  os tamanhos dos elementos de "free", que aceitam decimais.
+- Cores sempre no formato "#rrggbb".
 - "allowMultiple", "revealAnswer" e "showResponses" devem ser booleanos
   (true/false, sem aspas).
 - Todos os "id" de slides são diferentes entre si.

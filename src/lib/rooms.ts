@@ -2,21 +2,16 @@ import {
   arrayUnion,
   doc,
   getDoc,
+  increment,
   onSnapshot,
   updateDoc,
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { deleteAssets, uploadAssets } from './assets'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
 import { withDefaults } from '../utils/settings'
-import type {
-  Presentation,
-  PresentationSettings,
-  Room,
-  RoomStatus,
-  Slide,
-  SlideTimers,
-} from '../types/presentation'
+import type { Presentation, Room, RoomStatus, SlideTimers } from '../types/presentation'
 
 const ROOMS = 'rooms'
 
@@ -32,6 +27,22 @@ export function roomRef(code: string) {
  */
 export function presenterRef(code: string) {
   return doc(db, ROOMS, code, 'private', 'presenter')
+}
+
+/**
+ * Limite prático do documento da sala. O Firestore aceita até 1 MiB; a conta
+ * aqui é pelo JSON, um pouco maior que o tamanho real, então sobra folga.
+ */
+const MAX_ROOM_BYTES = 1_000_000
+
+function assertRoomFits(data: object): void {
+  const bytes = new Blob([JSON.stringify(data)]).size
+  if (bytes > MAX_ROOM_BYTES) {
+    throw new Error(
+      `A apresentação ficou grande demais para uma sala (${Math.round(bytes / 1024)} KB; ` +
+        'o limite do Firestore é 1 MiB por documento). Divida-a em menos slides ou encurte os textos.',
+    )
+  }
 }
 
 export interface CreatedRoom {
@@ -56,8 +67,10 @@ export async function createRoom(
 
     const now = Date.now()
     const token = generatePresenterToken()
+    // As imagens não entram no documento da sala: vão para a subcoleção.
+    const { assets = {}, ...content } = presentation
     const room: Room = {
-      ...presentation,
+      ...content,
       // O Firestore rejeita `undefined`: a sala sempre nasce com a configuração
       // completa, mesmo que a apresentação importada não a traga.
       settings: withDefaults(presentation.settings),
@@ -71,11 +84,18 @@ export async function createRoom(
       timers: {},
       revealedSlideIds: [],
     }
+    assertRoomFits(room)
     // Sala + doc privado (token) numa escrita atômica.
     const batch = writeBatch(db)
     batch.set(ref, room)
     batch.set(presenterRef(code), { token, ownerUid: creatorUid, createdAt: now })
     await batch.commit()
+    // Depois da sala, porque as regras só deixam o dono dela gravar imagens.
+    try {
+      await uploadAssets(code, Object.values(assets))
+    } catch (e) {
+      throw new Error(`A sala foi criada, mas as imagens não foram enviadas: ${(e as Error).message}`)
+    }
     return { code, token }
   }
   throw new Error('Não foi possível gerar um código de sala único. Tente novamente.')
@@ -169,15 +189,55 @@ export async function setStatus(code: string, status: RoomStatus): Promise<void>
   await updateDoc(roomRef(code), { status, updatedAt: Date.now() })
 }
 
-/** Atualiza os slides de uma sala já criada (edição durante a apresentação). */
-export async function updateSlides(code: string, slides: Slide[]): Promise<void> {
-  await updateDoc(roomRef(code), { slides, updatedAt: Date.now() })
-}
-
-/** Atualiza as opções globais de uma sala já criada. */
-export async function updateSettings(
+/**
+ * Grava a apresentação editada numa sala já iniciada e a recomeça do primeiro
+ * slide, numa escrita só.
+ *
+ * Recomeçar é o que mantém a sala coerente depois da edição: o slide no ar
+ * pode ter mudado de lugar ou deixado de existir, e os cronômetros e gabaritos
+ * já revelados se referem à versão anterior (um tempo novo nas opções, por
+ * exemplo, só vale para cronômetros que ainda não começaram). Como todos os
+ * navegadores seguem `currentSlideIndex`, a plateia volta ao início junto com
+ * o apresentador, sem mensagem direta a ninguém.
+ *
+ * As respostas já enviadas ficam guardadas: cada uma pertence a um slide pelo
+ * id, que a edição preserva, e só o próprio participante pode apagá-la.
+ *
+ * Imagens: `storedAssetIds` são as que a sala já tem. Só as novas são
+ * enviadas (antes do documento, para nenhum aparelho ver um slide sem a
+ * imagem), e as que deixaram de ser usadas são apagadas no fim.
+ */
+export async function saveAndRestartRoom(
   code: string,
-  settings: PresentationSettings,
+  presentation: Presentation,
+  storedAssetIds: string[] = [],
 ): Promise<void> {
-  await updateDoc(roomRef(code), { settings, updatedAt: Date.now() })
+  const { assets = {}, ...content } = presentation
+  const stored = new Set(storedAssetIds)
+  const data = {
+    title: content.title,
+    slides: content.slides,
+    // O Firestore rejeita `undefined`: grava a configuração completa.
+    settings: withDefaults(content.settings),
+    currentSlideIndex: 0,
+    status: 'live',
+    timers: {},
+    revealedSlideIds: [],
+    updatedAt: Date.now(),
+  }
+  assertRoomFits(data)
+  await uploadAssets(
+    code,
+    Object.values(assets).filter((asset) => !stored.has(asset.id)),
+  )
+  await updateDoc(roomRef(code), {
+    ...data,
+    // Avisa quem está na sala que a apresentação mudou (ver `RoomPage`).
+    revision: increment(1),
+  })
+  const unused = storedAssetIds.filter((id) => !assets[id])
+  if (unused.length > 0) {
+    // Limpeza: falhar aqui só deixa uma imagem sobrando, nada quebra.
+    await deleteAssets(code, unused).catch(() => {})
+  }
 }

@@ -1,43 +1,12 @@
 import { clsx } from 'clsx'
+import { useId } from 'react'
 import { clampTimerSeconds, FONT_SIZE_RANGE, QUIZ_TIMER_RANGE } from '../../utils/settings'
+import { Checkbox } from '../ui/Checkbox'
+import { Input } from '../ui/Input'
+import { Select } from '../ui/Select'
+import { Slider } from '../ui/Slider'
 
-/** Interruptor simples (usado nas opções globais). */
-export function ToggleRow({
-  label,
-  hint,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string
-  hint?: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (value: boolean) => void
-}) {
-  return (
-    <label
-      className={clsx(
-        'flex cursor-pointer items-start gap-2 text-sm',
-        disabled ? 'cursor-not-allowed opacity-50' : '',
-      )}
-    >
-      <input
-        type="checkbox"
-        className="mt-0.5"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span>
-        <span className="text-neutral-700 dark:text-neutral-200">{label}</span>
-        {hint && (
-          <span className="block text-xs text-neutral-500 dark:text-neutral-400">{hint}</span>
-        )}
-      </span>
-    </label>
-  )
-}
+const HINT_STYLES = 'block text-xs text-neutral-500 dark:text-neutral-400'
 
 /** Controle de tamanho de fonte com valor visível. */
 export function FontSizeRow({
@@ -52,19 +21,47 @@ export function FontSizeRow({
   disabled?: boolean
 }) {
   return (
-    <div className={clsx('space-y-1', disabled && 'opacity-50')}>
-      <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-        {label}: {value}px
-      </span>
-      <input
-        type="range"
-        min={FONT_SIZE_RANGE.min}
-        max={FONT_SIZE_RANGE.max}
+    <Slider
+      label={label}
+      valueLabel={`${value}px`}
+      min={FONT_SIZE_RANGE.min}
+      max={FONT_SIZE_RANGE.max}
+      value={value}
+      disabled={disabled}
+      onChange={onChange}
+    />
+  )
+}
+
+/** Campo de segundos do cronômetro, já limitado à faixa aceita. */
+function SecondsInput({
+  id,
+  value,
+  disabled,
+  onChange,
+  label,
+}: {
+  id?: string
+  value: number
+  disabled?: boolean
+  onChange: (value: number) => void
+  /** Nome acessível quando não há um `<label>` apontando para o campo. */
+  label?: string
+}) {
+  return (
+    <div className="w-24">
+      <Input
+        id={id}
+        type="number"
+        min={QUIZ_TIMER_RANGE.min}
+        max={QUIZ_TIMER_RANGE.max}
         step={1}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
+        aria-label={label}
+        // Um valor fora da faixa aqui viraria um JSON que a própria
+        // importação recusa: o limite é aplicado na origem.
+        onChange={(e) => onChange(clampTimerSeconds(Number(e.target.value)))}
       />
     </div>
   )
@@ -72,7 +69,7 @@ export function FontSizeRow({
 
 /**
  * Tempo do cronômetro, em segundos. É um campo numérico (e não um controle
- * deslizante como o das fontes) porque o professor pensa em valores exatos —
+ * deslizante como o das fontes) porque o professor pensa em valores exatos:
  * "20 segundos", não "por volta de 20".
  */
 export function TimerRow({
@@ -88,34 +85,28 @@ export function TimerRow({
   onChange: (value: number) => void
   disabled?: boolean
 }) {
+  const id = useId()
+  // O campo desativado já se esmaece sozinho; aqui só os textos em volta.
+  const dim = disabled && 'opacity-50'
   return (
-    <div className={clsx('space-y-1', disabled && 'opacity-50')}>
-      <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-200">
+    <div className="space-y-1">
+      <label
+        htmlFor={id}
+        className={clsx('block text-sm font-medium text-neutral-700 dark:text-neutral-200', dim)}
+      >
         {label}
       </label>
       <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min={QUIZ_TIMER_RANGE.min}
-          max={QUIZ_TIMER_RANGE.max}
-          step={1}
-          value={value}
-          disabled={disabled}
-          // Um valor fora da faixa aqui viraria um JSON que a própria
-          // importação recusa: o limite é aplicado na origem.
-          onChange={(e) => onChange(clampTimerSeconds(Number(e.target.value)))}
-          className="w-24 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-        />
-        <span className="text-sm text-neutral-500 dark:text-neutral-400">segundos</span>
+        <SecondsInput id={id} value={value} disabled={disabled} onChange={onChange} />
+        <span className={clsx('text-sm text-neutral-500 dark:text-neutral-400', dim)}>segundos</span>
       </div>
-      {hint && (
-        <span className="block text-xs text-neutral-500 dark:text-neutral-400">{hint}</span>
-      )}
+      {hint && <span className={clsx(HINT_STYLES, dim)}>{hint}</span>}
     </div>
   )
 }
 
-const INHERIT = '__inherit__'
+const INHERIT = 'herdar'
+type OverrideChoice = typeof INHERIT | 'sim' | 'nao'
 
 /**
  * Opção booleana de um slide com três estados: herdar do global, sim ou não.
@@ -136,26 +127,25 @@ export function OverrideToggleRow({
   disabled?: boolean
   onChange: (value: boolean | undefined) => void
 }) {
+  const labelId = useId()
+  const dim = disabled && 'opacity-50'
   return (
-    <div className={clsx('space-y-1', disabled && 'opacity-50')}>
-      <span className="block text-sm text-neutral-700 dark:text-neutral-200">{label}</span>
-      <select
-        value={value === undefined ? INHERIT : value ? 'yes' : 'no'}
+    <div className="space-y-1">
+      <span id={labelId} className={clsx('block text-sm text-neutral-700 dark:text-neutral-200', dim)}>
+        {label}
+      </span>
+      <Select<OverrideChoice>
+        aria-labelledby={labelId}
+        value={value === undefined ? INHERIT : value ? 'sim' : 'nao'}
         disabled={disabled}
-        onChange={(e) =>
-          onChange(e.target.value === INHERIT ? undefined : e.target.value === 'yes')
-        }
-        className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
-      >
-        <option value={INHERIT}>
-          Herdar da apresentação ({inherited ? 'sim' : 'não'})
-        </option>
-        <option value="yes">Sim</option>
-        <option value="no">Não</option>
-      </select>
-      {hint && (
-        <span className="block text-xs text-neutral-500 dark:text-neutral-400">{hint}</span>
-      )}
+        options={[
+          { value: INHERIT, label: `Herdar da apresentação (${inherited ? 'sim' : 'não'})` },
+          { value: 'sim', label: 'Sim' },
+          { value: 'nao', label: 'Não' },
+        ]}
+        onChange={(choice) => onChange(choice === INHERIT ? undefined : choice === 'sim')}
+      />
+      {hint && <span className={clsx(HINT_STYLES, dim)}>{hint}</span>}
     </div>
   )
 }
@@ -177,35 +167,27 @@ export function OverrideTimerRow({
   onChange: (value: number | undefined) => void
 }) {
   const custom = value !== undefined
+  const dim = disabled && 'opacity-50'
   return (
-    <div className={clsx('space-y-1', disabled && 'opacity-50')}>
-      <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
-          checked={custom}
-          disabled={disabled}
-          onChange={(e) => onChange(e.target.checked ? inherited : undefined)}
-        />
-        {label}
-      </label>
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          min={QUIZ_TIMER_RANGE.min}
-          max={QUIZ_TIMER_RANGE.max}
-          step={1}
-          value={custom ? value : inherited}
+    <div className="space-y-1.5">
+      <Checkbox
+        label={label}
+        checked={custom}
+        disabled={disabled}
+        onChange={(checked) => onChange(checked ? inherited : undefined)}
+      />
+      <div className="flex items-center gap-2 pl-7">
+        <SecondsInput
+          value={value ?? inherited}
           disabled={disabled || !custom}
-          onChange={(e) => onChange(clampTimerSeconds(Number(e.target.value)))}
-          className="w-24 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100"
+          onChange={onChange}
+          label={label}
         />
-        <span className="text-sm text-neutral-500 dark:text-neutral-400">
+        <span className={clsx('text-sm text-neutral-500 dark:text-neutral-400', dim)}>
           segundos{custom ? '' : ' (herdado)'}
         </span>
       </div>
-      {hint && (
-        <span className="block text-xs text-neutral-500 dark:text-neutral-400">{hint}</span>
-      )}
+      {hint && <span className={clsx(HINT_STYLES, dim)}>{hint}</span>}
     </div>
   )
 }
@@ -226,25 +208,30 @@ export function OverrideFontRow({
 }) {
   const custom = value !== undefined
   return (
-    <div className={clsx('space-y-1', disabled && 'opacity-50')}>
-      <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-200">
-        <input
-          type="checkbox"
+    <div className="space-y-1.5">
+      <div className="flex items-start justify-between gap-3">
+        <Checkbox
+          label={label}
           checked={custom}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.checked ? inherited : undefined)}
+          onChange={(checked) => onChange(checked ? inherited : undefined)}
         />
-        {label}: {custom ? `${value}px` : `${inherited}px (herdado)`}
-      </label>
-      <input
-        type="range"
+        <span
+          className={clsx(
+            'shrink-0 text-sm tabular-nums text-neutral-500 dark:text-neutral-400',
+            disabled && 'opacity-50',
+          )}
+        >
+          {custom ? `${value}px` : `${inherited}px (herdado)`}
+        </span>
+      </div>
+      <Slider
+        aria-label={label}
         min={FONT_SIZE_RANGE.min}
         max={FONT_SIZE_RANGE.max}
-        step={1}
-        value={custom ? value : inherited}
+        value={value ?? inherited}
         disabled={disabled || !custom}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full disabled:opacity-40"
+        onChange={onChange}
       />
     </div>
   )

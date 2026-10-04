@@ -1,4 +1,5 @@
 import { clsx } from 'clsx'
+import { forwardRef } from 'react'
 import type { ButtonHTMLAttributes } from 'react'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -24,14 +25,13 @@ const SIZES: Record<Size, string> = {
   lg: 'px-6 py-3 text-base',
 }
 
-export function Button({
-  variant = 'primary',
-  size = 'md',
-  className,
-  ...rest
-}: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = 'primary', size = 'md', className, ...rest },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       className={clsx(
         'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent',
@@ -43,4 +43,4 @@ export function Button({
       {...rest}
     />
   )
-}
+})
