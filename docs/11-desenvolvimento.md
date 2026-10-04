@@ -236,7 +236,7 @@ o link com o token funciona em qualquer um dos dois.
 
 | Quero… | Comece por |
 | --- | --- |
-| Criar um novo tipo de slide | `types/presentation.ts` → `utils/slideFactory.ts` → `utils/validation.ts` → `components/editor/` → `SlideDisplay` → `ParticipateView` → `exportPdf` → `aiPrompt` |
+| Criar um novo tipo de slide | `types/presentation.ts` → `utils/slideFactory.ts` → `utils/validation.ts` → `components/editor/` → `SlideDisplay` → `ParticipateView` → `exportPdf` → `aiPrompt` (e a versão estática em `utils/pptxExport/standard.ts`) |
 | Adicionar uma opção global | `types/presentation.ts` (`PresentationSettings`) → `utils/settings.ts` → `utils/validation.ts` → `PresentationSettingsButton` → `SlideSettingsSection` |
 | Mudar as cores dos gráficos | `components/charts/palette.ts` (vale também para o PDF) |
 | Adicionar um controle de formulário numa tela | Use os componentes de `components/ui/` (`Checkbox`, `Radio`, `Slider`, `Select`, `ScrollArea`, `Modal`); ver [08](08-componentes.md#ui-componentes-genéricos) |
@@ -244,7 +244,7 @@ o link com o token funciona em qualquer um dos dois.
 | Ajustar o relatório | `utils/exportPdf.ts` |
 | Mexer nas regras de acesso | `firestore.rules` + [07](07-tempo-real-e-comunicacao.md) |
 | Mudar a exibição de um elemento do slide livre | `components/free/layout.ts` e `FreeElementContent.tsx` (exibição e edição usam os dois) e, para o PDF, `utils/freeSlideRaster.ts` e `utils/canvasText.ts` |
-| Adicionar uma propriedade de texto ao slide livre | `FreeTextStyle` ou `FreeTextParagraph` em `types/presentation.ts`, depois `utils/validation.ts`, `utils/richText.ts`, `utils/richTextDom.ts`, `components/free/layout.ts`, `utils/canvasText.ts`, `FreeSlideConfig` e o leitor em `utils/pptx/text.ts` |
+| Adicionar uma propriedade de texto ao slide livre | `FreeTextStyle` ou `FreeTextParagraph` em `types/presentation.ts`, depois `utils/validation.ts`, `utils/richText.ts`, `utils/richTextDom.ts`, `components/free/layout.ts`, `utils/canvasText.ts`, `FreeSlideConfig`, o leitor em `utils/pptx/text.ts` e o gerador em `utils/pptxExport/slide.ts` |
 | Mexer na edição do slide livre (arrastar, alças, guias, atalhos) | `components/free/FreeSlideCanvas.tsx`; as ações sobre elementos ficam em `hooks/useFreeSlideActions.ts` |
 | Melhorar a importação de PowerPoint | `utils/pptx/index.ts` (o que vira texto, imagem ou é juntado); formas em `geometry.ts` e `draw.ts`; texto em `text.ts`; tabelas e gráficos em `table.ts` e `chart.ts` |
 | Mudar a compressão das imagens | `utils/images.ts` (`MAX_ASSET_CHARS`, `MAX_ASSET_DIMENSION`) |

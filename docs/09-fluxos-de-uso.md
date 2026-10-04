@@ -15,16 +15,19 @@
    imagens e as fontes, para importar de volta; ou em PowerPoint, para abrir
    em outros programas (o editor não persiste ao recarregar).
 5. **Iniciar apresentação**:
-   - autentica anonimamente (se ainda não estiver);
+   - usa o uid anônimo obtido ao abrir a página (se a conexão ainda não
+     terminou, pede para aguardar um instante; sem slides, pede para
+     adicionar ao menos um);
    - `createRoom` sorteia um código livre e grava sala + token, e depois as
-     imagens dos slides livres na subcoleção `assets`;
+     imagens e as fontes dos slides livres nas subcoleções `assets` e `fonts`;
    - a sessão é salva no `localStorage` deste dispositivo;
    - navega para `/present/<código>/<token>`.
 6. **Apresenta**: `→`, `PageDown` ou `Espaço` avançam; `←` e `PageUp` voltam
    (funciona com passador de slides). Os botões do cabeçalho fazem o mesmo, e o
    cabeçalho pode ser ocultado (reaparece ao encostar o mouse no topo).
 7. **Compartilha**: o código aparece grande no cabeçalho; clicar no QR abre o
-   modal com o QR ampliado, o **link curto** e o link completo.
+   modal com o QR ampliado, o código e o **link curto** em letra grande (um
+   botão alterna para o link completo, e outro copia o link em destaque).
 8. **Acompanha ao vivo**: gráficos e nuvem se atualizam a cada resposta; o
    rodapé mostra “N participantes · M responderam · …”.
 9. **Passa do último slide** → slide final de agradecimento, com a grade de
@@ -149,7 +152,7 @@ controle.
    - nuvem de palavras: digita textos (palavra ou frase) e envia;
    - barras/pizza/alternativas: toca na opção; a resposta é gravada na hora;
    - gabarito: vê se acertou;
-   - texto: só acompanha.
+   - texto e slide livre: só acompanha.
 5. **Troca a resposta** (se permitido): “Limpar resposta” / “Limpar tudo”, ou
    simplesmente escolhe outra opção. Se não for permitido, a resposta trava
    depois do primeiro envio.
@@ -158,22 +161,23 @@ controle.
 
 ## Ciclo de uma resposta
 
-```
-Participante toca na opção
-      |
-      v
-saveResponse() -> setDoc em rooms/{code}/responses/{slideId}__{uid}
-      |
-      +--> onSnapshot do apresentador (useResponses)
-      |         -> aggregateChoices -> gráfico/quadro se redesenha
-      |
-      +--> onSnapshot do próprio participante (useMyResponse)
-                -> o botão aparece marcado (e reflete em outras abas dele)
-```
+1. O participante toca na opção.
+2. `saveResponse()` faz `setDoc` em `rooms/{code}/responses/{slideId}__{uid}`;
+   os botões ficam ocupados até a confirmação.
+3. O ouvinte do próprio participante (`useMyResponse`) recebe na hora a
+   versão local da escrita: o botão aparece marcado (e reflete em outras abas
+   dele).
+4. O Firestore valida pelas regras e confirma.
+5. O ouvinte do apresentador (`useResponses`) recebe a mudança;
+   `aggregateChoices` recalcula e o gráfico ou o quadro se redesenha.
 
-Não há confirmação nem botão “enviar” nos slides de escolha: o toque **é** o
-envio, e o estado exibido vem sempre do Firestore — nunca de um estado local
-otimista. É isso que mantém abas e dispositivos do mesmo participante em sincronia.
+Não há confirmação nem botão "enviar" nos slides de escolha: o toque **é** o
+envio, e o estado exibido vem sempre de um snapshot do Firestore, nunca de um
+estado local otimista guardado pela aplicação. A marcação aparece na hora
+porque o próprio SDK do Firestore entrega a escrita pendente ao ouvinte local
+(compensação de latência). É isso que mantém abas e dispositivos do mesmo
+participante em sincronia. O mecanismo completo está em
+[07](07-tempo-real-e-comunicacao.md#como-o-sincronismo-funciona).
 
 ## Fluxo de pergunta e resposta (`quiz` + `answer`)
 

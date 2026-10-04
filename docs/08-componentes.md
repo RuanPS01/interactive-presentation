@@ -10,7 +10,7 @@ Três lugares, com responsabilidades separadas:
 | [`themeStore`](../src/store/themeStore.ts) (Zustand + localStorage) | Tema claro/escuro do usuário | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença | Até ser apagada |
 
-Mais dois usos de `localStorage`, em `lib/`:
+Outros usos de `localStorage`, em `lib/`:
 [`presenterSessions`](../src/lib/presenterSessions.ts) (salas apresentadas neste
 dispositivo, com o token) e
 [`participantName`](../src/lib/participantName.ts) (nome por sala).
@@ -235,8 +235,12 @@ mostra o progresso, o resultado (slides, imagens, avisos) ou o erro.
 ### `present/`
 
 - **[`ShareRoom`](../src/components/present/ShareRoom.tsx)** — miniatura do QR
-  na barra; o modal traz o QR ampliado, o **link curto em texto grande**, o
-  código da sala e o link completo com botão de copiar.
+  na barra; o modal traz o QR ampliado, o código da sala e um único lugar
+  para o link: "Encurtando o link…" enquanto encurta, depois o **link curto
+  em texto grande**, com "Ver link completo" (e "Ver link curto") para
+  alternar e "Copiar" para o que estiver em destaque. Se o encurtador
+  falhar, mostra o link completo e "Tentar de novo". Esc e clique fora
+  fecham.
 - **[`SummarySlide`](../src/components/present/SummarySlide.tsx)** — slide final
   com o botão central **Baixar resultados (PDF)** e a miniatura de cada slide
   (gráficos, nuvem, lista de alternativas com o gabarito ou o próprio slide

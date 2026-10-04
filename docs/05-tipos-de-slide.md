@@ -73,6 +73,7 @@ pizza quando as opções são mutuamente exclusivas.
   allowMultiple: boolean,
   correctOptionIds: string[],   // vazio = pergunta sem gabarito
   revealAnswer: boolean,        // mantém um slide `answer` logo depois
+  showResponses: boolean,       // mostra os votos no projetor durante a pergunta (padrão: false)
 }
 ```
 
@@ -229,7 +230,7 @@ do meio, o painel do slide
 | Redimensionar | 8 alças, que respeitam a rotação. Imagens mantêm a proporção (Shift inverte); textos não |
 | Editar texto | Clique duplo, ou Enter com a caixa selecionada; Esc sai da edição |
 | Formatar | Barra do painel ou Ctrl+B, Ctrl+I, Ctrl+U. Com texto selecionado, vale para a seleção; sem seleção, para a caixa inteira |
-| Duplicar e excluir | Ctrl+D e Delete, ou os botões do painel |
+| Duplicar e excluir | Ctrl+D e Delete (ou Backspace), ou os botões do painel |
 | Ordem | Lista de camadas (uma posição por vez) ou "Trazer para a frente" e "Enviar para trás" no painel do elemento |
 | Imagens | Botão "Adicionar imagem", arrastar arquivos para a prévia ou colar com Ctrl+V |
 | Editor ampliado | Botão "Ampliar": a mesma área de trabalho ocupando a tela inteira |

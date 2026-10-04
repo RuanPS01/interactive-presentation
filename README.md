@@ -42,7 +42,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
 | UI | React 18 + TypeScript |
 | Estilo/Tema | Tailwind CSS v4 (dark mode por classe) |
 | Estado do editor | Zustand |
-| Gráficos | Recharts (barras/pizza) + d3-cloud (nuvem) |
+| Gráficos | Recharts (barras/pizza) + layout próprio em SVG (nuvem) |
 | Ícones | lucide-react |
 | PDF | jsPDF (carregada sob demanda) |
 | PowerPoint | Leitor próprio sobre fflate (zip) e as definições de formas do modern-openxml, carregado sob demanda |

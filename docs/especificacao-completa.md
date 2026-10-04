@@ -1000,9 +1000,12 @@ própria importação recusaria.
 - **Por slide**: seção recolhível **"Opções deste slide"**
   (`SlideSettingsSection`) no painel de configuração. Cada opção booleana é
   um seletor de três estados: **Herdar da apresentação (sim/não)**, **Sim**,
-  **Não**. Cada tamanho de fonte tem uma caixa "personalizar" que libera o
-  controle deslizante. O cronômetro tem a mesma caixa, liberando um campo
-  numérico. Um selo mostra "N personalizada(s)".
+  **Não** (lista suspensa `Select`). Cada tamanho de fonte tem uma caixa de
+  seleção com o nome da opção: marcada, libera o controle deslizante (que
+  começa no valor global); desmarcada, mostra o valor global seguido de
+  "(herdado)". O cronômetro ("Tempo próprio para esta pergunta") tem a
+  mesma caixa, liberando um campo numérico. Um selo mostra
+  "N personalizada(s)".
 - Controles desativados com explicação: "Permitir limpar e trocar" em slides
   que não recebem respostas; "Identificar" sem `askName` global; cronômetro
   fora de `quiz`; "Tamanho do corpo" em slides `text`.

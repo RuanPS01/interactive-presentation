@@ -12,6 +12,8 @@
 | Gráficos | Recharts (barras/pizza) + layout próprio (nuvem) | `src/components/charts/` |
 | Ícones | lucide-react | — |
 | PDF | jsPDF (carregada sob demanda) | [`src/utils/exportPdf.ts`](../src/utils/exportPdf.ts) |
+| PowerPoint | Leitor e gerador próprios sobre fflate (zip) e as definições de formas do modern-openxml, carregados sob demanda | [`src/utils/pptx/`](../src/utils/pptx/index.ts), [`src/utils/pptxExport/`](../src/utils/pptxExport/index.ts) |
+| Fontes embutidas | Conversores próprios (EOT, MicroType Express, WOFF) e `FontFace` | [`src/utils/fonts/`](../src/utils/fonts/faces.ts) |
 | QR Code | react-qr-code | [`src/components/present/ShareRoom.tsx`](../src/components/present/ShareRoom.tsx) |
 | Backend/Tempo real | Firebase Firestore + Auth Anônima | `src/lib/` |
 | Validação (JSON) | Zod | [`src/utils/validation.ts`](../src/utils/validation.ts) |
@@ -45,7 +47,8 @@ limite rígido de conexões no plano gratuito.
 
 - **`types/`** define o domínio e é importado por todas as camadas.
 - **`utils/`** é lógica pura, sem React e sem Firebase: agregação, validação,
-  resolução de configurações, import/export, geração de PDF.
+  resolução de configurações, cronômetro, import/export, geração de PDF,
+  leitura e geração de PowerPoint, fontes, texto rico e imagens.
 - **`store/`** guarda o estado que existe **antes** de haver sala: a
   apresentação sendo montada no editor e a preferência de tema.
 
@@ -103,8 +106,14 @@ manualChunks: {
 }
 ```
 
-A jsPDF fica **fora** do bundle inicial: é importada dinamicamente dentro de
-`exportResultsPdf`, então só baixa quando alguém exporta um relatório.
+O pacote `d3-cloud` continua declarado no `package.json` e nesse chunk, mas
+não é importado em lugar nenhum: a nuvem de palavras usa um layout próprio
+([`WordCloudView`](../src/components/charts/WordCloudView.tsx)).
+
+Ficam **fora** do bundle inicial, importados dinamicamente (`import()`) só
+quando usados: a jsPDF (dentro de `exportResultsPdf`, ao exportar um
+relatório), o leitor de PowerPoint (`src/utils/pptx/`, ao importar um
+`.pptx`) e o gerador de PowerPoint (`src/utils/pptxExport/`, ao exportar).
 
 O `base` do Vite precisa bater com o caminho de publicação, e o site sai em
 dois lugares com caminhos diferentes:
