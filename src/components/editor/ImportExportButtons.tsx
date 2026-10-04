@@ -3,11 +3,12 @@ import { CheckCircle2, FileBraces, FileDown, FileUp, Loader2, Presentation, Tria
 import { useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import { useEditorStoreApi, useEditorStore } from '../../store/editorStore'
-import { exportPresentation, importPresentationFromFile } from '../../utils/importExport'
+import { importPresentationFromFile } from '../../utils/importExport'
 import type { PptxProgress } from '../../utils/pptx'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { ExportDialog } from './ExportDialog'
 
 interface ImportExportButtonsProps {
   /** Mensagem de erro da importação (ou `null` quando ela deu certo). */
@@ -23,8 +24,8 @@ type Status =
   | { kind: 'error'; message: string }
 
 /**
- * "Importar" (abre a escolha do que importar) e "Exportar JSON", sobre o
- * editor em uso.
+ * "Importar" e "Exportar", cada um com a escolha do formato, sobre o editor
+ * em uso.
  *
  * O JSON substitui a apresentação inteira, como sempre. O PowerPoint vira
  * slides livres, que entram no fim da apresentação ou no lugar dela; o
@@ -32,9 +33,9 @@ type Status =
  */
 export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
   const store = useEditorStoreApi()
-  const getPresentation = useEditorStore((s) => s.getPresentation)
   const loadPresentation = useEditorStore((s) => s.loadPresentation)
   const [open, setOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [mode, setMode] = useState<PptxMode>('append')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const jsonRef = useRef<HTMLInputElement>(null)
@@ -121,9 +122,10 @@ export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
       <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
         <FileUp size={16} /> Importar
       </Button>
-      <Button variant="secondary" size="sm" onClick={() => exportPresentation(getPresentation())}>
-        <FileDown size={16} /> Exportar JSON
+      <Button variant="secondary" size="sm" onClick={() => setExportOpen(true)}>
+        <FileDown size={16} /> Exportar
       </Button>
+      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
 
       <input
         ref={jsonRef}
