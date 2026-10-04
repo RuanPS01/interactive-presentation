@@ -16,6 +16,7 @@ o repositório original.
 | Conhecer a arquitetura, as bibliotecas e o build | Seção 4 |
 | Reproduzir os tipos, as coleções e o formato JSON | Seção 5 e Apêndices A e B |
 | Saber como cada opção e cada tipo de slide se comporta, com exemplos de execução | Seções 6 e 7 |
+| Entender como o sincronismo em tempo real permite que a plateia interaja com a apresentação | Seção 8.0 |
 | Implementar o tempo real (sala, respostas, presença, cronômetro, gabarito) | Seção 8 e Apêndice C |
 | Recriar o estado, as telas e os componentes | Seções 9 e 10 |
 | Implementar importação e exportação (JSON, PowerPoint, PDF, prompt de IA, link curto) | Seção 11 |
@@ -45,6 +46,7 @@ Convenções:
 6. [Configurações globais e por slide](#6-configurações-globais-e-por-slide)
 7. [Tipos de slide, com exemplos de execução](#7-tipos-de-slide-com-exemplos-de-execução)
 8. [Tempo real e comunicação](#8-tempo-real-e-comunicação)
+   - [8.0 Como o sincronismo em tempo real funciona](#80-como-o-sincronismo-em-tempo-real-funciona)
 9. [Estado, páginas, componentes e hooks](#9-estado-páginas-componentes-e-hooks)
 10. [Slide livre em profundidade](#10-slide-livre-em-profundidade)
 11. [Importação, exportação e integrações](#11-importação-exportação-e-integrações)
@@ -77,7 +79,11 @@ Duas características definem o projeto:
 - **Sem servidor próprio.** O frontend é 100% estático (publicado no GitHub
   Pages e no Firebase Hosting). Tempo real e persistência vêm do **Firebase**
   (Cloud Firestore + Autenticação Anônima). Não existe API da aplicação: todos
-  os navegadores conversam através de documentos do Firestore.
+  os navegadores conversam através de documentos do Firestore. O
+  apresentador grava o estado da sala, cada aluno grava as próprias
+  respostas, e todos ficam ouvindo (`onSnapshot`) os documentos de que
+  precisam; o Firestore empurra cada mudança em milissegundos. O
+  funcionamento completo está na seção 8.0.
 - **Sem cadastro.** Ninguém cria conta. Cada dispositivo recebe um `uid`
   anônimo do Firebase; o controle da apresentação é provado por um **token
   secreto na URL** do apresentador.
@@ -1535,6 +1541,357 @@ Quando o apresentador avança além do último slide, `currentSlideIndex` vira
 Não existe servidor da aplicação. Todos os navegadores conversam **através do
 Firestore**: quem escreve grava um documento; quem lê mantém uma assinatura
 (`onSnapshot`) e recebe a atualização em milissegundos.
+
+A seção 8.0 explica o sincronismo de ponta a ponta (quem escreve, quem ouve,
+os fluxos de cada interação, as garantias de consistência, a reconexão, o
+custo e como reproduzir com outra tecnologia). As seções 8.1 a 8.14
+detalham a implementação de cada parte.
+
+### 8.0 Como o sincronismo em tempo real funciona
+
+Esta é a peça central do projeto: é o que permite que a plateia (alunos,
+participantes) interaja com a apresentação ao mesmo tempo que ela acontece. O
+apresentador troca de slide e todos os celulares acompanham; um aluno toca numa
+alternativa e o gráfico do projetor muda; o tempo acaba e as respostas travam
+para todos juntos. Tudo isso **sem servidor próprio**, só com o Cloud
+Firestore e o SDK dele rodando em cada navegador.
+
+#### 8.0.1 A ideia em uma frase
+
+**O estado da apresentação mora em documentos do Firestore; cada navegador
+escreve só a sua parte e "assina" (fica ouvindo) os documentos de que
+precisa; o Firestore empurra cada mudança para todos os ouvintes em
+milissegundos.** Não existe mensagem direta entre apresentador e aluno, nem
+um processo central coordenando a sala: o próprio documento compartilhado é o
+canal de comunicação.
+
+É o padrão **publicar e assinar sobre estado compartilhado**:
+
+- **Publicar** é gravar um documento (`setDoc`, `updateDoc`, `deleteDoc`,
+  `writeBatch`).
+- **Assinar** é abrir um ouvinte com `onSnapshot` num documento ou numa
+  consulta. O ouvinte recebe primeiro o estado atual completo e, depois,
+  uma nova versão a cada mudança, até ser cancelado.
+- A interface **nunca guarda uma cópia própria do estado compartilhado**: o
+  React só desenha o último snapshot recebido. Por isso duas telas que ouvem o
+  mesmo documento mostram sempre a mesma coisa.
+
+#### 8.0.2 As peças envolvidas
+
+| Peça | Papel no sincronismo |
+| --- | --- |
+| Cloud Firestore (nuvem) | Guarda o estado (sala, respostas, presença) e envia cada mudança para quem tem ouvinte aberto naquele documento ou consulta |
+| SDK do Firestore no navegador (`firebase/firestore`) | Mantém uma conexão persistente de streaming com o Firestore (em redes que bloqueiam streaming, o SDK pode recorrer a long polling), um cache em memória, a compensação de latência (seção 8.0.6) e a reconexão automática |
+| Autenticação Anônima (`firebase/auth`) | Dá a cada aparelho um `uid` estável, sem cadastro. É a identidade usada pelas regras para saber quem pode escrever o quê |
+| Regras do Firestore (`firestore.rules`) | Validam cada escrita no servidor: só o dono muda a sala; cada aluno só grava a própria resposta e a própria presença |
+| Hooks React (`hooks/`) | Abrem um ouvinte quando a tela precisa de um dado e fecham quando não precisa mais (cleanup do `useEffect`) |
+| Documento da sala `rooms/{code}` | O canal de controle: slide atual, cronômetros, gabaritos revelados, opções e revisão. Só o apresentador escreve; todos ouvem |
+
+O padrão de todos os hooks de assinatura é o mesmo:
+
+```ts
+// lib/rooms.ts
+export function subscribeRoom(code: string, onData: (room: Room | null) => void, onError?: (e: Error) => void) {
+  return onSnapshot(
+    doc(db, 'rooms', code),
+    (snap) => onData(snap.exists() ? (snap.data() as Room) : null),   // estado atual e cada mudança
+    (error) => onError?.(error),
+  )   // devolve a função que cancela o ouvinte
+}
+
+// hooks/useRoom.ts
+export function useRoom(code: string | undefined) {
+  const [room, setRoom] = useState<Room | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!code) { setLoading(false); return }
+    setLoading(true); setError(null)
+    const unsubscribe = subscribeRoom(
+      code,
+      (r) => { setRoom(r); setLoading(false) },
+      (e) => { setError(e.message); setLoading(false) },
+    )
+    return unsubscribe            // trocar de sala ou sair da tela fecha o ouvinte
+  }, [code])
+  return { room, loading, error }
+}
+```
+
+#### 8.0.3 Quem escreve e quem ouve cada dado
+
+| Dado | Caminho | Quem escreve | Quando escreve | Quem ouve | Como ouve |
+| --- | --- | --- | --- | --- | --- |
+| Slide atual, cronômetros, gabaritos revelados, título, slides, opções, revisão | `rooms/{code}` | Só o apresentador (dono) | Trocar de slide; abrir um slide com tempo; o tempo zerar; terminar o suspense do gabarito; salvar uma edição | Projetor, todos os celulares e a tela de edição | `useRoom` (ouvinte do documento) |
+| Resposta de um aluno num slide | `rooms/{code}/responses/{slideId}__{uid}` | Só o próprio aluno | Tocar numa opção; enviar ou remover um texto; limpar a resposta | O projetor (todas as respostas do slide no ar) e o próprio aluno (só o documento dele) | `useResponses` (consulta `where('slideId', '==', id)`) e `useMyResponse` (ouvinte do documento) |
+| Presença | `rooms/{code}/participants/{uid}` | Só o próprio aluno | Ao abrir a sala e quando o nome muda | Projetor e tela de edição | `useParticipants` (ouvinte da coleção) |
+| Token do apresentador | `rooms/{code}/private/presenter` | Criação e reivindicação | Criar a sala; abrir a URL com o token em outro navegador | Ninguém (leitura proibida) | |
+| Imagens dos slides livres | `rooms/{code}/assets/{id}` | Apresentador | Criar ou salvar a sala | Ninguém ouve: leitura única sob demanda, porque o id muda junto com o conteúdo | `useRoomAssets` (`getDoc` com cache) |
+| Fontes embutidas | `rooms/{code}/fonts/...` | Apresentador | Criar ou salvar a sala | Ninguém ouve: uma consulta por `revision` | `useRoomFonts` (`getDocs` com cache) |
+
+Três consequências dessa divisão:
+
+1. **Não há conflito de escrita entre alunos**: cada um grava só documentos
+   com o próprio `uid` no id. Mil alunos votando ao mesmo tempo gravam mil
+   documentos diferentes.
+2. **A sala tem um único escritor** (o apresentador), então o documento de
+   controle nunca recebe escritas concorrentes da plateia.
+3. **Cada tela ouve só o que mostra**: o aluno não baixa as respostas dos
+   colegas; o projetor só ouve as respostas do slide que está no ar.
+
+Quem abre ouvinte em cada tela:
+
+| Tela | Ouvintes abertos |
+| --- | --- |
+| Projetor (`PresentPage`) | Sala; respostas do slide no ar (no gabarito, as da pergunta de origem); participantes |
+| Celular do aluno (`RoomPage` + `ParticipateView`) | Sala; a própria resposta no slide no ar (no gabarito, a resposta dada na pergunta) |
+| Edição da sala (`EditRoomPage`) | Sala (só para o acesso e a primeira carga); participantes (para a mensagem de confirmação) |
+
+#### 8.0.4 Fluxo A: o apresentador troca de slide e todos acompanham
+
+1. O apresentador aperta a seta para a direita (ou o passador de slides, ou o
+   botão "Próximo slide").
+2. `goTo(índice + 1)` lê a sala pela referência mais recente, limita o índice
+   (o valor `slides.length` é o slide final) e calcula os cronômetros com
+   `advanceTimers` (pausa o slide que sai, inicia ou retoma o que entra).
+3. **Uma única escrita**: `updateDoc(rooms/{code}, { currentSlideIndex,
+   timers, updatedAt })`.
+4. A tela do apresentador muda **na hora**, porque o SDK entrega ao ouvinte
+   local a versão com a escrita pendente (compensação de latência).
+5. O Firestore valida a escrita pelas regras (o `uid` precisa ser o dono) e a
+   confirma.
+6. O Firestore envia a nova versão do documento a **todos os ouvintes** da
+   sala. Em condições normais, isso leva de dezenas a poucas centenas de
+   milissegundos.
+7. Em cada celular, o `useRoom` recebe o snapshot e a `RoomPage` recalcula
+   `currentSlide = room.slides[room.currentSlideIndex]`.
+8. Como a `ParticipateView` usa `key={currentSlide.id}`, os controles do slide
+   anterior são desmontados e os do novo slide nascem limpos (campo de texto
+   vazio, nenhuma marcação local).
+9. `useMyResponse` fecha o ouvinte do slide anterior e abre o do novo slide:
+   se o aluno já tinha respondido esse slide antes (o apresentador voltou), a
+   resposta reaparece marcada.
+10. `useSlideTimer` passa a olhar `timers[novoSlide]`; `useRevealCountdown`
+    começa o suspense se o novo slide for um gabarito ainda não revelado;
+    `useRoomAssets` busca as imagens do slide no ar e do seguinte.
+11. No projetor, `useResponses` fecha o ouvinte do slide anterior e abre o do
+    novo; o primeiro snapshot já traz **todas as respostas existentes** desse
+    slide, então voltar a um slide mostra o resultado acumulado.
+
+Por que índice e cronômetros vão juntos: escrevendo separado, haveria um
+instante em que os celulares veriam o slide novo com o cronômetro do anterior
+(ou o contrário). Com uma escrita só, todos recebem o par já coerente.
+
+#### 8.0.5 Fluxo B: o aluno responde e o projetor atualiza
+
+1. A aluna toca na alternativa "B".
+2. `ChoiceInput` monta o novo valor (`['b']` na escolha única, ou a lista
+   alternada na múltipla) e chama `saveResponse`, que faz `setDoc` em
+   `responses/{slideId}__{uid}` com `{ slideId, participantUid, type: 'choice',
+   value, createdAt, participantName? }`. Enquanto a promessa não volta, os
+   botões ficam ocupados (`busy`) para evitar toques duplos.
+3. O ouvinte `useMyResponse` do próprio celular recebe a versão local na hora:
+   o botão aparece marcado e surge "Voto registrado".
+4. O Firestore valida (o `participantUid` precisa ser o `uid` de quem grava) e
+   confirma; a promessa do `setDoc` resolve e os botões voltam a ficar livres.
+5. O ouvinte `useResponses` do projetor (consulta das respostas do slide)
+   recebe a mudança.
+6. O projetor recalcula com funções puras: `aggregateChoices` (barras, pizza,
+   alternativas), `aggregateWords` (nuvem), `answeredCount` e
+   `responseSummary` (rodapé) e `namedResponses` (lista "Nome: resposta").
+7. O gráfico, a nuvem ou o quadro se redesenha. Na nuvem, o layout inteiro é
+   refeito com transição.
+8. Se a aluna estiver com a sala aberta em outra aba ou aparelho com o mesmo
+   `uid`, aquela tela também marca a opção (o mesmo documento é ouvido lá).
+
+Não existe botão "enviar" nos slides de escolha: **o toque é o envio**.
+Trocar de opção regrava o mesmo documento; "Limpar resposta" o apaga
+(`deleteDoc`), e o projetor recebe a remoção da mesma forma. Na nuvem de
+palavras, cada envio regrava o documento com a lista inteira de textos da
+pessoa.
+
+#### 8.0.6 Compensação de latência: por que a resposta aparece na hora
+
+O código **não** mantém estado otimista próprio (não existe um `useState`
+"votei em B" esperando o servidor). Mesmo assim, a marcação aparece
+instantaneamente porque o SDK do Firestore aplica a escrita no cache local e
+dispara os ouvintes daquele navegador antes da confirmação do servidor.
+
+| Momento | Celular da aluna | Projetor |
+| --- | --- | --- |
+| Toque | Ouvinte local recebe a versão pendente: botão marcado | Nada ainda |
+| Confirmação do servidor | Nada muda na tela; a promessa do `setDoc` resolve | Ouvinte recebe a resposta e o gráfico atualiza |
+| Escrita recusada pelas regras (caso raro) | O SDK desfaz a versão local e o ouvinte recebe o estado anterior: o botão desmarca | Nada muda |
+
+Por isso a regra do projeto é: **o que a tela mostra vem sempre de um
+snapshot**. Isso mantém abas e aparelhos do mesmo aluno em sincronia e evita
+divergência entre o que o aluno vê e o que o projetor contou.
+
+#### 8.0.7 Fluxo C: entrada do aluno e contagem de presença
+
+1. O aluno abre `/room/<código>` (QR, link curto, link completo ou digitando
+   o código em `/join`).
+2. `useParticipant` garante a sessão anônima e devolve o `uid`.
+3. `useRoom` abre o ouvinte da sala; o primeiro snapshot já traz o slide no
+   ar, as opções, os cronômetros e os gabaritos revelados. **Quem chega
+   atrasado não precisa de nenhum "replay"**: o estado atual completo está no
+   documento.
+4. Se a sala pede o nome e ele ainda não foi informado, o `NamePrompt`
+   aparece antes de qualquer slide.
+5. `joinRoom` grava `participants/{uid}` (com `merge: true`). O ouvinte
+   `useParticipants` do projetor recebe o documento novo e o contador de
+   pessoas e o rodapé ("N participante(s)") sobem, mesmo sem nenhuma resposta.
+6. O efeito de presença depende de `Boolean(room)` e não do objeto `room`;
+   assim as trocas de slide (que geram snapshots novos da sala) não reescrevem
+   a presença.
+
+#### 8.0.8 Fluxo D: tempo, encerramento e revelação sincronizados
+
+O tempo é sincronizado **sem nenhuma escrita por segundo**:
+
+1. Ao entrar numa pergunta com cronômetro, o apresentador grava o **instante
+   final** (`timers[slideId].endsAt`), na mesma escrita da troca de slide.
+2. Cada aparelho calcula o tempo restante localmente (`endsAt - Date.now()`),
+   amostrando a cada 250 ms. Só o projetor desenha a contagem (com
+   `requestAnimationFrame`); o celular não mostra contagem, porque o relógio de
+   cada aparelho pode estar alguns segundos adiantado ou atrasado.
+3. Quando a contagem **do projetor** chega a zero, ele grava o encerramento
+   (`{ endsAt: null, remainingMs: 0 }`) e, se o slide seguinte for o
+   gabarito dessa pergunta, avança na mesma escrita.
+4. Os celulares recebem esse snapshot e só então travam os botões
+   (`closed`). **Quem trava a plateia é o estado da sala, nunca o relógio do
+   celular.**
+5. No gabarito, cada aparelho conta 3 segundos **localmente** a partir do
+   momento em que recebeu a troca de slide ("A resposta certa é." "..."
+   "..."). Como cada celular recebe a troca com alguns milissegundos de
+   diferença, esse atraso faz todo mundo ver a resposta praticamente junto.
+6. Terminado o suspense, o projetor grava `revealedSlideIds:
+   arrayUnion(id)`. Quem chega depois, ou volta ao gabarito, recebe esse campo
+   no snapshot e vê a resposta na hora.
+
+#### 8.0.9 Fluxo E: edição salva e reinício para todos
+
+1. O apresentador salva uma edição da sala (`saveAndRestartRoom`).
+2. Uma única escrita grava os slides e as opções novas, `currentSlideIndex: 0`,
+   `timers: {}`, `revealedSlideIds: []` e `revision: increment(1)`.
+3. Todos os celulares recebem o snapshot: como seguem `currentSlideIndex`,
+   voltam ao primeiro slide sem nenhuma mensagem direta.
+4. Cada celular compara `revision` com o valor que viu ao abrir; se aumentou,
+   mostra por 10 segundos "O apresentador atualizou a apresentação e todos
+   voltaram para o início.".
+5. `useRoomFonts` refaz a leitura das fontes, porque a chave do cache inclui a
+   `revision`.
+
+#### 8.0.10 Sequência completa de uma interação
+
+| Passo | Quem | Ação | Efeito nos outros |
+| --- | --- | --- | --- |
+| 1 | Apresentador | Cria a sala (`writeBatch` com sala e token) | Nenhum (ninguém conectado ainda) |
+| 2 | Aluno | Abre a sala: ouvinte da sala + `joinRoom` | Projetor: contador de participantes sobe |
+| 3 | Apresentador | Avança para a nuvem de palavras (`updateDoc` da sala) | Celulares: trocam para o campo de texto |
+| 4 | Aluno | Envia "Feliz" (`setDoc` da resposta) | Projetor: "Feliz" aparece na nuvem; rodapé atualiza |
+| 5 | Apresentador | Avança para a pergunta com 20 s (índice + `endsAt` numa escrita) | Celulares: mostram as alternativas |
+| 6 | Aluno | Toca em "B" (`setDoc` da resposta) | Projetor: "N responderam" sobe (sem revelar a distribuição) |
+| 7 | Projetor | Contagem zera: grava o encerramento e avança para o gabarito numa escrita | Celulares: mudam para o gabarito; suspense local de 3 s |
+| 8 | Projetor | Fim do suspense: `arrayUnion` em `revealedSlideIds` | Quem chegar depois vê a resposta na hora |
+| 9 | Apresentador | Passa do último slide (`currentSlideIndex = slides.length`) | Celulares: "Obrigado por participar!" |
+
+#### 8.0.11 Garantias e decisões de consistência
+
+- **Fonte única da verdade**: o Firestore. O React só deriva a tela do último
+  snapshot; não há estado compartilhado duplicado em memória.
+- **Estados que precisam chegar juntos vão na mesma escrita** (índice e
+  cronômetros; encerramento e avanço para o gabarito; o reinício completo da
+  edição).
+- **Ids determinísticos** (`{slideId}__{uid}`, `participants/{uid}`): reenviar
+  é idempotente, nunca duplica, e apagar não precisa de consulta.
+- **Escrita idempotente** para marcas de evento (`arrayUnion` em
+  `revealedSlideIds`, `increment` em `revision`).
+- **Última escrita vence** em cada documento. Como cada aluno só escreve os
+  próprios documentos e a sala tem um único escritor, isso não gera
+  conflitos. Exceção possível: o mesmo apresentador com duas abas do projetor
+  abertas; as duas escrevem na sala e vale a última.
+- **Ordem**: as versões de um mesmo documento chegam em ordem, mas não há
+  ordem global entre documentos diferentes. O projeto não depende dela: o
+  gabarito lê as respostas da pergunta de origem, e o bloqueio por tempo vem
+  do mesmo documento que traz o slide.
+- **Assinaturas com ciclo de vida**: todo ouvinte é cancelado no cleanup do
+  `useEffect`; trocar de slide troca as assinaturas de respostas.
+- **Efeitos com dependências estáveis**: escritas disparadas por efeitos
+  (presença, início do cronômetro, encerramento, revelação) dependem de
+  valores derivados (ids, booleanos), nunca do objeto da sala, para não
+  reescrever a cada snapshot.
+- **O bloqueio por tempo é da interface**, não das regras: uma resposta já em
+  trânsito no momento do encerramento ainda pode ser gravada.
+
+#### 8.0.12 Conexão instável, recarregar e trocar de aparelho
+
+| Situação | O que acontece |
+| --- | --- |
+| A rede cai por alguns segundos | O SDK reconecta sozinho; os ouvintes recebem o estado atual ao voltar (inclusive se o slide mudou nesse meio tempo) |
+| O aluno responde sem rede | A marcação aparece pela compensação local; a escrita fica na fila em memória e é enviada quando a conexão volta, desde que a página continue aberta (o projeto não liga a persistência em disco do Firestore). Os botões ficam ocupados até a confirmação |
+| O aluno recarrega a página | O `uid` anônimo continua o mesmo (o Auth guarda a sessão no navegador), o nome vem do `localStorage` e a resposta reaparece, porque o documento é ligado ao `uid` |
+| O aluno troca de aparelho ou de navegador | Recebe um `uid` novo: conta como outro participante e começa sem respostas; as anteriores ficam com o `uid` antigo |
+| O apresentador recarrega | O token na URL reivindica o controle; slide, cronômetros e revelações estão no documento, então a apresentação continua do mesmo ponto. Se o tempo acabou enquanto a página estava fechada, ao abrir ele encerra a pergunta e avança para o gabarito |
+| O apresentador fecha o projetor no meio de uma pergunta | Nada encerra a pergunta (só o projetor encerra); os alunos continuam podendo responder até o projetor ser reaberto |
+
+#### 8.0.13 Desempenho e custo do sincronismo
+
+Cada mudança entregue a um ouvinte conta como leitura no Firestore, e um
+ouvinte de documento recebe **o documento inteiro** a cada mudança. Daí as
+principais decisões de desenho:
+
+| Decisão | Motivo ligado ao sincronismo |
+| --- | --- |
+| Sala pequena (abaixo de 1 MiB), sem imagens e sem fontes | Toda troca de slide envia o documento da sala inteiro para cada aluno conectado |
+| Imagens e fontes em subcoleções, lidas uma vez | Não são reenviadas a cada troca de slide |
+| Uma resposta por documento, e não contadores na sala | Cada aluno escreve num documento diferente, sem disputa; um único documento recebendo centenas de escritas por segundo seria um gargalo (o Firestore recomenda cerca de uma escrita por segundo, sustentada, por documento) |
+| Cronômetro por instante final | Uma escrita por troca de slide, e não uma por segundo para cada ouvinte |
+| Sem heartbeat de presença | Evita escritas e leituras periódicas proporcionais ao tamanho da plateia |
+| O aluno ouve só a própria resposta | Não recebe as respostas dos colegas |
+| O projetor ouve só as respostas do slide no ar | Consulta filtrada por `slideId` |
+
+Estimativa para uma aula com 100 alunos, 10 slides (6 interativos), uma
+resposta por aluno em cada slide interativo:
+
+| Item | Conta aproximada | Total |
+| --- | --- | --- |
+| Escritas de presença | 100 | 100 |
+| Escritas de respostas | 100 x 6 | cerca de 600 |
+| Escritas na sala (trocas de slide, cronômetros, revelações) | cerca de 15 | cerca de 15 |
+| Leituras de cada mudança da sala | 15 x 101 ouvintes | cerca de 1.500 |
+| Leituras das respostas (projetor + o próprio aluno) | 600 x 2 | cerca de 1.200 |
+| Leituras de presença no projetor | 100 | 100 |
+| PDF ao final (`getAllResponses`) | 600 | 600 |
+
+São milhares de operações por aula, o que costuma caber nas cotas diárias do
+plano gratuito do Firebase (confira os valores atuais na página de preços do
+Firebase). Slides com várias interações por aluno (nuvem com muitos textos,
+múltipla escolha alternando opções) aumentam as escritas proporcionalmente.
+
+#### 8.0.14 Como reproduzir o sincronismo com outra tecnologia
+
+Se o sistema maior não usar Firebase, o mesmo comportamento pode ser obtido com
+WebSocket próprio, Socket.IO, Supabase Realtime ou similares, desde que o
+servidor ofereça estas garantias:
+
+| Garantia do Firestore usada aqui | Equivalente a implementar |
+| --- | --- |
+| Ao assinar, recebe o estado atual completo | Ao entrar na sala (e a cada reconexão), o servidor envia o estado inteiro da sala e a resposta do próprio aluno |
+| Cada mudança é empurrada aos ouvintes | Uma "sala" de broadcast por código; o servidor transmite o estado da sala a cada alteração |
+| Ouvinte de consulta (respostas de um slide) | Canal só do apresentador recebendo inclusão, alteração e exclusão de respostas do slide no ar |
+| Escrita atômica de vários campos | Uma única mensagem que atualiza índice e cronômetros juntos |
+| Upsert por chave `slideId + uid` | Tabela de respostas com chave única (`slide_id`, `participant_uid`) e "insert or update" |
+| Regras por usuário | Validação no servidor: só o dono muda a sala; cada aluno só grava o que é dele |
+| Compensação de latência | Opcional: atualizar a interface do aluno ao enviar e corrigir se o servidor recusar |
+| Reconexão automática | Reconectar e pedir o estado completo de novo |
+
+Mensagens sugeridas para um protocolo próprio: `room:state` (servidor para
+todos), `room:goto` e `room:timers` (apresentador), `response:upsert` e
+`response:delete` (aluno), `response:changed` (servidor para o apresentador),
+`presence:join` (aluno) e `presence:list` (servidor para o apresentador). A
+lista de funções da camada `lib/` que precisam ser reimplementadas está na
+seção 15.4.
 
 ### 8.1 Inicialização do Firebase (`lib/firebase.ts`)
 
@@ -3815,6 +4172,12 @@ Checklist de comportamento (para testes de aceitação):
 - [ ] Nuvem recusa repetição da mesma pessoa sem diferenciar maiúsculas.
 - [ ] Troca desligada: escolha única trava no primeiro toque; múltipla bloqueia
       só desmarcar; nuvem sem remover.
+- [ ] Trocar de slide no projetor muda todos os celulares sem recarregar; quem
+      entra atrasado já abre no slide atual.
+- [ ] Um voto aparece marcado no celular na hora e chega ao projetor sem
+      recarregar; a mesma conta aberta em duas abas fica sincronizada.
+- [ ] Depois de uma queda de rede, celulares e projetor voltam ao estado
+      atual sozinhos.
 - [ ] Cronômetro só no projetor; pausa, retoma, fica zerado; quem trava é o
       estado da sala.
 - [ ] Ao zerar com gabarito em seguida, avança na mesma escrita que encerra.
