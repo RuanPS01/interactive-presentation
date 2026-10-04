@@ -6,7 +6,7 @@ Três lugares, com responsabilidades separadas:
 
 | Onde | O quê | Vive até |
 | --- | --- | --- |
-| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, imagens, seleção do slide e do elemento | Recarregar a página (o da edição de sala, até sair da tela) |
+| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, imagens, fontes embutidas, seleção do slide e do elemento | Recarregar a página (o da edição de sala, até sair da tela) |
 | [`themeStore`](../src/store/themeStore.ts) (Zustand + localStorage) | Tema claro/escuro do usuário | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença | Até ser apagada |
 
@@ -37,6 +37,7 @@ editor que criou.
 {
   title, slides, settings, selectedIndex,
   assets,                                   // imagens dos slides livres, pelo id
+  fonts,                                    // fontes embutidas, pelo id
   selectedElementId, editingElementId,      // slide livre: selecionado e em edição
   textSelection,                            // trecho selecionado no texto em edição
   setTitle, updateSettings, setOverride,
@@ -55,10 +56,13 @@ Detalhes do slide livre no estado:
 - **Trocar de slide** limpa a seleção de elemento e de texto.
 - **`updateSettings`** com um `slideAspect` novo reenquadra os slides livres
   que estavam na moldura antiga (ver [06](06-configuracoes.md#formato-dos-slides)).
-- **`getPresentation`** devolve só as imagens ainda usadas por algum slide
-  (`pickAssets`); sem nenhuma, o campo `assets` nem aparece.
+- **`getPresentation`** devolve só as imagens e as fontes ainda usadas por
+  algum slide (`pickAssets` e `pickFonts`); sem nenhuma, os campos `assets` e
+  `fonts` nem aparecem.
 - **`appendSlides`** é o "Adicionar ao fim" da importação de PowerPoint: junta
-  slides e imagens e seleciona o primeiro slide novo.
+  slides, imagens e fontes e seleciona o primeiro slide novo.
+- As **fontes** do editor são registradas no navegador pelo `EditorWorkspace`
+  sempre que mudam (`registerFonts`), então o texto da prévia já sai com elas.
 
 `useEditorStoreApi()` devolve o próprio editor do contexto, para ações que
 leem o estado na hora (a importação, os atalhos do slide livre) sem assinar
@@ -202,13 +206,20 @@ Formulários por tipo (`WordCloudConfig`, `ChoiceConfig`, `QuizConfig`,
 menu de adição (`AddSlideMenu`), os dois painéis de opções
 (`PresentationSettingsButton` e `SlideSettingsSection`, ambos usando os
 controles de `SettingsControls`), o modal do prompt de IA (`AiPromptButton`), o
-editor em 3 colunas (`EditorWorkspace`) e os botões "Importar" e "Exportar
-JSON" (`ImportExportButtons`).
+editor em 3 colunas (`EditorWorkspace`) e os botões "Importar" e "Exportar"
+(`ImportExportButtons`), que abrem os modais de importar e de exportar
+(`ExportDialog`).
 
 `FreeSlideConfig` é o painel do slide livre: nome, cor de fundo, botões de
 adicionar texto e imagem, lista de camadas e, para o elemento selecionado,
 posição e tamanho, rotação, opacidade, ordem, duplicar e excluir, mais o painel
-de texto ou de imagem (ver [05](05-tipos-de-slide.md#edição)).
+de texto ou de imagem (ver [05](05-tipos-de-slide.md#edição)). A lista de
+fontes do painel de texto começa pelas fontes embutidas da apresentação.
+
+`ExportDialog` oferece "Apresentação (.json)", que baixa na hora, e
+"PowerPoint (.pptx)", que carrega o gerador só nessa hora (`import()`
+dinâmico), mostra "Gerando…" e, no fim, os avisos (perguntas viraram slides
+estáticos, fonte que não pôde ser embutida).
 
 `ImportExportButtons` abre o modal "Importar" com duas opções: "Apresentação
 (.json)", que substitui tudo, e "PowerPoint (.pptx)", com a escolha entre
@@ -300,6 +311,7 @@ barra do `ScrollArea`, animação da lista do `Select`) ficam no
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
 | `useFullscreen` | Fullscreen API, acompanhando a saída por Esc |
 | `useRoomAssets` | Imagens de uma sala para os ids pedidos, lidas uma vez e guardadas ([07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres)) |
+| `useRoomFonts` | Fontes embutidas da sala registradas neste navegador, relidas a cada edição ([07](07-tempo-real-e-comunicacao.md#fontes-embutidas)) |
 | `useFreeSlideActions` | Ações do slide livre: adicionar texto e imagens (comprimidas antes), trocar imagem, duplicar, excluir, reordenar |
 
 ## Estilo e tema

@@ -26,6 +26,7 @@ própria aplicação.
 | [`useMyResponse`](../src/hooks/useMyResponse.ts) | `responses/{slideId}__{uid}` | Participante |
 | [`useParticipants`](../src/hooks/useParticipants.ts) | `participants` | Apresentador |
 | [`useRoomAssets`](../src/hooks/useRoomAssets.ts) | `assets/{id}` (leitura única, não é assinatura) | Apresentador e participante |
+| [`useRoomFonts`](../src/hooks/useRoomFonts.ts) | `fonts` (uma consulta por versão da sala) | Apresentador e participante |
 
 Todos devolvem a função de cancelamento do `onSnapshot` no cleanup do
 `useEffect`, então trocar de slide ou sair da página encerra a escuta.
@@ -190,10 +191,10 @@ durante a edição, porque quem encerra é a tela de apresentação: descartando
 encerramento acontece assim que essa tela volta a abrir; salvando, os
 cronômetros recomeçam com o tempo cheio.
 
-Ao abrir, a tela de edição também busca as imagens dos slides livres da sala
-e guarda a lista de ids que a sala já tem. Ao salvar, depois da confirmação,
-as imagens novas são enviadas primeiro (para nenhum aparelho ver um slide sem a
-imagem) e então uma única escrita no documento da sala grava:
+Ao abrir, a tela de edição também busca as imagens e as fontes dos slides
+livres da sala e guarda o que a sala já tem. Ao salvar, depois da confirmação,
+as imagens e fontes novas são enviadas primeiro (para nenhum aparelho ver um
+slide sem elas) e então uma única escrita no documento da sala grava:
 
 | Campo | Valor |
 | --- | --- |
@@ -204,8 +205,9 @@ imagem) e então uma única escrita no documento da sala grava:
 | `status` | `live` |
 | `revision` | `increment(1)` |
 
-Por fim, as imagens que nenhum slide usa mais são apagadas da subcoleção; se
-essa limpeza falhar, só sobra uma imagem sem uso, nada quebra.
+Por fim, as imagens e fontes que nenhum slide usa mais são apagadas das
+subcoleções (todas as partes de cada fonte); se essa limpeza falhar, só sobra
+um arquivo sem uso, nada quebra.
 
 Não existe mensagem direta para "redirecionar" ninguém: cada navegador segue
 `currentSlideIndex`, então zerar o índice leva todos ao início ao mesmo tempo,
@@ -271,6 +273,37 @@ slides livres cheios de texto. `createRoom` e `saveAndRestartRoom` medem o JSON
 antes de gravar e, se passar de 1 MB, recusam com uma mensagem que pede para
 dividir a apresentação.
 
+## Fontes embutidas
+
+[`src/lib/fonts.ts`](../src/lib/fonts.ts) ·
+[`useRoomFonts`](../src/hooks/useRoomFonts.ts) ·
+[`src/utils/fonts/faces.ts`](../src/utils/fonts/faces.ts)
+
+As fontes que vieram de um PowerPoint ficam em `rooms/{code}/fonts`, pelo
+mesmo motivo das imagens. Uma fonte pode ter alguns megabytes, então cada uma
+é dividida em partes de até 700 mil caracteres (`{fontId}`, `{fontId}~1`...).
+
+**Escrita.** `createRoom` envia as fontes junto com as imagens, depois da sala.
+Na edição, só as fontes que a sala ainda não tem são enviadas, e as que
+deixaram de ser usadas são apagadas, com todas as partes.
+
+**Leitura.** Diferente das imagens, as fontes não são pedidas por id: cada
+aparelho faz uma consulta à subcoleção inteira, junta as partes de cada fonte
+e registra todas no navegador com `FontFace`, usando o nome da família que os
+textos citam. A partir daí o texto já na tela troca de fonte sozinho, sem
+precisar desenhar nada de novo. A consulta só acontece quando a sala tem
+slides livres, fica guardada em memória e é refeita a cada edição da sala
+(`revision`), porque uma edição pode trocar as fontes.
+
+| Tela | Quando lê |
+| --- | --- |
+| Projetor e celular | Ao abrir a sala e a cada edição |
+| Edição da sala | Antes de abrir o editor (e a lista de fontes mostra as embutidas) |
+| PDF (projetor e tela inicial) | Antes de gerar, porque os slides livres são desenhados em canvas |
+
+Se uma fonte não carregar, o texto usa a próxima fonte da lista (uma parecida
+do sistema): não é um erro de tela.
+
 ## Regras de segurança
 
 [`firestore.rules`](../firestore.rules) — a pipeline as publica sozinha sempre
@@ -285,6 +318,7 @@ que o arquivo muda (job `regras-firestore`, ver
 | `rooms/{code}/participants/{uid}` | pública | só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`) |
 | `rooms/{code}/responses/{id}` | pública | criar/atualizar: `participantUid == uid`; excluir: só o autor |
 | `rooms/{code}/assets/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
+| `rooms/{code}/fonts/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
 
 Consequências práticas:
 
@@ -303,8 +337,10 @@ Consequências práticas:
   slide atual + 1 dos participantes.
 - O relatório em PDF faz uma leitura única de **todas** as respostas da sala
   (`getAllResponses`).
+- Fontes: uma consulta por aparelho e por versão da sala, só em salas com
+  slides livres; cada parte conta como uma leitura.
 - Imagens: uma leitura por imagem por aparelho, só quando o slide que a usa
   está no ar ou é o próximo. Uma imagem de 900 mil caracteres conta como cerca
   de 900 KB no armazenamento do Firestore (1 GiB no plano gratuito).
-- Não há expiração automática: salas, respostas e imagens antigas ficam no
-  Firestore até serem apagadas manualmente.
+- Não há expiração automática: salas, respostas, imagens e fontes antigas
+  ficam no Firestore até serem apagadas manualmente.

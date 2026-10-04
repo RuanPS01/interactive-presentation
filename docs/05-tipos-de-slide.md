@@ -238,8 +238,11 @@ O painel de texto tem fonte, tamanho, negrito, itálico, sublinhado, tachado,
 alinhamento, cor, realce, marcadores (caractere ou numeração), posição
 vertical, altura da linha, margem interna e fundo da caixa, mais "Uniformizar
 formatação", que limpa as exceções de cada trecho. Quando a seleção mistura
-valores diferentes, o controle fica vazio ("Misto", "Várias fontes"). O painel de imagem tem o
-encaixe (esticar, conter ou cobrir), os cantos arredondados, "Trocar imagem"
+valores diferentes, o controle fica vazio ("Misto", "Várias fontes"). A lista
+de fontes mostra primeiro as embutidas na apresentação, marcadas como
+"(embutida)": são as únicas que aparecem iguais em qualquer aparelho. O
+painel de imagem tem o encaixe (esticar, conter ou preencher), os cantos
+arredondados, "Trocar imagem"
 e "Proporção original".
 
 Como o slide não recebe respostas, a seção "Opções deste slide" não aparece
@@ -267,5 +270,14 @@ imagem ainda não chegou, o lugar dela mostra um espaço reservado cinza com o
 | Grupo | Os itens do grupo, um a um, com a transformação do grupo aplicada |
 | Itens gráficos vizinhos na ordem de desenho | Uma imagem só, para o slide não ficar com dezenas de camadas |
 | Slide oculto | Ignorado |
+| Fontes embutidas (`ppt/fonts/*.fntdata`) | Fontes da apresentação, registradas com o nome que os textos usam |
 
 O passo a passo da importação está em [09](09-fluxos-de-uso.md#importar-um-powerpoint).
+
+### O que vai para um PowerPoint
+
+A exportação ([10](10-exportacoes.md#exportar-powerpoint)) faz o caminho
+inverso: cada caixa de texto vira uma caixa de texto do PowerPoint, com os
+trechos, marcadores, recuos e espaçamentos; cada imagem vira uma imagem, com
+o encaixe, os cantos e a transparência; a cor de fundo vira o fundo do slide;
+e as fontes embutidas usadas vão junto no arquivo.

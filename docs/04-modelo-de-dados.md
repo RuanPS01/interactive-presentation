@@ -12,9 +12,10 @@ interface Presentation {
   slides: Slide[]
   settings?: Partial<PresentationSettings>  // ausente/parcial => padrões
   assets?: PresentationAssets               // imagens dos slides livres, pelo id
+  fonts?: PresentationFonts                 // fontes embutidas usadas, pelo id
 }
 
-interface Room extends Omit<Presentation, 'assets'> {
+interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
   creatorUid: string        // dono atual (quem criou ou reivindicou com o token)
   currentSlideIndex: number // slide no ar; === slides.length => slide final
   status: 'live' | 'ended'
@@ -33,8 +34,8 @@ interface SlideTimer {
 
 `Presentation` é a estrutura **serializável** (import/export JSON).
 `Room` é ela mais os campos que só existem depois de publicada, **sem as
-imagens**: elas vão para a subcoleção `assets` (ver abaixo), para o documento
-da sala continuar pequeno.
+imagens e sem as fontes**: elas vão para as subcoleções `assets` e `fonts`
+(ver abaixo), para o documento da sala continuar pequeno.
 
 `revision` começa ausente (vale 0) e soma 1 a cada edição feita pelo
 apresentador numa sala já iniciada. A edição recomeça a apresentação do
@@ -150,6 +151,26 @@ no máximo 1920 px no lado maior e 900 mil caracteres de data URL, JPEG quando
 mesma imagem usada em vários slides é guardada uma vez só, e um id nunca aponta
 para uma versão antiga.
 
+### Fontes embutidas (`PresentationFont`)
+
+```ts
+interface PresentationFont {
+  id: string                    // 'font_' + início do hash SHA-1 (nome, estilo e arquivo)
+  family: string                // o nome que os textos usam em fontFamily
+  weight: 'normal' | 'bold'
+  style: 'normal' | 'italic'
+  dataUrl: string               // data:font/woff;base64,...
+}
+type PresentationFonts = Record<string, PresentationFont>
+```
+
+Vêm dos PowerPoints importados: cada estilo embutido no arquivo (normal,
+negrito, itálico, negrito itálico) vira um registro. Os textos não guardam
+referência à fonte: usam o nome da família, como qualquer outra fonte, e a
+fonte só precisa estar registrada no navegador (`FontFace`) para valer. As
+fontes ficam guardadas em WOFF, cerca de metade do tamanho do TrueType. A
+apresentação leva só as famílias que algum texto usa (`pickFonts`).
+
 ### Respostas e presença
 
 ```ts
@@ -178,6 +199,7 @@ rooms/{code}                          documento da sala (Room)
   participants/{uid}                  ParticipantDoc (presença)
   responses/{slideId}__{uid}          ResponseDoc
   assets/{assetId}                    { dataUrl, width, height, createdAt }
+  fonts/{fontId} e fonts/{fontId}~N   { fontId, family, weight, style, part, parts, data, createdAt }
 ```
 
 ### `rooms/{code}`
@@ -212,6 +234,16 @@ lida uma vez por aparelho e guardada em memória
 ([`src/lib/assets.ts`](../src/lib/assets.ts)). Todos leem; só o dono da sala
 grava e apaga. Ver [07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres).
 
+### `rooms/{code}/fonts/{fontId}`
+
+As fontes embutidas, pelo mesmo motivo das imagens. Uma fonte pode passar do
+limite de um documento, então o `dataUrl` é dividido em partes de 700 mil
+caracteres: a primeira tem o id da fonte e as outras, `{fontId}~1`,
+`{fontId}~2`... Cada documento repete família, estilo e o total de partes, e a
+leitura junta tudo numa consulta só à subcoleção
+([`src/lib/fonts.ts`](../src/lib/fonts.ts)). Todos leem; só o dono da sala
+grava e apaga. Ver [07](07-tempo-real-e-comunicacao.md#fontes-embutidas).
+
 ### `rooms/{code}/responses/{slideId}__{uid}`
 
 Id **determinístico**: `${slideId}__${participantUid}`. Consequências:
@@ -225,8 +257,9 @@ Id **determinístico**: `${slideId}__${participantUid}`. Consequências:
 ## Formato JSON (import/export)
 
 O JSON exportado é exatamente um `Presentation`. Quando há slides livres com
-imagens, ele leva também o campo `assets` com as imagens usadas (as que
-deixaram de ser usadas não vão), então o arquivo é autossuficiente:
+imagens ou fontes embutidas, ele leva também os campos `assets` e `fonts` com
+as que estão em uso (as que deixaram de ser usadas não vão), então o arquivo
+é autossuficiente:
 
 ```json
 {
@@ -259,7 +292,9 @@ A validação está em [`src/utils/validation.ts`](../src/utils/validation.ts)
 em `#rrggbb` (ou `#rrggbbaa`), porque vão direto para o CSS; as imagens só
 aceitam data URL de PNG, JPEG, WebP ou GIF; e toda imagem citada por um
 elemento precisa existir em `assets`, senão o arquivo é recusado com o caminho
-do elemento.
+do elemento. Nas fontes, o arquivo só pode ser um data URL de fonte (WOFF,
+WOFF2, TTF ou OTF) e o nome da família não aceita aspas, sinais de marcação nem
+caracteres de controle, porque vai para o CSS e para o `FontFace`.
 
 ### Compatibilidade
 
@@ -269,7 +304,8 @@ O schema foi construído para **aceitar arquivos antigos**:
 - `overrides` é opcional em todo slide;
 - num slide `quiz`, `correctOptionIds` e `revealAnswer` têm `.default()`, então
   um JSON gerado sem esses campos importa como pergunta sem gabarito;
-- `assets` e `settings.slideAspect` são opcionais; sem o formato, vale 16:9.
+- `assets`, `fonts` e `settings.slideAspect` são opcionais; sem o formato,
+  vale 16:9.
 
 Um JSON exportado antes destas mudanças (só `title` + `slides` com os quatro
 tipos originais) continua importando sem erro.

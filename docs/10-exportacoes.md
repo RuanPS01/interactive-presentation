@@ -39,11 +39,84 @@ navegador:
   e rosca) e SmartArt a partir do desenho que o PowerPoint salva junto.
 - **Imagens** passam por recorte, máscara da forma e conversão de SVG antes de
   serem comprimidas.
+- **Fontes embutidas** ([`fonts.ts`](../src/utils/pptx/fonts.ts)) são lidas
+  antes dos slides, para tabelas, gráficos e SmartArt já saírem com elas. Ver
+  abaixo.
 
 Os itens que viram imagem e estão vizinhos na ordem de desenho são desenhados
 juntos numa imagem só, do tamanho da área que ocupam. Assim um slide com
 dezenas de formas decorativas fica com poucas camadas, e o texto continua
 editável por cima.
+
+### Fontes embutidas
+
+O PowerPoint guarda cada estilo de uma fonte embutida (normal, negrito,
+itálico, negrito itálico) num `ppt/fonts/*.fntdata`, listado em
+`p:embeddedFontLst` com o nome que os textos usam. O arquivo é um **Embedded
+OpenType (EOT)**: um cabeçalho com nomes e métricas e, no fim, a fonte, que
+pode vir "cifrada" com XOR e quase sempre vem comprimida em **MicroType
+Express (MTX)**. A conversão é toda feita no navegador, em
+[`src/utils/fonts/`](../src/utils/fonts/eot.ts):
+
+| Etapa | Arquivo | O que faz |
+| --- | --- | --- |
+| EOT | `eot.ts` | Lê o cabeçalho, desfaz o XOR e entrega a fonte (ou o MTX) |
+| LZCOMP | `lzcomp.ts` | Descomprime os três blocos do MTX (LZ77 com três árvores de Huffman adaptativas) |
+| CTF | `mtx.ts` | Reconstrói o TrueType: glifos (coordenadas em "tripletos"), instruções de hinting (os valores empilhados vêm num bloco à parte), `loca`, `cvt` |
+| WOFF | `woff.ts` | Comprime cada tabela com zlib para guardar (cerca de metade do tamanho) |
+| Registro | `faces.ts` | Confere com o `FontFace` do navegador e registra com o nome da família |
+
+O decodificador foi escrito a partir da especificação do formato (submissão
+W3C "MicroType Express Font Format") e conferido contra outras duas
+implementações: fontes comprimidas pelo sfntly (Google) e descomprimidas pelo
+libeot deram os mesmos glifos e as mesmas tabelas de hinting. As tabelas `hdmx`
+e `VDMX` (larguras pré-calculadas por tamanho de pixel) ficam de fora: são
+opcionais e os navegadores não precisam delas. Fontes já em TrueType,
+OpenType ou WOFF dentro do `.fntdata` também são aceitas.
+
+## Exportar
+
+O botão **Exportar** abre um modal com duas opções:
+
+| Opção | O que faz |
+| --- | --- |
+| **Apresentação (.json)** | Baixa o arquivo completo da plataforma, com imagens e fontes, para importar de volta: as perguntas continuam interativas |
+| **PowerPoint (.pptx)** | Gera um arquivo para o PowerPoint, Google Slides ou Keynote, com textos e imagens editáveis e as fontes embutidas |
+
+### Exportar PowerPoint
+
+[`src/utils/pptxExport/`](../src/utils/pptxExport/index.ts), carregado só
+quando alguém exporta (`import()` dinâmico), monta o `.pptx` no navegador: um
+tema, um mestre e um layout em branco, e um slide por slide da apresentação,
+no formato dela (16:9 ou 4:3).
+
+| Na plataforma | No PowerPoint |
+| --- | --- |
+| Caixa de texto do slide livre | Caixa de texto editável: trechos com fonte, tamanho, cor, realce, negrito, itálico, sublinhado e tachado; parágrafos com alinhamento, marcadores (caractere ou numeração automática), recuos, espaçamentos e altura da linha; margem interna, fundo, posição vertical, rotação e transparência |
+| Imagem do slide livre | Imagem, com "preencher" virando recorte, "conter" ajustando a moldura, cantos arredondados e transparência; WebP vira PNG |
+| Cor de fundo do slide livre | Fundo do slide |
+| Texto simples | Título e o texto, com o alinhamento e o tamanho do slide |
+| Alternativas, barras e pizza | Título, as alternativas em cartões (com letras nas alternativas) e a instrução "Responda pelo celular" |
+| Resposta correta | Título e as alternativas, com a correta destacada em verde |
+| Nuvem de palavras | Título e a instrução para enviar a resposta pelo celular |
+
+As unidades são o inverso das do importador: 1 px da moldura vale 6350 EMU
+(0,5 pt), e a altura de linha "simples" do PowerPoint (100%) equivale a 1,2
+vez a fonte. Assim, um PowerPoint importado e exportado de novo mantém
+posições, tamanhos e espaçamentos.
+
+As perguntas saem **sem resultados** (a exportação é feita no editor) e com
+tamanhos mínimos de letra, porque os padrões da plataforma foram pensados para
+a tela do projetor e ficariam pequenos num arquivo de PowerPoint.
+
+**Fontes.** As fontes embutidas que algum texto usa vão junto, cada estilo
+num `.fntdata` em EOT sem compressão (a mesma estrutura que o PowerPoint lê),
+listadas em `p:embeddedFontLst`. O PowerPoint só embute fontes TrueType:
+uma fonte OpenType com contornos CFF fica de fora, com aviso.
+
+O arquivo gerado foi conferido contra os esquemas XML oficiais do formato
+(ECMA-376, Transitional), aberto no python-pptx e no LibreOffice, e importado
+de volta na própria plataforma com textos, imagens e fontes.
 
 ## Exportar / importar JSON
 
@@ -51,9 +124,9 @@ editável por cima.
 [`src/utils/validation.ts`](../src/utils/validation.ts)
 
 - **Exportar JSON** serializa o `Presentation` inteiro (título, slides, opções
-  globais e as imagens usadas pelos slides livres, em `assets`) e baixa um
-  arquivo com nome derivado do título (sem acentos nem símbolos). Com imagens,
-  o arquivo pode passar de alguns megabytes.
+  globais e as imagens e fontes usadas pelos slides livres, em `assets` e
+  `fonts`) e baixa um arquivo com nome derivado do título (sem acentos nem
+  símbolos). Com imagens e fontes, o arquivo pode passar de alguns megabytes.
 - **Importar JSON** lê o arquivo, valida com Zod e carrega no editor. Erros são
   mostrados no formato `caminho: mensagem`, apontando o campo problemático.
 

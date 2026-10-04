@@ -201,10 +201,12 @@ o link com o token funciona em qualquer um dos dois.
 - **Efeitos com dependências estáveis.** Documentos do Firestore mudam de
   identidade a cada snapshot; dependa de um valor derivado (um booleano, um id)
   em vez do objeto, para não disparar escritas em cascata.
-- **Código pesado é carregado sob demanda.** A jsPDF e o leitor de PowerPoint
-  (com as definições de formas) entram por `import()` dinâmico, só quando
-  alguém exporta um PDF ou importa um `.pptx`; o resto da aplicação não paga
-  por eles.
+- **Código pesado é carregado sob demanda.** A jsPDF, o leitor de PowerPoint
+  (com as definições de formas e o descompressor de fontes) e o gerador de
+  PowerPoint entram por `import()` dinâmico, só quando alguém exporta um PDF,
+  importa ou exporta um `.pptx`; o resto da aplicação não paga por eles. Por
+  isso as conversões de fonte (`utils/fonts/convert.ts`) ficam separadas do
+  registro (`utils/fonts/faces.ts`), que o editor e as salas usam sempre.
 
 ## Solução de problemas
 
@@ -226,7 +228,9 @@ o link com o token funciona em qualquer um dos dois.
 | "A sala foi criada, mas as imagens não foram enviadas" | Regras antigas, sem a seção `assets/{assetId}`: republique o `firestore.rules` |
 | Imagens dos slides livres aparecem como espaço reservado cinza | A subcoleção `assets` da sala está vazia ou as regras não permitem a leitura; confira as regras e salve a sala de novo pela edição |
 | "A apresentação ficou grande demais para uma sala" | O documento da sala passaria de 1 MiB (as imagens não contam): divida a apresentação |
-| Um PowerPoint importa com fontes diferentes | A fonte do arquivo não está instalada no aparelho; o navegador usa uma parecida |
+| Um PowerPoint importa com fontes diferentes | A fonte não veio embutida no arquivo e não está instalada no aparelho; o navegador usa uma parecida. No PowerPoint, marque "Incorporar fontes no arquivo" antes de salvar |
+| Fontes embutidas não aparecem na sala | Regras antigas, sem a seção `fonts/{fontId}`: republique o `firestore.rules` |
+| O PowerPoint exportado abre com outra fonte | A fonte não era embutida, ou era OpenType (CFF), que o PowerPoint não embute; o modal de exportação avisa |
 
 ## Onde mexer para tarefas comuns
 
@@ -245,3 +249,5 @@ o link com o token funciona em qualquer um dos dois.
 | Melhorar a importação de PowerPoint | `utils/pptx/index.ts` (o que vira texto, imagem ou é juntado); formas em `geometry.ts` e `draw.ts`; texto em `text.ts`; tabelas e gráficos em `table.ts` e `chart.ts` |
 | Mudar a compressão das imagens | `utils/images.ts` (`MAX_ASSET_CHARS`, `MAX_ASSET_DIMENSION`) |
 | Mudar onde as imagens ficam guardadas | `lib/assets.ts`, `hooks/useRoomAssets.ts` e a regra `assets/{assetId}` em `firestore.rules` |
+| Mudar o que vai para o PowerPoint exportado | `utils/pptxExport/slide.ts` (slide livre) e `utils/pptxExport/standard.ts` (slides comuns) |
+| Mexer nas fontes embutidas | Leitura em `utils/pptx/fonts.ts`; formatos em `utils/fonts/` (EOT, MTX, WOFF); registro em `utils/fonts/faces.ts`; sala em `lib/fonts.ts` e a regra `fonts/{fontId}` |

@@ -21,7 +21,7 @@ arquivo.
 | [07 — Tempo real e comunicação](07-tempo-real-e-comunicacao.md) | Assinaturas, presença, autenticação e regras de segurança |
 | [08 — Componentes e estado](08-componentes.md) | Catálogo de componentes, hooks e stores |
 | [09 — Fluxos de uso](09-fluxos-de-uso.md) | Passo a passo do apresentador e do participante |
-| [10 - Exportações e integrações](10-exportacoes.md) | Importar (JSON e PowerPoint), exportar JSON e PDF, prompt de IA e encurtador de URL |
+| [10 - Exportações e integrações](10-exportacoes.md) | Importar e exportar (JSON e PowerPoint, com fontes embutidas), PDF, prompt de IA e encurtador de URL |
 | [11 — Desenvolvimento](11-desenvolvimento.md) | Rodar localmente, scripts, convenções e solução de problemas |
 
 ## Como manter esta documentação
@@ -42,3 +42,5 @@ atualize o documento correspondente:
 | `src/lib/assets.ts` (imagens) | [04](04-modelo-de-dados.md) e [07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres) |
 | `src/components/free/`, `src/utils/richText*.ts` | [05](05-tipos-de-slide.md#free---slide-livre) e [08](08-componentes.md#free-slide-livre) |
 | `src/utils/pptx/` | [05](05-tipos-de-slide.md#o-que-vem-de-um-powerpoint), [09](09-fluxos-de-uso.md#importar-um-powerpoint) e [10](10-exportacoes.md#importar) |
+| `src/utils/pptxExport/` | [05](05-tipos-de-slide.md#o-que-vai-para-um-powerpoint), [09](09-fluxos-de-uso.md#exportar-um-powerpoint) e [10](10-exportacoes.md#exportar-powerpoint) |
+| `src/utils/fonts/`, `src/lib/fonts.ts` | [04](04-modelo-de-dados.md), [07](07-tempo-real-e-comunicacao.md#fontes-embutidas) e [10](10-exportacoes.md#fontes-embutidas) |
