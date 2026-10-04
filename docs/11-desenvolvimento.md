@@ -36,7 +36,8 @@ Para testar o tempo real, abra **duas janelas**: uma em *Criar sala*
 | Comando | Ação |
 | --- | --- |
 | `npm run dev` | Servidor de desenvolvimento (porta 5173) |
-| `npm run build` | Type-check + build de produção em `dist/` |
+| `npm run build` | Type-check + build de produção em `dist/` (GitHub Pages) |
+| `npm run build:firebase` | Type-check + build com `base` na raiz em `dist-firebase/` (Firebase Hosting) |
 | `npm run preview` | Serve o build localmente |
 | `npm run typecheck` | Só a checagem de tipos (`tsc -b`) |
 | `npm run lint` | ESLint |
@@ -55,30 +56,31 @@ tipo, e o lint cobre as regras de hooks e de fast-refresh do React.
    conteúdo em **Firestore → Regras → Publicar** ou rode
    `npx firebase-tools deploy --only firestore:rules --project <id-do-projeto>`.
 
+6. Abra **Hosting** (menu **Build**) e clique em **Começar**; só avance pelas
+   telas, sem rodar os comandos sugeridos. Isso cria o site padrão do projeto,
+   para onde o workflow publica.
+
 Depois de publicar no GitHub Pages, adicione `SEU-USUARIO.github.io` em
 **Authentication → Settings → Domínios autorizados**, senão o login anônimo é
-recusado no domínio publicado.
+recusado no domínio publicado. Os domínios do Firebase Hosting
+(`<projeto>.web.app` e `<projeto>.firebaseapp.com`) já vêm autorizados.
 
 ## Pipeline de deploy
 
 [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) roda a cada
-`push` na `main` (e no disparo manual), com três jobs:
+`push` na `main` (e no disparo manual), com quatro jobs:
 
-```
-build ──────────────┐
-                    ├──> deploy (GitHub Pages)
-regras-firestore ───┘
-```
+| Job | Espera | O que faz |
+| --- | --- | --- |
+| `build` | nada | `npm ci`, `npm run build` (com os secrets e o `VITE_BASE`) para o Pages, `vite build --mode firebase` para o Firebase Hosting e envio dos dois artefatos |
+| `regras-firestore` | nada | Publica o [`firestore.rules`](../firestore.rules) no projeto do Firebase |
+| `deploy` | `build` e `regras-firestore` | Publica no GitHub Pages |
+| `hosting-firebase` | `build` e `regras-firestore` | Publica no Firebase Hosting |
 
-| Job | O que faz |
-| --- | --- |
-| `build` | `npm ci`, `npm run build` (com os secrets e o `VITE_BASE`) e envio do artefato |
-| `regras-firestore` | Publica o [`firestore.rules`](../firestore.rules) no projeto do Firebase |
-| `deploy` | Publica no GitHub Pages — **espera os dois anteriores** |
-
-O `deploy` depende do `regras-firestore` de propósito: uma versão do app que usa
-uma coleção ainda não liberada quebraria com `permission-denied` em produção. As
-regras entram antes do código.
+As duas publicações dependem do `regras-firestore` de propósito: uma versão do
+app que usa uma coleção ainda não liberada quebraria com `permission-denied` em
+produção. As regras entram antes do código. Entre si, `deploy` e
+`hosting-firebase` rodam em paralelo e não dependem um do outro.
 
 ### Publicação das regras
 
@@ -95,6 +97,35 @@ regras entram antes do código.
   Não há `.firebaserc` no repositório: o id do projeto vem da secret, via
   `--project`, para não ficar fixo num repositório público.
 
+### Publicação no Firebase Hosting
+
+- **Roda a cada push na `main`**, como o Pages: o site publicado nos dois
+  lugares é sempre o mesmo commit.
+- **Build próprio.** O Firebase Hosting serve o site na raiz do domínio, então
+  o artefato vem de `vite build --mode firebase` (`base` igual a `/`, saída em
+  `dist-firebase/`). O type-check roda uma vez só, no build do Pages.
+- **Só `hosting`.** O job roda `firebase deploy --only hosting`; as regras ficam
+  com o job delas, que só as republica quando o arquivo muda.
+- **Cache.** O [`firebase.json`](../firebase.json) manda os navegadores
+  revalidarem o `index.html` a cada visita (`no-cache`) e guardarem os arquivos
+  de `assets/` por um ano (`immutable`), porque o nome deles muda a cada build.
+  Assim ninguém fica com um `index.html` antigo apontando para arquivos que não
+  existem mais. Um arquivo inexistente devolve 404 (não há reescrita para o
+  `index.html`, que o `HashRouter` dispensa).
+- **Sem credenciais, o job avisa e segue**, igual ao das regras.
+- Cada publicação vira uma versão no console (**Histórico de versões**, na
+  página do Hosting), com o commit na descrição. Dá para voltar a uma versão anterior
+  por lá, e limitar quantas versões ficam guardadas.
+
+Para publicar à mão, com a CLI autenticada (`npx firebase-tools login`):
+
+```bash
+npm run build:firebase
+npx firebase-tools deploy --only hosting --project <id-do-projeto>
+```
+
+O `build:firebase` lê as chaves do `.env` local, como o `npm run dev`.
+
 ### Configuração (uma vez)
 
 1. Suba o projeto para um repositório no GitHub.
@@ -106,20 +137,23 @@ regras entram antes do código.
 | --- | --- |
 | `VITE_FIREBASE_API_KEY` | Build do app |
 | `VITE_FIREBASE_AUTH_DOMAIN` | Build do app |
-| `VITE_FIREBASE_PROJECT_ID` | Build do app **e** alvo do deploy das regras |
+| `VITE_FIREBASE_PROJECT_ID` | Build do app **e** alvo do deploy das regras e do Firebase Hosting |
 | `VITE_FIREBASE_STORAGE_BUCKET` | Build do app |
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` | Build do app |
 | `VITE_FIREBASE_APP_ID` | Build do app |
-| `FIREBASE_SERVICE_ACCOUNT` | JSON da conta de serviço que publica as regras |
+| `FIREBASE_SERVICE_ACCOUNT` | JSON da conta de serviço que publica as regras e o site no Firebase Hosting |
 
-### Conta de serviço para as regras
+### Conta de serviço para o deploy
 
 No **Google Cloud Console** do mesmo projeto (IAM e Admin → Contas de serviço):
 
-1. **Criar conta de serviço** (ex.: `github-actions-regras`).
+1. **Criar conta de serviço** (ex.: `github-actions-deploy`).
 2. Conceder os papéis:
    - **Firebase Rules Admin** (`roles/firebaserules.admin`) — cria e publica os
      rulesets;
+   - **Firebase Hosting Admin** (`roles/firebasehosting.admin`): envia os
+     arquivos e publica as versões do site. Numa conta já criada para as
+     regras, basta acrescentar este papel em **IAM**, editando a conta;
    - **Firebase Viewer** (`roles/firebase.viewer`) — a CLI lê o projeto antes de
      publicar.
    - Se o deploy reclamar da Service Usage API, acrescente **Service Usage
@@ -138,9 +172,16 @@ O workflow grava esse JSON num arquivo temporário do runner e aponta
 
 ### Sobre o `base` do Vite
 
-O workflow define `VITE_BASE=/<nome-do-repo>/`, então os assets resolvem no
-subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
-`.../#/room/ABC123` funcionam sem configuração extra de fallback.
+O workflow define `VITE_BASE=/<nome-do-repo>/` no build do Pages, então os
+assets resolvem no subcaminho do repositório. O build do Firebase Hosting usa o
+modo `firebase`, com `base` na raiz. Como a aplicação usa `HashRouter`,
+deep-links do tipo `.../#/room/ABC123` funcionam nos dois sem configuração
+extra de fallback.
+
+As salas lembradas para "Retomar" ficam no `localStorage`, que é separado por
+domínio: quem apresentou pelo GitHub Pages não vê essas salas na tela inicial
+do Firebase Hosting, e vice-versa. A sala em si é a mesma (o banco é um só), e
+o link com o token funciona em qualquer um dos dois.
 
 ## Convenções de código
 
@@ -179,6 +220,9 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 | Job `regras-firestore` falha com erro de credencial | A secret `FIREBASE_SERVICE_ACCOUNT` não contém o JSON inteiro (inclusive as chaves `{}`) |
 | Aviso "Credenciais ausentes" no workflow | Falta `FIREBASE_SERVICE_ACCOUNT` — o Pages publica assim mesmo, mas as regras não sobem |
 | Link curto não aparece em desenvolvimento | Esperado: o encurtador recusa `localhost`; use o link completo |
+| Job `hosting-firebase` falha com `403` ou `does not have permission` | Falta o papel **Firebase Hosting Admin** na conta de serviço |
+| Job `hosting-firebase` não encontra o site do projeto | O Hosting ainda não foi iniciado no console: clique em **Começar** na página do Hosting (passo 6) |
+| Site do Firebase Hosting abre em branco | O artefato veio do build do Pages (`base` com o nome do repositório): confira o passo "Build (Firebase Hosting)" do workflow |
 | "A sala foi criada, mas as imagens não foram enviadas" | Regras antigas, sem a seção `assets/{assetId}`: republique o `firestore.rules` |
 | Imagens dos slides livres aparecem como espaço reservado cinza | A subcoleção `assets` da sala está vazia ou as regras não permitem a leitura; confira as regras e salve a sala de novo pela edição |
 | "A apresentação ficou grande demais para uma sala" | O documento da sala passaria de 1 MiB (as imagens não contam): divida a apresentação |

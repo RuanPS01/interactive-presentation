@@ -10,8 +10,8 @@ no projetor.
 
 Duas características definem o projeto:
 
-- **Sem servidor próprio.** O frontend é 100% estático (hospedável no GitHub
-  Pages). Tempo real e persistência vêm do **Firebase (Cloud Firestore +
+- **Sem servidor próprio.** O frontend é 100% estático, publicado no GitHub
+  Pages e no Firebase Hosting. Tempo real e persistência vêm do **Firebase (Cloud Firestore +
   Autenticação Anônima)**.
 - **Sem cadastro.** Ninguém cria conta. Cada dispositivo recebe um uid anônimo
   do Firebase; o controle da apresentação é provado por um **token secreto na

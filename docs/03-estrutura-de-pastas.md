@@ -5,12 +5,12 @@
 | Arquivo | Papel |
 | --- | --- |
 | `index.html` | Casca da SPA (favicon inline, meta viewport, `#root`) |
-| `vite.config.ts` | `base` para o GitHub Pages, plugins React/Tailwind, chunks manuais |
+| `vite.config.ts` | `base` e pasta de saída do GitHub Pages e do Firebase Hosting (modo `firebase`), plugins React/Tailwind, chunks manuais |
 | `firestore.rules` | Regras de segurança do Firestore (publicadas pela pipeline quando mudam) |
-| `firebase.json` | Diz à CLI do Firebase onde está o arquivo de regras |
+| `firebase.json` | Diz à CLI do Firebase onde estão as regras e o que publicar no Hosting (`dist-firebase/`, com os cabeçalhos de cache) |
 | `.env.example` | Modelo das variáveis `VITE_FIREBASE_*` |
 | `eslint.config.js`, `tsconfig*.json` | Lint e type-check |
-| `.github/workflows/deploy.yml` | Build, publicação das regras do Firestore e deploy no GitHub Pages |
+| `.github/workflows/deploy.yml` | Build, publicação das regras do Firestore e deploy no GitHub Pages e no Firebase Hosting |
 | `docs/` | Esta documentação |
 
 ## `src/`

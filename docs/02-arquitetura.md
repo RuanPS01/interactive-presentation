@@ -15,7 +15,7 @@
 | QR Code | react-qr-code | [`src/components/present/ShareRoom.tsx`](../src/components/present/ShareRoom.tsx) |
 | Backend/Tempo real | Firebase Firestore + Auth Anônima | `src/lib/` |
 | Validação (JSON) | Zod | [`src/utils/validation.ts`](../src/utils/validation.ts) |
-| Deploy | GitHub Actions → GitHub Pages | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) |
+| Deploy | GitHub Actions, para o GitHub Pages e o Firebase Hosting | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) |
 
 ### Por que Firebase e não um banco próprio
 
@@ -106,35 +106,42 @@ manualChunks: {
 A jsPDF fica **fora** do bundle inicial: é importada dinamicamente dentro de
 `exportResultsPdf`, então só baixa quando alguém exporta um relatório.
 
-O `base` do Vite precisa bater com o caminho de publicação. O padrão é
-`/interactive-presentation/`; o workflow do GitHub Pages o sobrescreve com
-`VITE_BASE=/<nome-do-repo>/`.
+O `base` do Vite precisa bater com o caminho de publicação, e o site sai em
+dois lugares com caminhos diferentes:
+
+| Destino | Comando | `base` | Pasta |
+| --- | --- | --- | --- |
+| GitHub Pages | `npm run build` | `/interactive-presentation/` (o workflow usa `VITE_BASE=/<nome-do-repo>/`) | `dist/` |
+| Firebase Hosting | `npm run build:firebase` (`vite build --mode firebase`) | `/`, a raiz do domínio | `dist-firebase/` |
+
+A env `VITE_BASE` sobrescreve o `base` nos dois casos.
 
 ## Deploy
 
-`push` na `main` dispara [`deploy.yml`](../.github/workflows/deploy.yml), com
-dois alvos em paralelo e uma publicação que espera os dois:
+`push` na `main` dispara [`deploy.yml`](../.github/workflows/deploy.yml). O site
+é publicado em dois lugares, o **GitHub Pages** e o **Firebase Hosting**, e as
+duas publicações esperam o build e as regras:
 
-```
-build (npm ci + npm run build + artefato) ──┐
-                                            ├──> deploy (GitHub Pages)
-regras-firestore (firebase deploy) ─────────┘
-```
+| Job | Espera | O que faz |
+| --- | --- | --- |
+| `build` | nada | Compila o app duas vezes, com os secrets `VITE_FIREBASE_*`: uma para o Pages (`base` com o nome do repositório) e outra para o Firebase Hosting (`base` na raiz); envia os dois artefatos |
+| `regras-firestore` | nada | Publica o [`firestore.rules`](../firestore.rules), mas **só quando esse arquivo muda** (ou no disparo manual): cada publicação cria um *ruleset* novo no projeto |
+| `deploy` | `build` e `regras-firestore` | Publica no GitHub Pages |
+| `hosting-firebase` | `build` e `regras-firestore` | Publica no Firebase Hosting (`https://<projeto>.web.app`) |
 
-- **`build`** compila o app com os secrets `VITE_FIREBASE_*` e o `VITE_BASE`.
-- **`regras-firestore`** publica o [`firestore.rules`](../firestore.rules) no
-  projeto do Firebase, mas **só quando esse arquivo muda** (ou no disparo
-  manual) — cada publicação cria um *ruleset* novo no projeto.
-- **`deploy`** só roda depois dos dois: assim uma versão do app que depende de
-  uma coleção recém-liberada nunca vai ao ar antes das regras que a permitem.
+As duas publicações só rodam depois das regras: assim uma versão do app que
+depende de uma coleção recém-liberada nunca vai ao ar antes das regras que a
+permitem. Entre si elas são independentes: uma falha no Firebase Hosting não
+impede o Pages, e vice-versa.
 
-Sem a secret `FIREBASE_SERVICE_ACCOUNT`, o job das regras emite um aviso e
-termina com sucesso — o Pages continua publicando normalmente. Detalhes de
+Sem a secret `FIREBASE_SERVICE_ACCOUNT`, os jobs das regras e do Firebase
+Hosting emitem um aviso e terminam com sucesso; o Pages continua publicando
+normalmente. Detalhes de
 configuração e papéis da conta de serviço em
 [11 — Desenvolvimento](11-desenvolvimento.md#pipeline-de-deploy).
 
 As chaves `VITE_FIREBASE_*` são **identificadores públicos** do projeto, não
 segredos: quem protege os dados são as
 [regras do Firestore](07-tempo-real-e-comunicacao.md#regras-de-segurança). Já o
-JSON em `FIREBASE_SERVICE_ACCOUNT` é um segredo de verdade — ele autoriza
-publicar regras no projeto.
+JSON em `FIREBASE_SERVICE_ACCOUNT` é um segredo de verdade: ele autoriza
+publicar regras e o site no projeto.

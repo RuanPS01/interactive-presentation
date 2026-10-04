@@ -4,7 +4,7 @@ Aplicação web estilo *Mentimeter* para apresentações interativas em tempo re
 O apresentador cria slides, a plateia participa pelo celular (sem instalar nada e
 **sem criar conta**) e os resultados aparecem ao vivo.
 
-- **Frontend estático** (Vite + React + TypeScript + Tailwind CSS) — hospedável no **GitHub Pages**.
+- **Frontend estático** (Vite + React + TypeScript + Tailwind CSS), publicado no **GitHub Pages** e no **Firebase Hosting**.
 - **Tempo real + banco NoSQL** via **Firebase (Cloud Firestore + Autenticação Anônima)** — sem servidor próprio para manter.
 
 > 📚 **Documentação técnica completa em [`docs/`](docs/)** — arquitetura, modelo
@@ -47,7 +47,7 @@ O apresentador cria slides, a plateia participa pelo celular (sem instalar nada 
 | PowerPoint | Leitor próprio sobre fflate (zip) e as definições de formas do modern-openxml, carregado sob demanda |
 | Backend/Tempo real | Firebase Firestore + Auth Anônima |
 | Validação (JSON) | Zod |
-| Deploy | GitHub Actions → GitHub Pages |
+| Deploy | GitHub Actions, para o GitHub Pages e o Firebase Hosting |
 
 > **Por que Firebase e não MongoDB?** O acesso direto do navegador ao MongoDB Atlas
 > foi descontinuado (Data API/HTTPS Endpoints com fim de vida em set/2025), o que
@@ -77,7 +77,7 @@ src/
     pptx/         Leitor de PowerPoint (slides livres a partir de um .pptx)
 docs/             Documentação técnica por assunto
 firestore.rules   Regras de segurança do Firestore
-.github/workflows/deploy.yml   Pipeline de deploy no GitHub Pages
+.github/workflows/deploy.yml   Pipeline de deploy (GitHub Pages e Firebase Hosting)
 ```
 
 Detalhes de cada arquivo: [docs/03 — Estrutura de pastas](docs/03-estrutura-de-pastas.md).
@@ -124,16 +124,22 @@ Scripts:
 | --- | --- |
 | `npm run dev` | Servidor de desenvolvimento |
 | `npm run build` | Type-check + build de produção (`dist/`) |
+| `npm run build:firebase` | Type-check + build para o Firebase Hosting (`dist-firebase/`, `base` na raiz) |
 | `npm run preview` | Servir o build localmente |
 | `npm run typecheck` | Apenas checagem de tipos |
 | `npm run lint` | ESLint |
 
 ## Deploy
 
-A action [`deploy.yml`](.github/workflows/deploy.yml) faz duas coisas a cada push
+A action [`deploy.yml`](.github/workflows/deploy.yml) faz três coisas a cada push
 na `main`: **publica as regras do Firestore** (quando o `firestore.rules` muda) e
-**publica o site no GitHub Pages** — nessa ordem, para o app nunca ir ao ar antes
-das regras de que ele depende.
+então **publica o site no GitHub Pages e no Firebase Hosting**, em paralelo. As
+regras vêm antes para o app nunca ir ao ar sem as regras de que ele depende.
+
+| Destino | Endereço |
+| --- | --- |
+| GitHub Pages | `https://<usuario>.github.io/<nome-do-repo>/` |
+| Firebase Hosting | `https://<id-do-projeto>.web.app/` (e `https://<id-do-projeto>.firebaseapp.com/`) |
 
 1. **Suba o projeto** para um repositório no GitHub.
    - O nome do repositório define o caminho da URL. O workflow ajusta o `base`
@@ -143,23 +149,27 @@ das regras de que ele depende.
    `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`,
    `VITE_FIREBASE_APP_ID` e `FIREBASE_SERVICE_ACCOUNT`.
    - `FIREBASE_SERVICE_ACCOUNT` é o **JSON de uma conta de serviço** com os papéis
-     *Firebase Rules Admin* e *Firebase Viewer* no projeto — é ela que publica as
-     regras. Passo a passo em
-     [docs/11 — Desenvolvimento](docs/11-desenvolvimento.md#conta-de-serviço-para-as-regras).
-   - Sem essa secret o site continua sendo publicado normalmente; só as regras
-     ficam por sua conta no console do Firebase.
+     *Firebase Rules Admin*, *Firebase Hosting Admin* e *Firebase Viewer* no
+     projeto. É ela que publica as regras e o site no Firebase Hosting. Passo a
+     passo em
+     [docs/11 (Desenvolvimento)](docs/11-desenvolvimento.md#conta-de-serviço-para-o-deploy).
+   - Sem essa secret o GitHub Pages continua sendo publicado normalmente; as
+     regras e o Firebase Hosting ficam por sua conta.
 3. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
-4. **Faça push na branch `main`** (ou rode o workflow manualmente). O site sai em
-   `https://<usuario>.github.io/<nome-do-repo>/`.
-5. Em **Authentication → Settings → Domínios autorizados**, adicione
-   `SEU-USUARIO.github.io` para o login anônimo funcionar no domínio publicado.
+4. No console do Firebase, abra **Hosting** (menu **Build**) e clique em
+   **Começar** uma vez, para criar o site padrão do projeto.
+5. **Faça push na branch `main`** (ou rode o workflow manualmente). O site sai
+   nos dois endereços da tabela acima.
+6. Em **Authentication**, aba **Settings**, seção **Domínios autorizados**, adicione
+   `SEU-USUARIO.github.io` para o login anônimo funcionar no GitHub Pages. Os
+   domínios do Firebase Hosting já vêm autorizados.
 
 > Como o app usa `HashRouter`, os links diretos (ex.: `.../#/room/ABC123`) funcionam
-> no GitHub Pages sem configuração extra de fallback.
+> no GitHub Pages e no Firebase Hosting sem configuração extra de fallback.
 
 > As chaves `VITE_FIREBASE_*` são identificadores públicos do projeto. Já o JSON em
 > `FIREBASE_SERVICE_ACCOUNT` **é um segredo de verdade**: ele autoriza publicar
-> regras no seu projeto do Firebase.
+> regras e o site no seu projeto do Firebase.
 
 ## Importar / Exportar
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:firebase": "tsc -b && vite build --mode firebase",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc -b"
