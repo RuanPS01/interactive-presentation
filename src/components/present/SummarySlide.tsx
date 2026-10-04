@@ -1,9 +1,11 @@
+import { FileDown } from 'lucide-react'
 import type { PresentationAssets, ResponseDoc, Room, Slide } from '../../types/presentation'
 import { aggregateChoices, aggregateWords } from '../../utils/aggregate'
 import { BarChartView } from '../charts/BarChartView'
 import { PieChartView } from '../charts/PieChartView'
 import { WordCloudView } from '../charts/WordCloudView'
 import { FreeSlideView } from '../free/FreeSlideView'
+import { Button } from '../ui/Button'
 import { ScrollArea } from '../ui/ScrollArea'
 
 interface SummarySlideProps {
@@ -13,6 +15,9 @@ interface SummarySlideProps {
   loading: boolean
   /** Imagens dos slides livres. */
   assets?: PresentationAssets
+  /** Baixa o PDF com os resultados (o botão central do slide). */
+  onExportPdf?: () => void
+  exporting?: boolean
 }
 
 /** Agrupa as respostas por slide para montar cada miniatura. */
@@ -27,10 +32,19 @@ function groupBySlide(responses: ResponseDoc[]): Map<string, ResponseDoc[]> {
 }
 
 /**
- * Slide final automático de agradecimento: um "obrigado" e uma grade com todos
- * os slides em miniatura (gráficos e nuvens de palavras com os dados ao vivo).
+ * Slide final automático de agradecimento: um "obrigado", o botão central para
+ * baixar os resultados em PDF e uma grade com todos os slides em miniatura
+ * (gráficos e nuvens de palavras com os dados ao vivo). O PDF só é gerado
+ * quando o apresentador pede.
  */
-export function SummarySlide({ room, responses, loading, assets = {} }: SummarySlideProps) {
+export function SummarySlide({
+  room,
+  responses,
+  loading,
+  assets = {},
+  onExportPdf,
+  exporting = false,
+}: SummarySlideProps) {
   const bySlide = groupBySlide(responses)
 
   return (
@@ -42,6 +56,11 @@ export function SummarySlide({ room, responses, loading, assets = {} }: SummaryS
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
           Resumo de “{room.title}”{loading && ' · carregando resultados…'}
         </p>
+        {onExportPdf && (
+          <Button size="lg" className="mt-4" onClick={onExportPdf} disabled={exporting}>
+            <FileDown size={18} /> {exporting ? 'Gerando o PDF…' : 'Baixar resultados (PDF)'}
+          </Button>
+        )}
       </div>
 
       <ScrollArea className="grid min-h-0 flex-1 auto-rows-[220px] grid-cols-2 gap-4 pr-1 md:grid-cols-3">
