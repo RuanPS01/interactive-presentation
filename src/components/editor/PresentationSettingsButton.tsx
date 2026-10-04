@@ -4,6 +4,9 @@ import { useEditorStore } from '../../store/editorStore'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Modal } from '../ui/Modal'
+import { SegmentedControl } from '../ui/SegmentedControl'
+import { SLIDE_ASPECTS } from '../../utils/settings'
+import type { SlideAspect } from '../../types/presentation'
 import { FontSizeRow, TimerRow } from './SettingsControls'
 
 /**
@@ -40,6 +43,25 @@ export function PresentationSettingsButton() {
         footer={<Button onClick={() => setOpen(false)}>Concluir</Button>}
       >
         <div className="space-y-5">
+          <div className="space-y-1.5">
+            <span className="block text-sm font-medium text-neutral-700 dark:text-neutral-200">
+              Formato dos slides
+            </span>
+            <SegmentedControl<SlideAspect>
+              aria-label="Formato dos slides"
+              value={settings.slideAspect}
+              options={SLIDE_ASPECTS.map((aspect) => ({
+                value: aspect,
+                label: aspect === '16:9' ? '16:9 (widescreen)' : '4:3 (padrão antigo)',
+              }))}
+              onChange={(slideAspect) => updateSettings({ slideAspect })}
+            />
+            <span className="block text-xs text-neutral-500 dark:text-neutral-400">
+              Moldura da prévia e tamanho dos slides livres. Trocar o formato
+              redimensiona os slides livres para caber, sem cortar nada.
+            </span>
+          </div>
+
           <Checkbox
             label="Permitir limpar e trocar a resposta"
             hint="O participante pode apagar o que enviou e escolher de novo."

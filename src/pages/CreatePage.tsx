@@ -61,7 +61,8 @@ export function CreatePage() {
   return (
     // Em telas grandes o editor ocupa exatamente a altura da janela e cada
     // coluna rola por conta própria (ver `EditorWorkspace`).
-    <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
+    // Ocupa a largura inteira da janela: em telas largas a prévia ganha espaço.
+    <div className="flex min-h-screen w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
       {/* Barra superior */}
       <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate('/')}>

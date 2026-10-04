@@ -1,8 +1,9 @@
-import type { ResponseDoc, Room, Slide } from '../../types/presentation'
+import type { PresentationAssets, ResponseDoc, Room, Slide } from '../../types/presentation'
 import { aggregateChoices, aggregateWords } from '../../utils/aggregate'
 import { BarChartView } from '../charts/BarChartView'
 import { PieChartView } from '../charts/PieChartView'
 import { WordCloudView } from '../charts/WordCloudView'
+import { FreeSlideView } from '../free/FreeSlideView'
 import { ScrollArea } from '../ui/ScrollArea'
 
 interface SummarySlideProps {
@@ -10,6 +11,8 @@ interface SummarySlideProps {
   /** Todas as respostas da sala (de todos os slides). */
   responses: ResponseDoc[]
   loading: boolean
+  /** Imagens dos slides livres. */
+  assets?: PresentationAssets
 }
 
 /** Agrupa as respostas por slide para montar cada miniatura. */
@@ -27,7 +30,7 @@ function groupBySlide(responses: ResponseDoc[]): Map<string, ResponseDoc[]> {
  * Slide final automático de agradecimento: um "obrigado" e uma grade com todos
  * os slides em miniatura (gráficos e nuvens de palavras com os dados ao vivo).
  */
-export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
+export function SummarySlide({ room, responses, loading, assets = {} }: SummarySlideProps) {
   const bySlide = groupBySlide(responses)
 
   return (
@@ -57,6 +60,7 @@ export function SummarySlide({ room, responses, loading }: SummarySlideProps) {
                 slides={room.slides}
                 responses={bySlide.get(slide.id) ?? []}
                 bySlide={bySlide}
+                assets={assets}
               />
             </div>
           </div>
@@ -71,10 +75,11 @@ interface MiniatureProps {
   slides: Slide[]
   responses: ResponseDoc[]
   bySlide: Map<string, ResponseDoc[]>
+  assets: PresentationAssets
 }
 
 /** Corpo do slide reduzido: reaproveita as mesmas views (responsivas). */
-function Miniature({ slide, slides, responses, bySlide }: MiniatureProps) {
+function Miniature({ slide, slides, responses, bySlide, assets }: MiniatureProps) {
   switch (slide.type) {
     case 'wordcloud':
       return <WordCloudView words={aggregateWords(responses)} />
@@ -114,6 +119,8 @@ function Miniature({ slide, slides, responses, bySlide }: MiniatureProps) {
           </p>
         </div>
       )
+    case 'free':
+      return <FreeSlideView slide={slide} assets={assets} />
   }
 }
 

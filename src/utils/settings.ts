@@ -1,6 +1,7 @@
 import type {
   PresentationSettings,
   Slide,
+  SlideAspect,
   SlideOverrides,
 } from '../types/presentation'
 
@@ -17,7 +18,21 @@ export const DEFAULT_SETTINGS: PresentationSettings = {
   labelFontSize: 16,
   bodyFontSize: 24,
   quizTimerSeconds: 20,
+  slideAspect: '16:9',
 }
+
+/**
+ * Moldura lógica de cada formato, em px. É a resolução de referência (Full
+ * HD, a mais comum nos projetores): a prévia do editor desenha o slide nesse
+ * tamanho e reduz por inteiro, então o que se vê nela tem a mesma proporção
+ * do que aparece na tela grande. Também é o tamanho de um slide livre novo.
+ */
+export const SLIDE_FRAMES: Record<SlideAspect, { width: number; height: number }> = {
+  '16:9': { width: 1920, height: 1080 },
+  '4:3': { width: 1440, height: 1080 },
+}
+
+export const SLIDE_ASPECTS: SlideAspect[] = ['16:9', '4:3']
 
 /** Limites aceitos pelos controles e pela validação do JSON. */
 export const FONT_SIZE_RANGE = { min: 10, max: 200 } as const
@@ -75,4 +90,5 @@ export const SETTING_LABELS = {
   labelFontSize: 'Tamanho dos rótulos',
   bodyFontSize: 'Tamanho do corpo',
   quizTimerSeconds: 'Tempo do cronômetro (questionário)',
+  slideAspect: 'Formato dos slides',
 } as const

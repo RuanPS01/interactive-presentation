@@ -7,6 +7,8 @@ import { useParticipants } from '../hooks/useParticipants'
 import { usePresenterAccess } from '../hooks/usePresenterAccess'
 import { useRoom } from '../hooks/useRoom'
 import { saveAndRestartRoom } from '../lib/rooms'
+import { fetchAssets } from '../lib/assets'
+import { collectAssetIds } from '../utils/freeSlide'
 import { createEditorStore, EditorStoreContext } from '../store/editorStore'
 import { useThemeStore } from '../store/themeStore'
 import type { Presentation } from '../types/presentation'
@@ -66,18 +68,30 @@ export function EditRoomPage() {
   const roomRef = useRef(room)
   roomRef.current = room
   const [baseline, setBaseline] = useState<string | null>(null)
+  // Imagens que a sala já tem: ao salvar, só as novas são enviadas.
+  const storedAssetIds = useRef<string[]>([])
   const canLoad = access === 'granted' && room !== null
   useEffect(() => {
     const current = roomRef.current
-    if (!canLoad || baseline !== null || !current) return
-    const { loadPresentation, getPresentation } = store.getState()
-    loadPresentation({
-      title: current.title,
-      slides: current.slides,
-      settings: current.settings,
+    if (!canLoad || baseline !== null || !current || !code) return
+    let cancelled = false
+    // As imagens dos slides livres vêm da subcoleção da sala.
+    void fetchAssets(code, collectAssetIds(current.slides)).then((assets) => {
+      if (cancelled) return
+      const { loadPresentation, getPresentation } = store.getState()
+      loadPresentation({
+        title: current.title,
+        slides: current.slides,
+        settings: current.settings,
+        assets,
+      })
+      storedAssetIds.current = Object.keys(assets)
+      setBaseline(snapshot(getPresentation()))
     })
-    setBaseline(snapshot(getPresentation()))
-  }, [canLoad, baseline, store])
+    return () => {
+      cancelled = true
+    }
+  }, [canLoad, baseline, store, code])
 
   const dirty = baseline !== null && snapshot({ title, slides, settings }) !== baseline
   const presentPath = `/present/${code}${token ? `/${token}` : ''}`
@@ -95,7 +109,7 @@ export function EditRoomPage() {
     if (!code) return
     setSaving(true)
     try {
-      await saveAndRestartRoom(code, store.getState().getPresentation())
+      await saveAndRestartRoom(code, store.getState().getPresentation(), storedAssetIds.current)
       // O apresentador também volta ao início: a tela de apresentação já abre
       // no primeiro slide, que é o que a sala diz agora.
       navigate(presentPath)
@@ -143,7 +157,7 @@ export function EditRoomPage() {
     <EditorStoreContext.Provider value={store}>
       {/* Mesmo layout da criação: em telas grandes, altura da janela e colunas
           com rolagem própria. */}
-      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
+      <div className="flex min-h-screen w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
         <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
           <Button variant="ghost" size="sm" onClick={leave}>
             <ChevronLeft size={16} /> Voltar à apresentação

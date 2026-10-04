@@ -2,6 +2,7 @@ import {
   BarChart3,
   CheckCircle2,
   Cloud,
+  LayoutTemplate,
   ListChecks,
   PieChart,
   Type,
@@ -17,4 +18,5 @@ export const SLIDE_TYPE_ICONS: Record<SlideType, LucideIcon> = {
   quiz: ListChecks,
   answer: CheckCircle2,
   text: Type,
+  free: LayoutTemplate,
 }

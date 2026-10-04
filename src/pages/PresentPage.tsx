@@ -20,11 +20,14 @@ import { useRoom } from '../hooks/useRoom'
 import { useResponses } from '../hooks/useResponses'
 import { useParticipants } from '../hooks/useParticipants'
 import { usePresenterAccess } from '../hooks/usePresenterAccess'
+import { useRoomAssets } from '../hooks/useRoomAssets'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
 import { markAnswerRevealed, saveSlideTimers, setCurrentSlide } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
+import { fetchAssets } from '../lib/assets'
+import { collectAssetIds } from '../utils/freeSlide'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { resolveSlideSettings } from '../utils/settings'
 import { advanceTimers, closeTimer, slideTimerSeconds } from '../utils/timer'
@@ -71,6 +74,16 @@ export function PresentPage() {
     answerSlideId && room?.revealedSlideIds?.includes(answerSlideId),
   )
   const reveal = useRevealCountdown(answerSlideId, { revealed: alreadyRevealed })
+
+  // Imagens dos slides livres: as do slide no ar e do seguinte; no slide
+  // final, todas (a grade mostra cada slide em miniatura).
+  const onSummaryNow = Boolean(room && room.slides.length > 0 && room.currentSlideIndex >= room.slides.length)
+  const assetSlides = room
+    ? onSummaryNow
+      ? room.slides
+      : room.slides.slice(room.currentSlideIndex, room.currentSlideIndex + 2)
+    : []
+  const assets = useRoomAssets(code, collectAssetIds(assetSlides))
 
   const [copied, setCopied] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -147,7 +160,9 @@ export function PresentPage() {
         const currentRoom = roomRef.current
         if (currentRoom && !pdfDownloadedRef.current) {
           pdfDownloadedRef.current = true
-          void exportResultsPdf(currentRoom, all)
+          void fetchAssets(code, collectAssetIds(currentRoom.slides)).then((loaded) =>
+            exportResultsPdf(currentRoom, all, loaded),
+          )
         }
       })
       .catch(() => {
@@ -263,8 +278,11 @@ export function PresentPage() {
     setExporting(true)
     try {
       // Busca todas as respostas da sala (de todos os slides) para o relatório.
-      const all = await getAllResponses(code)
-      await exportResultsPdf(room, all)
+      const [all, loaded] = await Promise.all([
+        getAllResponses(code),
+        fetchAssets(code, collectAssetIds(room.slides)),
+      ])
+      await exportResultsPdf(room, all, loaded)
     } finally {
       setExporting(false)
     }
@@ -395,8 +413,8 @@ export function PresentPage() {
       {/* Área do slide */}
       <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
         {isSummary ? (
-          <div className="mx-auto flex h-full w-full max-w-6xl flex-1 flex-col">
-            <SummarySlide room={room} responses={allResponses} loading={summaryLoading} />
+          <div className="flex h-full w-full flex-1 flex-col">
+            <SummarySlide room={room} responses={allResponses} loading={summaryLoading} assets={assets} />
           </div>
         ) : currentSlide ? (
           // Largura total: a nuvem de palavras e os gráficos aproveitam a tela
@@ -416,6 +434,7 @@ export function PresentPage() {
               }
               revealPending={reveal.pending}
               revealDots={reveal.dots}
+              assets={assets}
             />
           </div>
         ) : (

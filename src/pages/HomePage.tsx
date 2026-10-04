@@ -9,6 +9,8 @@ import {
 } from '../lib/presenterSessions'
 import { getRoom } from '../lib/rooms'
 import { getAllResponses } from '../lib/responses'
+import { fetchAssets } from '../lib/assets'
+import { collectAssetIds } from '../utils/freeSlide'
 import { exportResultsPdf } from '../utils/exportPdf'
 import { PageShell } from '../components/layout/PageShell'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
@@ -34,8 +36,11 @@ export function HomePage() {
         setExportError(`A sala ${s.code} não existe mais.`)
         return
       }
-      const all = await getAllResponses(s.code)
-      await exportResultsPdf(room, all)
+      const [all, assets] = await Promise.all([
+        getAllResponses(s.code),
+        fetchAssets(s.code, collectAssetIds(room.slides)),
+      ])
+      await exportResultsPdf(room, all, assets)
     } catch (e) {
       setExportError((e as Error).message)
     } finally {

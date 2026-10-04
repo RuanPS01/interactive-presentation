@@ -1,6 +1,7 @@
 import type { jsPDF } from 'jspdf'
 import type {
   ChoiceSlide,
+  PresentationAssets,
   QuizSlide,
   ResponseDoc,
   Room,
@@ -16,6 +17,7 @@ import {
   totalVotes,
 } from './aggregate'
 import { SLIDE_TYPE_LABELS } from './slideFactory'
+import { renderFreeSlide } from './freeSlideRaster'
 import { CHART_COLORS } from '../components/charts/palette'
 
 const MARGIN = 48
@@ -43,9 +45,25 @@ function slugify(value: string): string {
  * Gera um PDF com os resultados da apresentação (dados enviados pelos
  * participantes), desenhado de forma vetorial. Roda 100% no navegador;
  * a jsPDF é carregada sob demanda para não pesar no bundle inicial.
+ *
+ * Slides livres entram como imagem (desenhados em canvas a partir do modelo),
+ * por isso o relatório recebe também as imagens deles.
  */
-export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Promise<void> {
+export async function exportResultsPdf(
+  room: Room,
+  responses: ResponseDoc[],
+  assets: PresentationAssets = {},
+): Promise<void> {
   const { jsPDF } = await import('jspdf')
+  const freeImages = new Map<string, { data: string; ratio: number }>()
+  for (const slide of room.slides) {
+    if (slide.type !== 'free') continue
+    const canvas = await renderFreeSlide(slide, assets, 1)
+    freeImages.set(slide.id, {
+      data: canvas.toDataURL('image/jpeg', 0.9),
+      ratio: slide.height / slide.width,
+    })
+  }
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()
   const H = doc.internal.pageSize.getHeight()
@@ -59,7 +77,7 @@ export async function exportResultsPdf(room: Room, responses: ResponseDoc[]): Pr
   pages.forEach((slide, i) => {
     doc.addPage()
     const slideResponses = responses.filter((r) => r.slideId === slide.id)
-    drawSlidePage(doc, slide, slideResponses, i + 1, pages.length, W, H)
+    drawSlidePage(doc, slide, slideResponses, i + 1, pages.length, W, H, freeImages.get(slide.id))
 
     // Página seguinte: quem respondeu o quê, em tabela. Só para slides que
     // recebem resposta e que tenham pelo menos uma.
@@ -102,6 +120,7 @@ function drawSlidePage(
   count: number,
   W: number,
   H: number,
+  freeImage?: { data: string; ratio: number },
 ): void {
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(10)
@@ -140,6 +159,18 @@ function drawSlidePage(
     case 'answer':
       // Filtrado antes de chegar aqui (ver `exportResultsPdf`).
       return
+    case 'free': {
+      if (!freeImage) return
+      // A imagem do slide na largura da página, sem passar da altura.
+      const maxW = W - 2 * MARGIN
+      const maxH = H - contentTop - MARGIN
+      const width = Math.min(maxW, maxH / freeImage.ratio)
+      const height = width * freeImage.ratio
+      doc.setDrawColor(220, 220, 220)
+      doc.rect(MARGIN, contentTop, width, height)
+      doc.addImage(freeImage.data, 'JPEG', MARGIN, contentTop, width, height)
+      return
+    }
   }
 }
 

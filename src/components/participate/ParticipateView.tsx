@@ -1,6 +1,7 @@
-import type { PresentationSettings, Slide } from '../../types/presentation'
+import type { PresentationAssets, PresentationSettings, Slide } from '../../types/presentation'
 import { useMyResponse } from '../../hooks/useMyResponse'
 import { findQuizSlide } from '../../utils/slides'
+import { FreeSlideView } from '../free/FreeSlideView'
 import { AnswerSuspense } from '../slides/AnswerSuspense'
 import { AnswerReveal } from './AnswerReveal'
 import { WordCloudInput } from './WordCloudInput'
@@ -24,7 +25,11 @@ interface ParticipateViewProps {
   revealPending?: boolean
   /** Pontos já exibidos nas reticências do suspense. */
   revealDots?: number
+  /** Imagens dos slides livres. */
+  assets?: PresentationAssets
 }
+
+const NO_ASSETS: PresentationAssets = {}
 
 /** Controles que o participante vê, conforme o tipo do slide atual. */
 export function ParticipateView({
@@ -37,6 +42,7 @@ export function ParticipateView({
   timeUp = false,
   revealPending = false,
   revealDots = 0,
+  assets = NO_ASSETS,
 }: ParticipateViewProps) {
   const quiz = findQuizSlide(slide, slides)
   // No slide de gabarito o que interessa é a resposta dada na pergunta.
@@ -45,6 +51,18 @@ export function ParticipateView({
   const current = myResponse?.value ?? []
 
   const bodyStyle = { fontSize: `${Math.min(settings.bodyFontSize, 28)}px` }
+
+  // O slide livre vai inteiro para o celular, no formato dele.
+  if (slide.type === 'free') {
+    return (
+      <div
+        className="w-full overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800"
+        style={{ aspectRatio: `${slide.width} / ${slide.height}` }}
+      >
+        <FreeSlideView slide={slide} assets={assets} />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">

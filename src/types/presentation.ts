@@ -1,7 +1,10 @@
 /** Tipos centrais do domínio da apresentação interativa. */
 
-export type SlideType = 'wordcloud' | 'bar' | 'pie' | 'quiz' | 'answer' | 'text'
+export type SlideType = 'wordcloud' | 'bar' | 'pie' | 'quiz' | 'answer' | 'text' | 'free'
 export type ThemeMode = 'light' | 'dark'
+
+/** Formato (proporção) dos slides da apresentação. */
+export type SlideAspect = '16:9' | '4:3'
 
 /** Quantas palavras o participante pode enviar numa nuvem de palavras. */
 export type WordLimitMode = 'one' | 'range' | 'unlimited'
@@ -36,14 +39,19 @@ export interface PresentationSettings {
    * slide fica sem cronômetro e a pergunta espera o apresentador avançar.
    */
   quizTimerSeconds: number
+  /**
+   * Formato dos slides: a moldura da prévia no editor e o tamanho de cada
+   * slide livre novo. A tela do projetor continua ocupando a tela inteira.
+   */
+  slideAspect: SlideAspect
 }
 
 /**
  * Sobrescritas por slide. Campo ausente = herda a configuração global.
- * `askName` não aparece aqui: a pergunta acontece uma única vez, antes de
- * entrar na sala, então só faz sentido no nível da apresentação.
+ * `askName` e `slideAspect` não aparecem aqui: o nome é pedido uma única vez,
+ * antes de entrar na sala, e o formato vale para a apresentação inteira.
  */
-export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName'>>
+export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect'>>
 
 interface SlideBase {
   id: string
@@ -113,6 +121,132 @@ export interface TextSlide extends SlideBase {
   fontSize: number
 }
 
+/* ------------------------------------------------------------------------
+   Slide livre: composição de textos e imagens posicionados à mão (ou vindos
+   de um PPTX importado). Só exibição, como o slide de texto.
+
+   Coordenadas e tamanhos estão em px de uma moldura lógica (`width` x
+   `height` do slide, 1920 x 1080 no 16:9). A tela redimensiona a moldura
+   inteira de uma vez, então texto e imagens mantêm a proporção em qualquer
+   tela.
+   ------------------------------------------------------------------------ */
+
+/** Estilo de um trecho de texto. Ausente = herda do parágrafo e da caixa. */
+export interface FreeTextStyle {
+  fontFamily?: string
+  /** Tamanho em px da moldura lógica. */
+  fontSize?: number
+  /** Cor em `#rrggbb` (ou `#rrggbbaa`). */
+  color?: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  strike?: boolean
+  /** Cor de realce atrás do texto. */
+  highlight?: string
+}
+
+export type FreeTextAlign = 'left' | 'center' | 'right' | 'justify'
+export type FreeVerticalAlign = 'top' | 'middle' | 'bottom'
+
+/** Trecho de texto com estilo próprio. `\n` é quebra de linha no parágrafo. */
+export interface FreeTextRun {
+  text: string
+  style?: FreeTextStyle
+}
+
+export type FreeNumbering = 'arabic' | 'alphaLower' | 'alphaUpper' | 'romanLower' | 'romanUpper'
+
+/** Marcador de lista: um caractere ("•") ou numeração automática. */
+export type FreeBullet =
+  | { kind: 'char'; char: string; color?: string }
+  | { kind: 'number'; format: FreeNumbering; suffix: '.' | ')'; startAt?: number }
+
+export interface FreeTextParagraph {
+  runs: FreeTextRun[]
+  align?: FreeTextAlign
+  /** Estilo padrão dos trechos deste parágrafo (e da linha quando vazio). */
+  style?: FreeTextStyle
+  bullet?: FreeBullet
+  /** Margem esquerda do texto (px). */
+  indent?: number
+  /** Quanto o marcador fica pendurado à esquerda da margem (px). */
+  hanging?: number
+  /** Espaço antes e depois do parágrafo (px). */
+  spaceBefore?: number
+  spaceAfter?: number
+  /** Altura da linha, em múltiplos do tamanho da fonte. */
+  lineHeight?: number
+}
+
+interface FreeElementBase {
+  id: string
+  /** Nome na lista de camadas. */
+  name?: string
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Rotação em graus, em torno do centro. */
+  rotation?: number
+  /** 0 a 1. Ausente = opaco. */
+  opacity?: number
+}
+
+export interface FreeTextElement extends FreeElementBase {
+  kind: 'text'
+  paragraphs: FreeTextParagraph[]
+  /** Estilo base de todos os parágrafos. */
+  style: FreeTextStyle
+  verticalAlign?: FreeVerticalAlign
+  /** Espaço interno (px): cima, direita, baixo, esquerda. */
+  padding?: [number, number, number, number]
+  /** Cor de fundo da caixa. */
+  background?: string
+  /** Altura de linha padrão, em múltiplos do tamanho da fonte. */
+  lineHeight?: number
+}
+
+export type FreeImageFit = 'fill' | 'contain' | 'cover'
+
+export interface FreeImageElement extends FreeElementBase {
+  kind: 'image'
+  /** Chave em `Presentation.assets` (e em `rooms/{code}/assets`). */
+  assetId: string
+  /** Como a imagem ocupa a caixa. Padrão: `fill` (estica). */
+  fit?: FreeImageFit
+  /** Arredondamento dos cantos (px). */
+  radius?: number
+}
+
+export type FreeElement = FreeTextElement | FreeImageElement
+
+export interface FreeSlide extends SlideBase {
+  type: 'free'
+  /** Tamanho da moldura lógica, em px. */
+  width: number
+  height: number
+  /** Cor de fundo do slide. */
+  background: string
+  /** Em ordem de desenho: o último fica na frente. */
+  elements: FreeElement[]
+}
+
+/**
+ * Imagem usada por slides livres, já comprimida para caber num documento do
+ * Firestore. Fica fora dos slides para a sala não estourar o limite de 1 MiB
+ * do documento: os slides guardam só o `id`.
+ */
+export interface PresentationAsset {
+  id: string
+  /** `data:` URL da imagem. */
+  dataUrl: string
+  width: number
+  height: number
+}
+
+export type PresentationAssets = Record<string, PresentationAsset>
+
 export type Slide =
   | WordCloudSlide
   | BarSlide
@@ -120,6 +254,7 @@ export type Slide =
   | QuizSlide
   | AnswerSlide
   | TextSlide
+  | FreeSlide
 
 /** Slides de barras, pizza e alternativas compartilham opções e votação. */
 export type ChoiceSlide = BarSlide | PieSlide | QuizSlide
@@ -145,6 +280,11 @@ export interface Presentation {
    * completa.
    */
   settings?: Partial<PresentationSettings>
+  /**
+   * Imagens dos slides livres, pelo id. Vão junto no JSON exportado; na sala
+   * ficam numa subcoleção própria (ver `lib/assets.ts`).
+   */
+  assets?: PresentationAssets
 }
 
 export type RoomStatus = 'live' | 'ended'
@@ -166,8 +306,11 @@ export interface SlideTimer {
 /** Cronômetros da sala, indexados pelo id do slide. */
 export type SlideTimers = Record<string, SlideTimer>
 
-/** Documento salvo em `rooms/{roomCode}` no Firestore. */
-export interface Room extends Presentation {
+/**
+ * Documento salvo em `rooms/{roomCode}` no Firestore. As imagens não vão nele
+ * (ficam em `rooms/{roomCode}/assets`), por isso `assets` fica de fora.
+ */
+export interface Room extends Omit<Presentation, 'assets'> {
   creatorUid: string
   currentSlideIndex: number
   status: RoomStatus

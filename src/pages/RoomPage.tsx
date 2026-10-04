@@ -4,10 +4,12 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
 import { useRoom } from '../hooks/useRoom'
 import { useRevealCountdown } from '../hooks/useRevealCountdown'
+import { useRoomAssets } from '../hooks/useRoomAssets'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
 import { joinRoom } from '../lib/participants'
 import { getParticipantName, saveParticipantName } from '../lib/participantName'
+import { collectAssetIds } from '../utils/freeSlide'
 import { resolveSlideSettings, withDefaults } from '../utils/settings'
 import { ParticipateView } from '../components/participate/ParticipateView'
 import { NamePrompt } from '../components/participate/NamePrompt'
@@ -80,6 +82,13 @@ export function RoomPage() {
       ? room.slides[room.currentSlideIndex]
       : undefined
   const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
+  // Imagens do slide no ar e do seguinte (já chega carregado quando o
+  // apresentador avançar).
+  const nextSlide = room && currentSlide ? room.slides[room.currentSlideIndex + 1] : undefined
+  const assets = useRoomAssets(
+    code,
+    collectAssetIds([currentSlide, nextSlide].filter((s): s is NonNullable<typeof s> => Boolean(s))),
+  )
 
   // A contagem regressiva não aparece no celular: o relógio de cada aparelho
   // não bate com o do projetor, e duas contagens diferentes na mesma sala
@@ -191,6 +200,7 @@ export function RoomPage() {
                 timeUp={timer.closed}
                 revealPending={reveal.pending}
                 revealDots={reveal.dots}
+                assets={assets}
               />
             )}
           </Card>

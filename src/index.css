@@ -150,6 +150,35 @@
   background-color: var(--color-neutral-500);
 }
 
+/* Texto do slide livre (utils/richTextDom.ts). Quebras de linha do texto são
+   respeitadas, e o marcador de lista fica pendurado à esquerda da margem do
+   parágrafo, como no PowerPoint; ele vem de um atributo, então não entra no
+   texto editável nem na seleção. */
+.ft-text {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+.ft-text p {
+  margin: 0;
+}
+.ft-text p[data-marker]::before {
+  content: attr(data-marker);
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--ft-hang, 1.1em);
+  margin-left: calc(-1 * var(--ft-hang, 1.1em));
+  color: var(--ft-marker-color, inherit);
+  white-space: nowrap;
+  text-indent: 0;
+}
+
+/* Editor do slide livre: contorno tracejado ao passar o mouse sobre um
+   elemento. --inv é o inverso da escala da moldura, para a linha ter 1 px na
+   tela em qualquer zoom. */
+.free-el:hover {
+  outline: calc(1px * var(--inv, 1)) dashed rgb(96 165 250 / 0.9);
+}
+
 /* Lista do Select: surge com um leve deslocamento, sem atrasar a escolha. */
 .ui-popover {
   animation: ui-popover-in 0.12s ease-out;

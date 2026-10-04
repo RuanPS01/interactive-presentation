@@ -1,5 +1,6 @@
 import { clsx } from 'clsx'
 import type {
+  PresentationAssets,
   PresentationSettings,
   QuizSlide,
   ResponseDoc,
@@ -18,6 +19,7 @@ import { findQuizSlide } from '../../utils/slides'
 import { BarChartView } from '../charts/BarChartView'
 import { PieChartView } from '../charts/PieChartView'
 import { WordCloudView } from '../charts/WordCloudView'
+import { FreeSlideView } from '../free/FreeSlideView'
 import { AnswerSuspense } from './AnswerSuspense'
 import { NamedResponsesList } from './NamedResponsesList'
 import { OptionsBoard } from './OptionsBoard'
@@ -46,7 +48,11 @@ interface SlideDisplayProps {
   revealPending?: boolean
   /** Pontos já exibidos nas reticências do suspense. */
   revealDots?: number
+  /** Imagens dos slides livres (as que ainda não chegaram aparecem reservadas). */
+  assets?: PresentationAssets
 }
+
+const NO_ASSETS: PresentationAssets = {}
 
 const ALIGN_ITEMS: Record<TextAlign, string> = {
   left: 'justify-start text-left',
@@ -64,7 +70,36 @@ export function SlideDisplay({
   countdown = null,
   revealPending = false,
   revealDots = 0,
+  assets = NO_ASSETS,
 }: SlideDisplayProps) {
+  // O slide livre é a composição inteira: sem título padrão nem rodapé.
+  if (slide.type === 'free') {
+    return <FreeSlideView slide={slide} assets={assets} className="h-full w-full flex-1" />
+  }
+  return (
+    <StandardSlide
+      slide={slide}
+      slides={slides}
+      responses={responses}
+      settings={settings}
+      participants={participants}
+      countdown={countdown}
+      revealPending={revealPending}
+      revealDots={revealDots}
+    />
+  )
+}
+
+function StandardSlide({
+  slide,
+  responses,
+  settings = DEFAULT_SETTINGS,
+  participants,
+  slides,
+  countdown = null,
+  revealPending = false,
+  revealDots = 0,
+}: Omit<SlideDisplayProps, 'assets'>) {
   const quiz = findQuizSlide(slide, slides)
   // Num `quiz`, identificar as respostas também as revela — então a lista de
   // nomes só aparece quando o slide autoriza mostrar as respostas.
@@ -190,6 +225,8 @@ function SlideBody({ slide, responses, settings, quiz }: BodyProps) {
           </p>
         </div>
       )
+    case 'free':
+      return null
   }
 }
 
