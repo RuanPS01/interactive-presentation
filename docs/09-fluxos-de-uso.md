@@ -4,16 +4,19 @@
 
 1. **Início → “Criar sala”** (`/create`). O editor abre vazio, com o título
    “Minha apresentação”.
-2. **Monta os slides** na coluna 1 (5 tipos criáveis), configura na coluna 2 e
-   confere na coluna 3, que mostra a prévia com as fontes reais.
+2. **Monta os slides** na coluna 1 (6 tipos criáveis), configura na coluna 2 e
+   confere na coluna 3, que mostra a prévia com as fontes reais, na proporção
+   escolhida (16:9 ou 4:3). No slide livre, a própria prévia é editável.
 3. **Ajusta as opções** em **Opções** (globais) e, se precisar, em “Opções deste
    slide” (individuais) — ver [06](06-configuracoes.md).
 4. *(Opcional)* **Prompt de IA** → cola num assistente, salva a resposta como
-   `.json` e usa **Importar JSON**. Ou **Exportar JSON** para guardar o que
-   montou (o editor não persiste ao recarregar).
+   `.json` e usa **Importar**, opção "Apresentação (.json)". Ou importa um
+   PowerPoint (ver abaixo). **Exportar JSON** guarda o que montou, com as
+   imagens (o editor não persiste ao recarregar).
 5. **Iniciar apresentação**:
    - autentica anonimamente (se ainda não estiver);
-   - `createRoom` sorteia um código livre e grava sala + token;
+   - `createRoom` sorteia um código livre e grava sala + token, e depois as
+     imagens dos slides livres na subcoleção `assets`;
    - a sessão é salva no `localStorage` deste dispositivo;
    - navega para `/present/<código>/<token>`.
 6. **Apresenta**: `→`, `PageDown` ou `Espaço` avançam; `←` e `PageUp` voltam
@@ -26,6 +29,61 @@
 9. **Passa do último slide** → slide final de agradecimento, com a grade de
    miniaturas, e o **PDF de resultados baixa automaticamente** (uma vez por
    sessão). O botão **Exportar PDF** gera o mesmo relatório a qualquer momento.
+
+### Importar um PowerPoint
+
+1. **Importar** abre o modal com as duas opções. Em "PowerPoint (.pptx)",
+   escolha antes onde os slides entram: **Adicionar ao fim** (padrão) ou
+   **Substituir tudo**. O arquivo pode ser escolhido ou arrastado para a opção.
+2. O leitor ([`src/utils/pptx`](../src/utils/pptx/index.ts)) é baixado nessa
+   hora e lê o arquivo no próprio navegador, sem enviar nada a servidor. O
+   modal mostra o progresso slide a slide.
+3. Para cada slide visível, o leitor percorre o slide, o layout e o mestre e
+   monta um slide livre: textos viram caixas de texto editáveis, fotos viram
+   imagens, e formas, fundos, tabelas, gráficos e SmartArt são desenhados num
+   canvas e viram imagens (itens gráficos vizinhos viram uma imagem só). Ver a
+   tabela em [05](05-tipos-de-slide.md#o-que-vem-de-um-powerpoint).
+4. Toda imagem é comprimida e identificada pelo conteúdo; uma imagem repetida
+   em vários slides (um logotipo do mestre, por exemplo) é guardada uma vez.
+5. No fim, o modal mostra quantos slides e imagens entraram e os avisos do que
+   não pôde ser reproduzido. **Concluir** fecha e deixa o primeiro slide novo
+   selecionado.
+
+Formato: com "Substituir tudo", ou com o editor vazio, a apresentação adota o
+formato do arquivo (16:9 ou 4:3). Adicionando ao fim de uma apresentação em
+outro formato, os slides importados mantêm o tamanho do arquivo e aparecem com
+faixas nas bordas; o modal avisa. Um PowerPoint numa proporção que não é 16:9
+nem 4:3 (16:10, A4) também mantém a própria proporção.
+
+Avisos que podem aparecer:
+
+| Aviso | Motivo |
+| --- | --- |
+| Imagens em formato EMF, WMF ou TIFF ficaram de fora | Navegadores não desenham esses formatos |
+| Textos verticais foram importados na horizontal | O slide livre só tem texto horizontal |
+| Vídeos e áudios viraram apenas a imagem de capa | A plataforma não reproduz mídia |
+| Gráficos viraram imagens simplificadas | São redesenhados a partir dos dados salvos no arquivo, com estilo próprio |
+| SmartArt virou imagem (ou ficou de fora, sem desenho salvo) | O desenho salvo pelo PowerPoint é usado; sem ele, não há o que desenhar |
+| Alguns objetos ficaram de fora | Objetos OLE, controles e afins |
+| N slide(s) oculto(s) ficaram de fora | Slides marcados como ocultos não entram |
+
+As fontes do arquivo são mantidas pelo nome; se o aparelho não tiver a fonte,
+o navegador usa uma parecida, e as quebras de linha podem mudar um pouco.
+
+### Montar um slide livre do zero
+
+1. **Adicionar slide** e escolha "Slide livre". Ele nasce com fundo branco,
+   no formato da apresentação, e um título de exemplo ("Clique duas vezes para
+   editar").
+2. **Adicionar texto** cria uma caixa nova, já em edição. **Adicionar
+   imagem** (ou arrastar arquivos para a prévia, ou colar com Ctrl+V) insere as
+   imagens comprimidas.
+3. Arraste os elementos e use as alças para redimensionar; as guias mostram o
+   alinhamento com o slide e com os outros elementos.
+4. Clique duas vezes num texto para editar. Selecione um trecho e use a barra
+   de texto do painel (ou Ctrl+B, Ctrl+I, Ctrl+U) para formatar só ele; sem
+   seleção, a formatação vale para a caixa inteira.
+5. Para mais espaço, **Ampliar** abre o editor na tela inteira.
 
 ### Retomar uma sala
 
@@ -133,3 +191,11 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Participante entra depois de uma edição | Vê a sala atualizada, sem o aviso de reinício |
 | Alguém abre `/edit/<código>` sem o token | Tela "Acesso de apresentador necessário", igual à da apresentação |
 | A edição esvazia a lista de slides | Salvar é recusado: a apresentação precisa de ao menos um slide |
+| Imagem de um slide livre ainda não chegou ao celular | O lugar dela mostra um espaço reservado cinza até a imagem chegar; o resto do slide aparece na hora |
+| Imagem que não existe mais na sala | Fica o espaço reservado cinza, com o ícone de imagem ausente, sem quebrar o slide |
+| A apresentação passa de 1 MB sem contar as imagens | Criar ou salvar é recusado com o tamanho e a sugestão de dividir a apresentação |
+| A sala é criada, mas o envio das imagens falha | A mensagem diz que a sala existe sem as imagens; reabrir a edição e salvar envia de novo |
+| Arquivo .ppt antigo, ou outro arquivo na opção de PowerPoint | Recusado, com a orientação de salvar como .pptx |
+| Arquivo .pptx na opção de JSON | É lido como PowerPoint |
+| PowerPoint sem slides visíveis | "O arquivo não tem slides visíveis para importar." |
+| Troca de formato com slides livres | Os slides livres no formato antigo são reenquadrados para caber, sem distorcer |

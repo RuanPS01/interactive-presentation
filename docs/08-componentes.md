@@ -6,7 +6,7 @@ Três lugares, com responsabilidades separadas:
 
 | Onde | O quê | Vive até |
 | --- | --- | --- |
-| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, seleção | Recarregar a página (o da edição de sala, até sair da tela) |
+| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, imagens, seleção do slide e do elemento | Recarregar a página (o da edição de sala, até sair da tela) |
 | [`themeStore`](../src/store/themeStore.ts) (Zustand + localStorage) | Tema claro/escuro do usuário | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença | Até ser apagada |
 
@@ -36,11 +36,33 @@ editor que criou.
 ```ts
 {
   title, slides, settings, selectedIndex,
+  assets,                                   // imagens dos slides livres, pelo id
+  selectedElementId, editingElementId,      // slide livre: selecionado e em edição
+  textSelection,                            // trecho selecionado no texto em edição
   setTitle, updateSettings, setOverride,
   addSlide, updateSlide, removeSlide, moveSlide, select,
+  addAssets, selectElement, setEditingElement, setTextSelection,
+  updateElement, setElements, appendSlides,
   loadPresentation, getPresentation, reset,
 }
 ```
+
+Detalhes do slide livre no estado:
+
+- **`textSelection`** guarda a última seleção feita dentro do texto em edição,
+  em deslocamentos no texto corrido. Os botões do painel usam essa seleção,
+  porque clicar neles tira o foco do texto.
+- **Trocar de slide** limpa a seleção de elemento e de texto.
+- **`updateSettings`** com um `slideAspect` novo reenquadra os slides livres
+  que estavam na moldura antiga (ver [06](06-configuracoes.md#formato-dos-slides)).
+- **`getPresentation`** devolve só as imagens ainda usadas por algum slide
+  (`pickAssets`); sem nenhuma, o campo `assets` nem aparece.
+- **`appendSlides`** é o "Adicionar ao fim" da importação de PowerPoint: junta
+  slides e imagens e seleciona o primeiro slide novo.
+
+`useEditorStoreApi()` devolve o próprio editor do contexto, para ações que
+leem o estado na hora (a importação, os atalhos do slide livre) sem assinar
+mudanças.
 
 Dois auxiliares internos sustentam o resto:
 
@@ -79,7 +101,15 @@ das três colunas recebe `lg:flex-1 lg:min-h-0`. Cada coluna tem uma
 | --- | --- | --- |
 | 1 | Card “Adicionar slide” | Lista de slides |
 | 2 | Título “Configuração” | Formulário do slide + opções do slide |
-| 3 | Título “Prévia” | Prévia do slide |
+| 3 | Título “Prévia”, formato (16:9 ou 4:3) e, no slide livre, "Ampliar" | Prévia do slide |
+
+As colunas são `260px`, `0.9fr` e `1.35fr`: a prévia fica com a maior parte da
+largura, e a página usa a tela inteira (`w-full`, sem largura máxima). A prévia
+desenha o slide numa moldura do tamanho do formato e a escala para caber
+([`ScaledFrame`](../src/components/slides/ScaledFrame.tsx)); num slide livre,
+a prévia é a área de trabalho editável
+([`FreeSlideCanvas`](../src/components/free/FreeSlideCanvas.tsx)), e "Ampliar"
+abre a mesma área num painel da tela inteira (Esc fecha).
 
 Assim a página **não cresce** conforme slides são adicionados: cada área rola
 por conta própria. Abaixo de `lg` o layout volta ao empilhamento natural, que é
@@ -96,7 +126,13 @@ o comportamento certo no celular.
 - **[`SlideDisplay`](../src/components/slides/SlideDisplay.tsx)** — moldura de
   todo slide: título (com o tamanho configurado), corpo conforme o tipo, lista
   de respostas identificadas (quando ligada) e rodapé de contagem. Recebe
-  `slides` para que um slide `answer` encontre seu `quiz`.
+  `slides` para que um slide `answer` encontre seu `quiz`, e `assets` para as
+  imagens. O slide livre não usa essa moldura: vira só o `FreeSlideView`.
+- **[`ScaledFrame`](../src/components/slides/ScaledFrame.tsx)**: desenha um
+  conteúdo de tamanho fixo (a moldura do slide) escalado com `transform` para
+  caber no espaço disponível, centralizado. Acompanha o tamanho com
+  `ResizeObserver`; o filho pode ser uma função que recebe a escala (o editor
+  do slide livre precisa dela para converter o mouse em px do slide).
 - **[`OptionsBoard`](../src/components/slides/OptionsBoard.tsx)** — alternativas
   em cartões grandes com letras A, B, C…; em modo `reveal` pinta a correta de
   verde e mostra votos e porcentagem. Passa a duas colunas com mais de 4 opções.
@@ -110,11 +146,44 @@ o comportamento certo no celular.
   “A resposta certa é…”, com um ponto a mais por segundo, no lugar do gabarito
   durante os 3 segundos de espera. Também usado pelo `ParticipateView`.
 
+### `free/`: slide livre
+
+- **[`FreeSlideView`](../src/components/free/FreeSlideView.tsx)**: exibição
+  (projetor, celular, miniatura do resumo). `FreeSlideStage` desenha a moldura
+  e os elementos; `FreeSlideView` a coloca num `ScaledFrame`.
+- **[`FreeElementContent`](../src/components/free/FreeElementContent.tsx)**:
+  conteúdo de um elemento. O texto vira parágrafos e trechos em HTML (com os
+  marcadores desenhados por CSS); a imagem respeita o encaixe e os cantos, e
+  mostra um espaço reservado enquanto não chega.
+- **[`layout.ts`](../src/components/free/layout.ts)**: posição, tamanho,
+  rotação e opacidade de cada elemento, e o CSS da caixa de texto, iguais na
+  exibição e na edição.
+- **[`FreeSlideCanvas`](../src/components/free/FreeSlideCanvas.tsx)**: área de
+  trabalho do editor. Arrastar com guias de encaixe, 8 alças de
+  redimensionamento que respeitam a rotação, atalhos de teclado, soltar e colar
+  imagens (ver [05](05-tipos-de-slide.md#edição)).
+- **[`FreeTextEditable`](../src/components/free/FreeTextEditable.tsx)**: a
+  caixa de texto em edição, com `contentEditable`. A cada digitação o HTML é
+  lido de volta para o modelo (`htmlToParagraphs`) e a seleção é guardada em
+  deslocamentos (`getSelectionOffsets`), que sobrevivem à nova renderização. A
+  colagem entra só como texto, para não trazer estilos de outras páginas.
+
+A lógica do texto rico fica fora dos componentes, em `utils/`:
+[`richText.ts`](../src/utils/richText.ts) (aplicar estilo num intervalo,
+partindo e juntando trechos; ler o valor de um intervalo, ou "misto"),
+[`richTextDom.ts`](../src/utils/richTextDom.ts) (modelo para HTML e de volta)
+e [`freeTextFormat.ts`](../src/utils/freeTextFormat.ts) (formatar a seleção ou
+a caixa inteira). As ações que mexem em elementos (adicionar texto e imagens,
+trocar imagem, duplicar, excluir, reordenar) ficam em
+[`useFreeSlideActions`](../src/hooks/useFreeSlideActions.ts), usadas tanto
+pela área de trabalho quanto pelo painel.
+
 ### `participate/` — tela do participante
 
 - **[`ParticipateView`](../src/components/participate/ParticipateView.tsx)** —
   escolhe o controle pelo tipo do slide e resolve o alvo da resposta (no
-  gabarito, a resposta dada na pergunta).
+  gabarito, a resposta dada na pergunta). No slide livre, mostra o slide
+  inteiro numa caixa com a proporção dele.
 - **[`ChoiceInput`](../src/components/participate/ChoiceInput.tsx)** — voto em
   `bar`/`pie`/`quiz`; “Limpar resposta” quando a troca é permitida, cadeado
   quando não.
@@ -129,12 +198,23 @@ o comportamento certo no celular.
 ### `editor/`
 
 Formulários por tipo (`WordCloudConfig`, `ChoiceConfig`, `QuizConfig`,
-`AnswerConfig`, `TextConfig`), a lista (`SlideList`), o menu de adição
-(`AddSlideMenu`), os dois painéis de opções (`PresentationSettingsButton` e
-`SlideSettingsSection`, ambos usando os controles de `SettingsControls`), o
-modal do prompt de IA (`AiPromptButton`), o editor em 3 colunas
-(`EditorWorkspace`) e os botões de importar/exportar JSON
-(`ImportExportButtons`).
+`AnswerConfig`, `TextConfig`, `FreeSlideConfig`), a lista (`SlideList`), o
+menu de adição (`AddSlideMenu`), os dois painéis de opções
+(`PresentationSettingsButton` e `SlideSettingsSection`, ambos usando os
+controles de `SettingsControls`), o modal do prompt de IA (`AiPromptButton`), o
+editor em 3 colunas (`EditorWorkspace`) e os botões "Importar" e "Exportar
+JSON" (`ImportExportButtons`).
+
+`FreeSlideConfig` é o painel do slide livre: nome, cor de fundo, botões de
+adicionar texto e imagem, lista de camadas e, para o elemento selecionado,
+posição e tamanho, rotação, opacidade, ordem, duplicar e excluir, mais o painel
+de texto ou de imagem (ver [05](05-tipos-de-slide.md#edição)).
+
+`ImportExportButtons` abre o modal "Importar" com duas opções: "Apresentação
+(.json)", que substitui tudo, e "PowerPoint (.pptx)", com a escolha entre
+"Adicionar ao fim" e "Substituir tudo". As duas aceitam o arquivo arrastado. O
+leitor de PowerPoint é carregado só nessa hora (`import()` dinâmico), e o modal
+mostra o progresso, o resultado (slides, imagens, avisos) ou o erro.
 
 `SettingsControls` monta as linhas de opção sobre os componentes de `ui/`:
 `FontSizeRow` e `OverrideFontRow` usam o `Slider`, `OverrideToggleRow` usa o
@@ -146,8 +226,8 @@ modal do prompt de IA (`AiPromptButton`), o editor em 3 colunas
   na barra; o modal traz o QR ampliado, o **link curto em texto grande**, o
   código da sala e o link completo com botão de copiar.
 - **[`SummarySlide`](../src/components/present/SummarySlide.tsx)** — slide final
-  com miniatura de cada slide (gráficos, nuvem ou lista de alternativas com o
-  gabarito).
+  com miniatura de cada slide (gráficos, nuvem, lista de alternativas com o
+  gabarito ou o próprio slide livre reduzido).
 - **[`PresenterAccessDenied`](../src/components/present/PresenterAccessDenied.tsx)**:
   tela de quem abre `/present` ou `/edit` sem o token, com atalho para entrar
   como participante.
@@ -178,6 +258,9 @@ de foco azul translúcido) nos temas claro e escuro.
 | [`Modal`](../src/components/ui/Modal.tsx) | Janelas modais | Esc e clique fora fecham; Tab preso no painel; foco volta para quem abriu |
 | [`ConfirmDialog`](../src/components/ui/ConfirmDialog.tsx) | Confirmar ações | Sobre o `Modal`; foco inicial no botão de confirmar; tom `danger` |
 | [`Banner`](../src/components/ui/Banner.tsx) | Avisos no topo da tela | Tons `info`, `warning` e `error`; fechar opcional |
+| [`ColorInput`](../src/components/ui/ColorInput.tsx) | Escolher cor | Amostra que abre o seletor do sistema, campo hexadecimal e cores rápidas; estado "misto" e opção "nenhuma" (`allowNone`) |
+| [`SegmentedControl`](../src/components/ui/SegmentedControl.tsx) | Escolha entre poucas opções lado a lado | `radiogroup` de botões com texto ou ícone; tamanhos `sm` e `md`; não tira o foco do texto em edição |
+| [`ToggleButton`](../src/components/ui/ToggleButton.tsx) | Ligar e desligar (negrito, itálico...) | `aria-pressed`; estado "misto" quando a seleção tem as duas coisas |
 
 Como o `Select` se comporta no teclado:
 
@@ -216,6 +299,8 @@ barra do `ScrollArea`, animação da lista do `Select`) ficam no
 | `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito — pulados num gabarito já revelado |
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
 | `useFullscreen` | Fullscreen API, acompanhando a saída por Esc |
+| `useRoomAssets` | Imagens de uma sala para os ids pedidos, lidas uma vez e guardadas ([07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres)) |
+| `useFreeSlideActions` | Ações do slide livre: adicionar texto e imagens (comprimidas antes), trocar imagem, duplicar, excluir, reordenar |
 
 ## Estilo e tema
 
@@ -225,5 +310,6 @@ escolha do usuário vence a do sistema. O `color-scheme` do `<html>` acompanha a
 classe, para os controles que continuam nativos (setas do campo numérico, barra
 de rolagem da página) também seguirem o tema escolhido. O
 [`index.css`](../src/index.css) também traz as animações da nuvem de palavras,
-os ajustes de cor dos textos e tooltips do Recharts nos dois temas e as partes
-dos componentes genéricos descritas acima.
+os ajustes de cor dos textos e tooltips do Recharts nos dois temas, as partes
+dos componentes genéricos descritas acima e as regras do texto do slide livre
+(`.ft-text`: quebras preservadas e marcadores desenhados por `::before`).

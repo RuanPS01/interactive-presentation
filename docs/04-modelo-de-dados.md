@@ -11,9 +11,10 @@ interface Presentation {
   title: string
   slides: Slide[]
   settings?: Partial<PresentationSettings>  // ausente/parcial => padrões
+  assets?: PresentationAssets               // imagens dos slides livres, pelo id
 }
 
-interface Room extends Presentation {
+interface Room extends Omit<Presentation, 'assets'> {
   creatorUid: string        // dono atual (quem criou ou reivindicou com o token)
   currentSlideIndex: number // slide no ar; === slides.length => slide final
   status: 'live' | 'ended'
@@ -31,7 +32,9 @@ interface SlideTimer {
 ```
 
 `Presentation` é a estrutura **serializável** (import/export JSON).
-`Room` é ela mais os campos que só existem depois de publicada.
+`Room` é ela mais os campos que só existem depois de publicada, **sem as
+imagens**: elas vão para a subcoleção `assets` (ver abaixo), para o documento
+da sala continuar pequeno.
 
 `revision` começa ausente (vale 0) e soma 1 a cada edição feita pelo
 apresentador numa sala já iniciada. A edição recomeça a apresentação do
@@ -47,7 +50,7 @@ cada slide precisa lembrar em que pé estava. Ver
 ### Slides
 
 ```ts
-type SlideType = 'wordcloud' | 'bar' | 'pie' | 'quiz' | 'answer' | 'text'
+type SlideType = 'wordcloud' | 'bar' | 'pie' | 'quiz' | 'answer' | 'text' | 'free'
 
 interface SlideBase {
   id: string
@@ -69,7 +72,83 @@ isInteractiveSlide(slide): slide is WordCloudSlide | ChoiceSlide  // recebe resp
 
 `isInteractiveSlide` é um *type predicate*: quem passa por ele já pode acessar
 `options` sem checagem extra. `text` e `answer` ficam de fora — nenhum dos dois
-recebe respostas próprias.
+recebe respostas próprias. O slide livre (`free`) também fica de fora: é só
+exibição.
+
+### Slide livre
+
+O slide livre é uma moldura lógica de tamanho fixo com elementos posicionados
+em px dessa moldura. A tela escala a moldura inteira de uma vez, então texto e
+imagens mantêm a proporção em qualquer aparelho.
+
+```ts
+interface FreeSlide extends SlideBase {
+  type: 'free'
+  width: number            // 1920 no 16:9, 1440 no 4:3
+  height: number           // 1080 nos dois
+  background: string       // cor '#rrggbb'
+  elements: FreeElement[]  // ordem de desenho: o último fica na frente
+}
+
+type FreeElement = FreeTextElement | FreeImageElement
+
+// Comum aos dois
+{ id, name?, x, y, width, height, rotation?, opacity? }
+
+interface FreeTextElement {
+  kind: 'text'
+  style: FreeTextStyle                 // estilo base da caixa
+  paragraphs: FreeTextParagraph[]
+  verticalAlign?: 'top' | 'middle' | 'bottom'
+  padding?: [number, number, number, number]  // cima, direita, baixo, esquerda
+  background?: string
+  lineHeight?: number
+}
+
+interface FreeTextParagraph {
+  runs: { text: string; style?: FreeTextStyle }[]
+  align?: 'left' | 'center' | 'right' | 'justify'
+  style?: FreeTextStyle
+  bullet?: { kind: 'char'; char: string; color?: string }
+         | { kind: 'number'; format: FreeNumbering; suffix: '.' | ')'; startAt?: number }
+  indent?: number; hanging?: number    // margem e recuo do marcador
+  spaceBefore?: number; spaceAfter?: number; lineHeight?: number
+}
+
+interface FreeTextStyle {  // tudo opcional: o que falta é herdado
+  fontFamily?, fontSize?, color?, bold?, italic?, underline?, strike?, highlight?
+}
+
+interface FreeImageElement {
+  kind: 'image'
+  assetId: string                       // chave em Presentation.assets
+  fit?: 'fill' | 'contain' | 'cover'    // padrão: fill (estica)
+  radius?: number                       // cantos arredondados
+}
+```
+
+O estilo de um trecho vale nesta ordem: o do trecho, o do parágrafo e o da
+caixa. Os utilitários de [`src/utils/richText.ts`](../src/utils/richText.ts)
+aplicam formatação num intervalo de caracteres, partindo e juntando trechos
+para o modelo continuar enxuto.
+
+### Imagens (`PresentationAsset`)
+
+```ts
+interface PresentationAsset {
+  id: string        // 'img_' + início do hash SHA-1 do conteúdo
+  dataUrl: string   // data:image/(jpeg|webp|png|gif);base64,...
+  width: number
+  height: number
+}
+type PresentationAssets = Record<string, PresentationAsset>
+```
+
+Toda imagem entra comprimida por [`src/utils/images.ts`](../src/utils/images.ts):
+no máximo 1920 px no lado maior e 900 mil caracteres de data URL, JPEG quando
+é opaca e WebP ou PNG quando tem transparência. Como o id vem do conteúdo, a
+mesma imagem usada em vários slides é guardada uma vez só, e um id nunca aponta
+para uma versão antiga.
 
 ### Respostas e presença
 
@@ -94,10 +173,11 @@ interface ParticipantDoc {
 ## Coleções do Firestore
 
 ```
-rooms/{code}                          <- documento da sala (Room)
-  private/presenter                   <- { token, ownerUid, createdAt }  (ilegível para clientes)
-  participants/{uid}                  <- ParticipantDoc (presença)
-  responses/{slideId}__{uid}          <- ResponseDoc
+rooms/{code}                          documento da sala (Room)
+  private/presenter                   { token, ownerUid, createdAt }  (ilegível para clientes)
+  participants/{uid}                  ParticipantDoc (presença)
+  responses/{slideId}__{uid}          ResponseDoc
+  assets/{assetId}                    { dataUrl, width, height, createdAt }
 ```
 
 ### `rooms/{code}`
@@ -123,6 +203,15 @@ muda. Um heartbeat multiplicaria as escritas por participante e por minuto, o
 que pesa no plano gratuito sem mudar a contagem que interessa — quem entrou na
 sala conta como participante.
 
+### `rooms/{code}/assets/{assetId}`
+
+Uma imagem por documento, com o mesmo id do `PresentationAsset`. Ficam fora do
+documento da sala por dois motivos: o limite de 1 MiB por documento e o fato
+de a sala ser lida por todos os aparelhos a cada troca de slide. Cada imagem é
+lida uma vez por aparelho e guardada em memória
+([`src/lib/assets.ts`](../src/lib/assets.ts)). Todos leem; só o dono da sala
+grava e apaga. Ver [07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres).
+
 ### `rooms/{code}/responses/{slideId}__{uid}`
 
 Id **determinístico**: `${slideId}__${participantUid}`. Consequências:
@@ -135,7 +224,9 @@ Id **determinístico**: `${slideId}__${participantUid}`. Consequências:
 
 ## Formato JSON (import/export)
 
-O JSON exportado é exatamente um `Presentation`:
+O JSON exportado é exatamente um `Presentation`. Quando há slides livres com
+imagens, ele leva também o campo `assets` com as imagens usadas (as que
+deixaram de ser usadas não vão), então o arquivo é autossuficiente:
 
 ```json
 {
@@ -147,7 +238,8 @@ O JSON exportado é exatamente um `Presentation`:
     "titleFontSize": 36,
     "labelFontSize": 16,
     "bodyFontSize": 24,
-    "quizTimerSeconds": 20
+    "quizTimerSeconds": 20,
+    "slideAspect": "16:9"
   },
   "slides": [
     { "id": "s1", "type": "text", "title": "Abertura",
@@ -163,7 +255,11 @@ O JSON exportado é exatamente um `Presentation`:
 ```
 
 A validação está em [`src/utils/validation.ts`](../src/utils/validation.ts)
-(Zod, união discriminada por `type`).
+(Zod, união discriminada por `type`). No slide livre, as cores precisam estar
+em `#rrggbb` (ou `#rrggbbaa`), porque vão direto para o CSS; as imagens só
+aceitam data URL de PNG, JPEG, WebP ou GIF; e toda imagem citada por um
+elemento precisa existir em `assets`, senão o arquivo é recusado com o caminho
+do elemento.
 
 ### Compatibilidade
 
@@ -172,7 +268,8 @@ O schema foi construído para **aceitar arquivos antigos**:
 - `settings` é opcional e parcial — o que faltar recebe o padrão;
 - `overrides` é opcional em todo slide;
 - num slide `quiz`, `correctOptionIds` e `revealAnswer` têm `.default()`, então
-  um JSON gerado sem esses campos importa como pergunta sem gabarito.
+  um JSON gerado sem esses campos importa como pergunta sem gabarito;
+- `assets` e `settings.slideAspect` são opcionais; sem o formato, vale 16:9.
 
 Um JSON exportado antes destas mudanças (só `title` + `slides` com os quatro
 tipos originais) continua importando sem erro.

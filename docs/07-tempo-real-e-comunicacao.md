@@ -25,6 +25,7 @@ própria aplicação.
 | [`useResponses`](../src/hooks/useResponses.ts) | `responses` filtradas por `slideId` | Apresentador |
 | [`useMyResponse`](../src/hooks/useMyResponse.ts) | `responses/{slideId}__{uid}` | Participante |
 | [`useParticipants`](../src/hooks/useParticipants.ts) | `participants` | Apresentador |
+| [`useRoomAssets`](../src/hooks/useRoomAssets.ts) | `assets/{id}` (leitura única, não é assinatura) | Apresentador e participante |
 
 Todos devolvem a função de cancelamento do `onSnapshot` no cleanup do
 `useEffect`, então trocar de slide ou sair da página encerra a escuta.
@@ -189,7 +190,10 @@ durante a edição, porque quem encerra é a tela de apresentação: descartando
 encerramento acontece assim que essa tela volta a abrir; salvando, os
 cronômetros recomeçam com o tempo cheio.
 
-Ao salvar, depois da confirmação, uma única escrita grava:
+Ao abrir, a tela de edição também busca as imagens dos slides livres da sala
+e guarda a lista de ids que a sala já tem. Ao salvar, depois da confirmação,
+as imagens novas são enviadas primeiro (para nenhum aparelho ver um slide sem a
+imagem) e então uma única escrita no documento da sala grava:
 
 | Campo | Valor |
 | --- | --- |
@@ -199,6 +203,9 @@ Ao salvar, depois da confirmação, uma única escrita grava:
 | `revealedSlideIds` | `[]`: os gabaritos voltam a ter o suspense |
 | `status` | `live` |
 | `revision` | `increment(1)` |
+
+Por fim, as imagens que nenhum slide usa mais são apagadas da subcoleção; se
+essa limpeza falhar, só sobra uma imagem sem uso, nada quebra.
 
 Não existe mensagem direta para "redirecionar" ninguém: cada navegador segue
 `currentSlideIndex`, então zerar o índice leva todos ao início ao mesmo tempo,
@@ -216,11 +223,53 @@ Decisões:
   editor preserva, e as regras só deixam o próprio autor apagá-la. Respostas de
   um slide removido ficam órfãs e não aparecem em lugar nenhum; votos em uma
   opção removida deixam de ser contados.
-- **As regras não mudam.** Gravar a edição é um `update` comum no documento da
-  sala, já permitido ao dono atual.
+- **As regras do documento da sala não mudam.** Gravar a edição é um `update`
+  comum, já permitido ao dono atual. As imagens seguem a regra da subcoleção
+  `assets`, que exige o mesmo dono.
 - **O editor é só da tela de edição.** Ela cria o próprio `editorStore` (ver
   [08](08-componentes.md#editorstore-em-detalhe)), então o rascunho da tela de
   criação não é tocado.
+
+## Imagens dos slides livres
+
+[`src/lib/assets.ts`](../src/lib/assets.ts) ·
+[`useRoomAssets`](../src/hooks/useRoomAssets.ts)
+
+As imagens ficam em `rooms/{code}/assets/{assetId}`, uma por documento, e não
+no documento da sala. A sala é lida por todos os aparelhos a cada troca de
+slide e tem limite de 1 MiB; com as imagens dentro, ela estouraria o limite e
+cada troca de slide baixaria tudo de novo.
+
+O Firestore foi escolhido no lugar do Cloud Storage porque o Storage exige o
+plano pago (Blaze) do Firebase, e o projeto roda no plano gratuito. Para caber
+num documento, toda imagem é comprimida antes de entrar (no máximo 1920 px no
+lado maior e 900 mil caracteres de data URL).
+
+**Escrita.** `createRoom` grava a sala e o documento privado no lote atômico de
+sempre e só depois envia as imagens, porque as regras só deixam o dono da sala
+gravá-las. As imagens vão em lotes de até 8 documentos ou 7 MB. Na edição, só
+as imagens que a sala ainda não tem são enviadas (o id vem do conteúdo, então
+id igual é imagem igual).
+
+**Leitura.** Não há assinatura: o id muda junto com o conteúdo, então uma
+imagem lida nunca fica desatualizada. Cada aparelho lê cada imagem uma vez e a
+guarda em memória (as leituras em andamento também, para duas telas pedindo a
+mesma imagem gerarem uma leitura só). Cada tela pede só o que vai mostrar:
+
+| Tela | Imagens lidas |
+| --- | --- |
+| Projetor | As do slide no ar e do seguinte; no slide final, todas (miniaturas) |
+| Celular | As do slide no ar e do seguinte |
+| Edição da sala | Todas, antes de abrir o editor |
+| PDF (projetor e tela inicial) | Todas, na hora de gerar |
+
+Enquanto uma imagem não chega, o lugar dela mostra um espaço reservado cinza;
+o slide não espera por ela.
+
+**Tamanho da sala.** Mesmo sem as imagens, a sala pode crescer com muitos
+slides livres cheios de texto. `createRoom` e `saveAndRestartRoom` medem o JSON
+antes de gravar e, se passar de 1 MB, recusam com uma mensagem que pede para
+dividir a apresentação.
 
 ## Regras de segurança
 
@@ -235,6 +284,7 @@ que o arquivo muda (job `regras-firestore`, ver
 | `rooms/{code}/private/{doc}` | **negada a todos** | criar/atualizar: autenticado e reenviando o **mesmo token**; excluir: negado |
 | `rooms/{code}/participants/{uid}` | pública | só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`) |
 | `rooms/{code}/responses/{id}` | pública | criar/atualizar: `participantUid == uid`; excluir: só o autor |
+| `rooms/{code}/assets/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
 
 Consequências práticas:
 
@@ -253,5 +303,8 @@ Consequências práticas:
   slide atual + 1 dos participantes.
 - O relatório em PDF faz uma leitura única de **todas** as respostas da sala
   (`getAllResponses`).
-- Não há expiração automática: salas e respostas antigas ficam no Firestore até
-  serem apagadas manualmente.
+- Imagens: uma leitura por imagem por aparelho, só quando o slide que a usa
+  está no ar ou é o próximo. Uma imagem de 900 mil caracteres conta como cerca
+  de 900 KB no armazenamento do Firestore (1 GiB no plano gratuito).
+- Não há expiração automática: salas, respostas e imagens antigas ficam no
+  Firestore até serem apagadas manualmente.

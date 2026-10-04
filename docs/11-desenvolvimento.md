@@ -160,6 +160,10 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 - **Efeitos com dependências estáveis.** Documentos do Firestore mudam de
   identidade a cada snapshot; dependa de um valor derivado (um booleano, um id)
   em vez do objeto, para não disparar escritas em cascata.
+- **Código pesado é carregado sob demanda.** A jsPDF e o leitor de PowerPoint
+  (com as definições de formas) entram por `import()` dinâmico, só quando
+  alguém exporta um PDF ou importa um `.pptx`; o resto da aplicação não paga
+  por eles.
 
 ## Solução de problemas
 
@@ -175,6 +179,10 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 | Job `regras-firestore` falha com erro de credencial | A secret `FIREBASE_SERVICE_ACCOUNT` não contém o JSON inteiro (inclusive as chaves `{}`) |
 | Aviso "Credenciais ausentes" no workflow | Falta `FIREBASE_SERVICE_ACCOUNT` — o Pages publica assim mesmo, mas as regras não sobem |
 | Link curto não aparece em desenvolvimento | Esperado: o encurtador recusa `localhost`; use o link completo |
+| "A sala foi criada, mas as imagens não foram enviadas" | Regras antigas, sem a seção `assets/{assetId}`: republique o `firestore.rules` |
+| Imagens dos slides livres aparecem como espaço reservado cinza | A subcoleção `assets` da sala está vazia ou as regras não permitem a leitura; confira as regras e salve a sala de novo pela edição |
+| "A apresentação ficou grande demais para uma sala" | O documento da sala passaria de 1 MiB (as imagens não contam): divida a apresentação |
+| Um PowerPoint importa com fontes diferentes | A fonte do arquivo não está instalada no aparelho; o navegador usa uma parecida |
 
 ## Onde mexer para tarefas comuns
 
@@ -187,3 +195,9 @@ subcaminho do Pages. Como a aplicação usa `HashRouter`, deep-links do tipo
 | Mudar o que a edição de sala grava ou reinicia | `saveAndRestartRoom` em `lib/rooms.ts` + [07](07-tempo-real-e-comunicacao.md#edição-de-uma-sala-em-andamento) |
 | Ajustar o relatório | `utils/exportPdf.ts` |
 | Mexer nas regras de acesso | `firestore.rules` + [07](07-tempo-real-e-comunicacao.md) |
+| Mudar a exibição de um elemento do slide livre | `components/free/layout.ts` e `FreeElementContent.tsx` (exibição e edição usam os dois) e, para o PDF, `utils/freeSlideRaster.ts` e `utils/canvasText.ts` |
+| Adicionar uma propriedade de texto ao slide livre | `FreeTextStyle` ou `FreeTextParagraph` em `types/presentation.ts`, depois `utils/validation.ts`, `utils/richText.ts`, `utils/richTextDom.ts`, `components/free/layout.ts`, `utils/canvasText.ts`, `FreeSlideConfig` e o leitor em `utils/pptx/text.ts` |
+| Mexer na edição do slide livre (arrastar, alças, guias, atalhos) | `components/free/FreeSlideCanvas.tsx`; as ações sobre elementos ficam em `hooks/useFreeSlideActions.ts` |
+| Melhorar a importação de PowerPoint | `utils/pptx/index.ts` (o que vira texto, imagem ou é juntado); formas em `geometry.ts` e `draw.ts`; texto em `text.ts`; tabelas e gráficos em `table.ts` e `chart.ts` |
+| Mudar a compressão das imagens | `utils/images.ts` (`MAX_ASSET_CHARS`, `MAX_ASSET_DIMENSION`) |
+| Mudar onde as imagens ficam guardadas | `lib/assets.ts`, `hooks/useRoomAssets.ts` e a regra `assets/{assetId}` em `firestore.rules` |

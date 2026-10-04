@@ -40,7 +40,7 @@ src/
       ThemeToggle.tsx       Botão claro/escuro
     editor/
       EditorWorkspace.tsx           Editor em 3 colunas (criação e edição de sala)
-      ImportExportButtons.tsx       Botões "Importar JSON" e "Exportar JSON"
+      ImportExportButtons.tsx       "Importar" (modal: JSON ou PowerPoint) e "Exportar JSON"
       AddSlideMenu.tsx              Botões de "adicionar slide" (tipos criáveis)
       SlideList.tsx                 Lista ordenável; marca o gabarito como vinculado
       SlideEditor.tsx               Dispatcher por tipo + seção de opções do slide
@@ -49,6 +49,7 @@ src/
       QuizConfig.tsx                Formulário das alternativas + gabarito + revelação
       AnswerConfig.tsx              Painel do slide de gabarito (só renomear)
       TextConfig.tsx                Formulário do slide de texto
+      FreeSlideConfig.tsx           Painel do slide livre: fundo, camadas, elemento, texto e imagem
       SlideSettingsSection.tsx      Sobrescritas deste slide (herdar/sim/não, fontes)
       PresentationSettingsButton.tsx Modal com as opções globais
       SettingsControls.tsx          Controles reutilizados pelos dois painéis acima
@@ -56,10 +57,17 @@ src/
       slideTypeIcons.ts             Ícone lucide de cada tipo de slide
     slides/
       SlideDisplay.tsx        Slide na tela do apresentador (título, corpo, rodapé)
+      ScaledFrame.tsx         Desenha um conteúdo de tamanho fixo escalado para caber
       OptionsBoard.tsx        Quadro de alternativas (quiz e gabarito)
       NamedResponsesList.tsx  "Nome: resposta" quando a identificação está ligada
       SlideCountdown.tsx      Contagem regressiva grande ("20s"), vermelha no fim
       AnswerSuspense.tsx      "A resposta certa é…" antes de revelar o gabarito
+    free/                  Slide livre (exibição e edição)
+      layout.ts              Estilos de posição, rotação e caixa de cada elemento
+      FreeElementContent.tsx Conteúdo de um texto ou de uma imagem
+      FreeSlideView.tsx      Slide livre só para exibição (projetor, celular, miniatura)
+      FreeTextEditable.tsx   Caixa de texto em edição (contentEditable)
+      FreeSlideCanvas.tsx    Prévia editável: arrastar, alças, guias, teclado, soltar imagens
     participate/
       ParticipateView.tsx  Escolhe o controle conforme o tipo do slide
       ChoiceInput.tsx      Voto em barras/pizza/alternativas + limpar/travar
@@ -87,6 +95,9 @@ src/
       Modal.tsx          Janela modal (Esc, foco preso, rolagem do corpo)
       ConfirmDialog.tsx  Pergunta de confirmação sobre o Modal
       Banner.tsx         Faixa de aviso: informação, alerta ou erro
+      ColorInput.tsx     Seletor de cor: amostra, campo hexadecimal e cores rápidas
+      SegmentedControl.tsx Grupo de opções lado a lado (radiogroup)
+      ToggleButton.tsx   Botão que liga e desliga (negrito, itálico...)
 
   hooks/
     useRoom.ts             Assina o documento da sala
@@ -99,6 +110,8 @@ src/
     useRevealCountdown.ts  Suspense de 3 s antes de revelar o gabarito
     useApplyTheme.ts       Aplica a classe `.dark` no <html>
     useFullscreen.ts       Fullscreen API
+    useRoomAssets.ts       Busca as imagens que os slides livres de uma sala usam
+    useFreeSlideActions.ts Ações do slide livre (adicionar texto e imagem, excluir...)
 
   lib/
     firebase.ts           Inicialização (com config de reserva se faltar .env)
@@ -109,6 +122,7 @@ src/
     presenterSessions.ts  Salas apresentadas neste dispositivo (localStorage)
     participantName.ts    Nome do participante por sala (localStorage)
     shortUrl.ts           Encurtador do link de entrada
+    assets.ts             Imagens da sala (subcoleção `assets`): ler, enviar, apagar
 
   store/
     editorStore.ts   Apresentação em edição (Zustand), um editor por contexto
@@ -124,6 +138,23 @@ src/
     importExport.ts  Download/leitura do JSON da apresentação
     exportPdf.ts     Relatório em PDF (jsPDF, sob demanda)
     aiPrompt.ts      Texto do prompt de IA
+    freeSlide.ts     Criar, duplicar, reordenar e reenquadrar elementos do slide livre
+    richText.ts      Modelo do texto rico: estilos por trecho e por parágrafo
+    richTextDom.ts   Texto rico para HTML e de volta; seleção em deslocamentos
+    freeTextFormat.ts Formatação da seleção ou da caixa inteira
+    images.ts        Comprime imagens para data URL (tamanho e formato)
+    canvasText.ts    Desenha texto rico num canvas (PDF, tabelas, SmartArt)
+    freeSlideRaster.ts Desenha um slide livre inteiro numa imagem (PDF)
+    pptx/            Leitor de PowerPoint, carregado só quando usado
+      index.ts       importPptx: slides, imagens, formato e avisos
+      package.ts     Abre o .pptx (zip) e resolve as relações entre as partes
+      xml.ts         Atalhos de leitura de XML por nome local
+      colors.ts      Cores do tema, mapa de cores e modificadores
+      geometry.ts    Formas pré-definidas e personalizadas em Path2D
+      draw.ts        Preenchimento, contorno, sombra e desenho das formas
+      text.ts        Texto com herança de estilos (slide, layout, mestre, tema)
+      table.ts       Tabelas desenhadas em canvas
+      chart.ts       Gráficos desenhados a partir dos dados salvos no arquivo
 ```
 
 ## Convenções
