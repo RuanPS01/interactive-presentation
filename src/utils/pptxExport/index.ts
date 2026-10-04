@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from 'fflate'
 import type { Zippable } from 'fflate'
-import type { FreeSlide, Presentation, PresentationFont } from '../../types/presentation'
+import type { FreeSlide, Presentation, PresentationFont, ThemeMode } from '../../types/presentation'
 import { sfntToEot } from '../fonts/eot'
 import { fontToSfnt } from '../fonts/convert'
 import { dataUrlToBytes, pickFonts } from '../fonts/faces'
@@ -61,14 +61,25 @@ const SLOT = (font: PresentationFont) =>
   font.weight === 'bold' ? (font.style === 'italic' ? 'boldItalic' : 'bold') : font.style === 'italic' ? 'italic' : 'regular'
 const SLOT_ORDER = ['regular', 'bold', 'italic', 'boldItalic']
 
-export async function exportPptx(presentation: Presentation): Promise<PptxExportResult> {
+export interface PptxExportOptions {
+  /**
+   * Tema dos slides comuns (perguntas, gabarito, texto simples), como na tela
+   * do projetor. Os slides livres têm cores próprias e não mudam.
+   */
+  theme?: ThemeMode
+}
+
+export async function exportPptx(
+  presentation: Presentation,
+  { theme = 'light' }: PptxExportOptions = {},
+): Promise<PptxExportResult> {
   const warnings = new Set<string>()
   const settings = withDefaults(presentation.settings)
   const frame = SLIDE_FRAMES[settings.slideAspect]
   const slides: FreeSlide[] = presentation.slides.map((slide) =>
     slide.type === 'free'
       ? fitFreeSlideToFrame(slide, frame)
-      : standardSlideToFree(slide, presentation.slides, presentation.settings, frame),
+      : standardSlideToFree(slide, presentation.slides, presentation.settings, frame, theme),
   )
   if (presentation.slides.some((s) => s.type !== 'free')) {
     warnings.add('As perguntas viraram slides estáticos com as alternativas: a votação só funciona aqui na plataforma.')

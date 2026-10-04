@@ -2,6 +2,7 @@ import { CheckCircle2, FileBraces, Loader2, Presentation, TriangleAlert } from '
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { useEditorStoreApi } from '../../store/editorStore'
+import { useThemeStore } from '../../store/themeStore'
 import { downloadBlob, exportPresentation, presentationFileName } from '../../utils/importExport'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -24,6 +25,8 @@ type Status =
  */
 export function ExportDialog({ open, onClose }: ExportDialogProps) {
   const store = useEditorStoreApi()
+  // Os slides comuns saem no tema da página, como aparecem no projetor.
+  const theme = useThemeStore((s) => s.theme)
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const working = status.kind === 'working'
 
@@ -43,7 +46,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
     try {
       const presentation = store.getState().getPresentation()
       const { exportPptx: generate } = await import('../../utils/pptxExport')
-      const { blob, warnings } = await generate(presentation)
+      const { blob, warnings } = await generate(presentation, { theme })
       downloadBlob(blob, presentationFileName(presentation.title, 'pptx'))
       setStatus({ kind: 'done', warnings })
     } catch (e) {
@@ -78,7 +81,7 @@ export function ExportDialog({ open, onClose }: ExportDialogProps) {
           <ExportOption
             icon={<Presentation size={28} strokeWidth={1.6} />}
             title="PowerPoint (.pptx)"
-            description="Para abrir no PowerPoint, Google Slides ou Keynote. Textos e imagens continuam editáveis, com as fontes embutidas; as perguntas viram slides estáticos com as alternativas."
+            description={`Para abrir no PowerPoint, Google Slides ou Keynote. Textos e imagens continuam editáveis, com as fontes embutidas; as perguntas viram slides estáticos com as alternativas, no tema ${theme === 'dark' ? 'escuro' : 'claro'} da página.`}
             action={working ? 'Gerando…' : 'Baixar .pptx'}
             disabled={working}
             onChoose={() => void exportPptx()}
