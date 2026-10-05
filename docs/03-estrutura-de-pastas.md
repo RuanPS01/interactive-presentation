@@ -1,4 +1,4 @@
-# 03 — Estrutura de pastas
+# 03. Estrutura de pastas
 
 ## Raiz
 
@@ -7,7 +7,7 @@
 | `index.html` | Casca da SPA (favicon inline, meta viewport, `#root`) |
 | `vite.config.ts` | `base` e pasta de saída do GitHub Pages e do Firebase Hosting (modo `firebase`), plugins React/Tailwind, chunks manuais |
 | `firestore.rules` | Regras de segurança do Firestore (publicadas pela pipeline quando mudam) |
-| `firebase.json` | Diz à CLI do Firebase onde estão as regras e o que publicar no Hosting (`dist-firebase/`, com os cabeçalhos de cache) |
+| `firebase.json` | Diz à CLI do Firebase onde estão as regras, o que publicar no Hosting (`dist-firebase/`, com os cabeçalhos de cache) e as portas dos emuladores locais (Auth e Firestore) |
 | `.env.example` | Modelo das variáveis `VITE_FIREBASE_*` |
 | `eslint.config.js`, `tsconfig*.json` | Lint e type-check |
 | `.github/workflows/deploy.yml` | Build, publicação das regras do Firestore e deploy no GitHub Pages e no Firebase Hosting |
@@ -26,12 +26,13 @@ src/
     presentation.ts   TODO o domínio: slides, configurações, sala, resposta, presença
 
   pages/
-    HomePage.tsx      Entrada, sessões salvas neste dispositivo (retomar/reexportar)
-    CreatePage.tsx    Editor em 3 colunas com rolagem independente
-    PresentPage.tsx   Tela do apresentador (projetor): slide, navegação, QR, PDF
-    EditRoomPage.tsx  Edição de uma sala já iniciada; salvar recomeça do 1º slide
+    HomePage.tsx      Entrada, salas apresentadas neste dispositivo (situação, retomar, reexportar)
+    CreatePage.tsx    Editor da criação, com o rascunho guardado no navegador
+    PresentPage.tsx   Tela do apresentador (projetor): slide, navegação, código, encerrar, PDF
+    EditRoomPage.tsx  Edição de uma sala no ar; salvar recomeça do 1º slide
     JoinPage.tsx      Formulário do código da sala
-    RoomPage.tsx      Tela do participante: pedido de nome, presença e controles
+    RoomPage.tsx      Tela do participante: pedido de nome, presença, controles e tela final
+    ViewPage.tsx      Modo leitura: um .json local (/view) ou uma sala encerrada (/view/:code)
 
   components/
     layout/
@@ -39,11 +40,12 @@ src/
       FullScreenMessage.tsx Mensagem centralizada (carregando, erro, sem acesso)
       ThemeToggle.tsx       Botão claro/escuro
     editor/
-      EditorWorkspace.tsx           Editor em 3 colunas (criação e edição de sala)
-      ImportExportButtons.tsx       "Importar" e "Exportar" (modais: JSON ou PowerPoint)
+      EditorWorkspace.tsx           Editor em 3 colunas (a partir de 1024 px) ou em seções empilhadas
+      EditorToolbar.tsx             Barra do editor: voltar, título, ações (ou menu "Mais") e botão principal
+      ImportDialog.tsx              Modal "Importar": JSON ou PowerPoint
       ExportDialog.tsx              Modal "Exportar": baixa o JSON ou gera o PowerPoint
-      AddSlideMenu.tsx              Botões de "adicionar slide" (tipos criáveis)
-      SlideList.tsx                 Lista ordenável; marca o gabarito como vinculado
+      AddSlideMenu.tsx              Menu "Adicionar slide" (tipos criáveis, com dica)
+      SlideList.tsx                 Lista reordenável por arraste (framer-motion) e menu de cada slide
       SlideEditor.tsx               Dispatcher por tipo + seção de opções do slide
       WordCloudConfig.tsx           Formulário da nuvem de palavras
       ChoiceConfig.tsx              Formulário de barras/pizza
@@ -76,8 +78,10 @@ src/
       AnswerReveal.tsx     Gabarito na tela do participante ("você acertou!")
       NamePrompt.tsx       Pedido de nome antes de entrar
     present/
-      ShareRoom.tsx              QR Code, código grande e link curto
+      RoomCodeDialog.tsx         Modal "Código da sala": QR, link curto, projeção em tela cheia e QR ampliado
+      ShareRoom.tsx              Miniatura do QR no cabeçalho do projetor (abre o modal)
       SummarySlide.tsx           Slide final: botão de baixar o PDF e grade de miniaturas
+      DownloadSlides.tsx         "Baixar slides" (PDF e PowerPoint) no fim, para o participante
       PresenterAccessDenied.tsx  Aviso para quem abre /present ou /edit sem o token
     charts/
       BarChartView.tsx   Barras (Recharts) com rótulos quebrados em linhas
@@ -94,6 +98,8 @@ src/
       Select.tsx         Lista suspensa acessível (substitui o <select> nativo)
       ScrollArea.tsx     Área com rolagem própria e barra fina
       Modal.tsx          Janela modal (Esc, foco preso, rolagem do corpo)
+      Menu.tsx           Botão de menu acessível (lista num portal, teclado)
+      StackSection.tsx   Seção recolhível do editor empilhado
       ConfirmDialog.tsx  Pergunta de confirmação sobre o Modal
       Banner.tsx         Faixa de aviso: informação, alerta ou erro
       ColorInput.tsx     Seletor de cor: amostra, campo hexadecimal e cores rápidas
@@ -114,25 +120,32 @@ src/
     useRoomAssets.ts       Busca as imagens que os slides livres de uma sala usam
     useRoomFonts.ts        Registra as fontes embutidas da sala neste navegador
     useFreeSlideActions.ts Ações do slide livre (adicionar texto e imagem, excluir...)
+    useRoomAnswers.ts      Assina os gabaritos da sala (só o dono lê)
+    useMediaQuery.ts       Acompanha uma media query (layout do editor)
+    useDialogControl.ts    Modal aberto por fora (menu) ou pelo próprio botão
+    useSlideDownload.ts    Baixa os slides em PDF ou PowerPoint
 
   lib/
     firebase.ts           Inicialização (com config de reserva se faltar .env)
-    rooms.ts              Criar/assinar/atualizar sala, token de apresentador
+    rooms.ts              Criar/assinar/atualizar/encerrar sala, token de apresentador
+    answers.ts            Gabaritos protegidos (secret/answers) e o que a plateia pode ver
     responses.ts          Salvar/limpar/assinar respostas
     participants.ts       Presença na sala
     roomCode.ts           Código da sala e token do apresentador
     presenterSessions.ts  Salas apresentadas neste dispositivo (localStorage)
     participantName.ts    Nome do participante por sala (localStorage)
-    shortUrl.ts           Encurtador do link de entrada
+    shortUrl.ts           Encurtador do link de entrada (da.gd, com cache)
+    draftStorage.ts       Rascunho do editor: texto no localStorage, arquivos no IndexedDB
     assets.ts             Imagens da sala (subcoleção `assets`): ler, enviar, apagar
     fonts.ts              Fontes da sala (subcoleção `fonts`, em partes): ler, enviar, apagar
 
   store/
     editorStore.ts   Apresentação em edição (Zustand), um editor por contexto
+    editorDraft.ts   Restaura e grava o rascunho da tela de criação
     themeStore.ts    Tema claro/escuro do usuário (Zustand + localStorage)
 
   utils/
-    settings.ts      Padrões e resolução global -> slide
+    settings.ts      Padrões e resolução (global, depois o slide)
     timer.ts         Duração do cronômetro por slide e atraso da revelação
     slideFactory.ts  Ids, slides padrão e rótulos dos tipos
     slides.ts        Busca o `quiz` de um slide de gabarito
@@ -140,6 +153,8 @@ src/
     validation.ts    Schemas Zod do JSON importado
     importExport.ts  Download/leitura do JSON da apresentação
     exportPdf.ts     Relatório em PDF (jsPDF, sob demanda)
+    exportSlidesPdf.ts PDF dos slides, uma página por slide (jsPDF, sob demanda)
+    staticSlides.ts  Todos os slides como slides livres estáticos (download e leitura)
     aiPrompt.ts      Texto do prompt de IA
     freeSlide.ts     Criar, duplicar, reordenar e reenquadrar elementos do slide livre
     richText.ts      Modelo do texto rico: estilos por trecho e por parágrafo
@@ -178,7 +193,7 @@ src/
 ## Convenções
 
 - **Um assunto por arquivo.** Componentes exportam apenas componentes (o ESLint
-  avisa quando um arquivo mistura componentes e utilitários — por isso
+  avisa quando um arquivo mistura componentes e utilitários; por isso
   `findQuizSlide` vive em `utils/slides.ts`, e não junto do `SlideDisplay`).
 - **Comentários em português**, explicando o *porquê* de decisões não óbvias
   (limites do Firestore, CORS do encurtador, cálculo de layout da nuvem).

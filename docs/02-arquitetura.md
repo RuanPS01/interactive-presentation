@@ -1,4 +1,4 @@
-# 02 — Arquitetura
+# 02. Arquitetura
 
 ## Stack
 
@@ -10,11 +10,14 @@
 | Roteamento | React Router 7 (`HashRouter`) | [`src/main.tsx`](../src/main.tsx), [`src/App.tsx`](../src/App.tsx) |
 | Estado do editor | Zustand | [`src/store/editorStore.ts`](../src/store/editorStore.ts) |
 | Gráficos | Recharts (barras/pizza) + layout próprio (nuvem) | `src/components/charts/` |
-| Ícones | lucide-react | — |
+| Ícones | lucide-react | Componentes em geral |
 | PDF | jsPDF (carregada sob demanda) | [`src/utils/exportPdf.ts`](../src/utils/exportPdf.ts) |
 | PowerPoint | Leitor e gerador próprios sobre fflate (zip) e as definições de formas do modern-openxml, carregados sob demanda | [`src/utils/pptx/`](../src/utils/pptx/index.ts), [`src/utils/pptxExport/`](../src/utils/pptxExport/index.ts) |
 | Fontes embutidas | Conversores próprios (EOT, MicroType Express, WOFF) e `FontFace` | [`src/utils/fonts/`](../src/utils/fonts/faces.ts) |
-| QR Code | react-qr-code | [`src/components/present/ShareRoom.tsx`](../src/components/present/ShareRoom.tsx) |
+| Arraste da lista de slides | framer-motion 14 (`Reorder`) | [`src/components/editor/SlideList.tsx`](../src/components/editor/SlideList.tsx) |
+| QR Code | react-qr-code | [`src/components/present/RoomCodeDialog.tsx`](../src/components/present/RoomCodeDialog.tsx), [`src/components/present/ShareRoom.tsx`](../src/components/present/ShareRoom.tsx) |
+| Link curto | Serviço público da.gd, chamado do navegador (sem chave, com CORS) | [`src/lib/shortUrl.ts`](../src/lib/shortUrl.ts) |
+| Rascunho do editor | `localStorage` (texto) e IndexedDB (imagens e fontes) | [`src/lib/draftStorage.ts`](../src/lib/draftStorage.ts), [`src/store/editorDraft.ts`](../src/store/editorDraft.ts) |
 | Backend/Tempo real | Firebase Firestore + Auth Anônima | `src/lib/` |
 | Validação (JSON) | Zod | [`src/utils/validation.ts`](../src/utils/validation.ts) |
 | Deploy | GitHub Actions, para o GitHub Pages e o Firebase Hosting | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) |
@@ -29,28 +32,23 @@ limite rígido de conexões no plano gratuito.
 
 ## Camadas
 
-```
-   pages/                      Telas e orquestração (rotas)
-      |
-      v
-   components/                 Apresentação (editor, slides, participação, gráficos, ui)
-      |
-      v
-   hooks/                      Ponte React <-> Firestore (assinaturas em tempo real)
-      |
-      v
-   lib/                        Acesso ao Firebase e ao localStorage
-      |
-      v
-   Firebase (Firestore + Auth)
-```
+Cada camada usa só a de baixo:
+
+| Camada | Papel |
+| --- | --- |
+| `pages/` | Telas e orquestração (rotas) |
+| `components/` | Apresentação (editor, slides, participação, gráficos, ui) |
+| `hooks/` | Ponte entre o React e o Firestore (assinaturas em tempo real) e utilidades de tela (largura, modais) |
+| `lib/` | Acesso ao Firebase, ao `localStorage` e ao IndexedDB |
+| Firebase | Firestore e Auth |
 
 - **`types/`** define o domínio e é importado por todas as camadas.
 - **`utils/`** é lógica pura, sem React e sem Firebase: agregação, validação,
   resolução de configurações, cronômetro, import/export, geração de PDF,
   leitura e geração de PowerPoint, fontes, texto rico e imagens.
 - **`store/`** guarda o estado que existe **antes** de haver sala: a
-  apresentação sendo montada no editor e a preferência de tema.
+  apresentação sendo montada no editor (com o rascunho gravado no navegador,
+  `editorDraft.ts`) e a preferência de tema.
 
 A regra prática: **componentes não falam com o Firestore diretamente**. Eles
 recebem dados por props (do `pages/`, que usa os hooks) ou disparam funções de
@@ -58,7 +56,7 @@ recebem dados por props (do `pages/`, que usa os hooks) ou disparam funções de
 
 ## Roteamento
 
-`HashRouter` — os links ficam no formato `.../#/room/ABC123`. Isso evita 404 em
+`HashRouter`: os links ficam no formato `.../#/room/ABC123`. Isso evita 404 em
 deep-links e refresh no GitHub Pages, que serve arquivos estáticos sem fallback
 para `index.html`.
 
@@ -72,7 +70,9 @@ para `index.html`.
 | `/edit/:code/:token` | [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Quem tem o token secreto |
 | `/join` | [`JoinPage`](../src/pages/JoinPage.tsx) | Público |
 | `/room/:code` | [`RoomPage`](../src/pages/RoomPage.tsx) | Quem tem o código |
-| `*` | Redireciona para `/` | — |
+| `/view` | [`ViewPage`](../src/pages/ViewPage.tsx) | Público (lê um `.json` local, sem Firebase) |
+| `/view/:code` | [`ViewPage`](../src/pages/ViewPage.tsx) | Quem tem o código, só com a sala encerrada |
+| `*` | Redireciona para `/` | Público |
 
 ## Fluxo de controle da apresentação
 
@@ -83,6 +83,9 @@ entre apresentador e plateia: o documento da sala é o único canal.
 
 O índice `currentSlideIndex === slides.length` é reservado ao **slide final
 automático** de agradecimento, com o botão para baixar o PDF dos resultados.
+Chegar a ele **encerra a sala**: a mesma escrita grava o índice final e
+`status: 'ended'`, e daí em diante as regras recusam qualquer mudança na sala
+e qualquer resposta. O botão "Encerrar" do projetor faz a mesma escrita.
 
 É o mesmo canal que leva todos de volta ao início quando o apresentador edita
 uma sala em andamento: a gravação da edição zera `currentSlideIndex`, e cada
@@ -112,8 +115,11 @@ não é importado em lugar nenhum: a nuvem de palavras usa um layout próprio
 
 Ficam **fora** do bundle inicial, importados dinamicamente (`import()`) só
 quando usados: a jsPDF (dentro de `exportResultsPdf`, ao exportar um
-relatório), o leitor de PowerPoint (`src/utils/pptx/`, ao importar um
-`.pptx`) e o gerador de PowerPoint (`src/utils/pptxExport/`, ao exportar).
+relatório, e de `exportSlidesPdf`, ao baixar os slides em PDF), o leitor de
+PowerPoint (`src/utils/pptx/`, ao importar um `.pptx`) e o gerador de
+PowerPoint (`src/utils/pptxExport/`, ao exportar ou ao baixar os slides). A
+framer-motion, usada só na lista de slides do editor, entra no bundle
+principal.
 
 O `base` do Vite precisa bater com o caminho de publicação, e o site sai em
 dois lugares com caminhos diferentes:
@@ -147,7 +153,7 @@ Sem a secret `FIREBASE_SERVICE_ACCOUNT`, os jobs das regras e do Firebase
 Hosting emitem um aviso e terminam com sucesso; o Pages continua publicando
 normalmente. Detalhes de
 configuração e papéis da conta de serviço em
-[11 — Desenvolvimento](11-desenvolvimento.md#pipeline-de-deploy).
+[11 (Desenvolvimento)](11-desenvolvimento.md#pipeline-de-deploy).
 
 As chaves `VITE_FIREBASE_*` são **identificadores públicos** do projeto, não
 segredos: quem protege os dados são as

@@ -1,4 +1,4 @@
-# 04 — Modelo de dados
+# 04. Modelo de dados
 
 Todo o domínio está em [`src/types/presentation.ts`](../src/types/presentation.ts).
 
@@ -10,20 +10,22 @@ Todo o domínio está em [`src/types/presentation.ts`](../src/types/presentation
 interface Presentation {
   title: string
   slides: Slide[]
-  settings?: Partial<PresentationSettings>  // ausente/parcial => padrões
+  settings?: Partial<PresentationSettings>  // ausente ou parcial: vale o padrão
   assets?: PresentationAssets               // imagens dos slides livres, pelo id
   fonts?: PresentationFonts                 // fontes embutidas usadas, pelo id
 }
 
 interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
   creatorUid: string        // dono atual (quem criou ou reivindicou com o token)
-  currentSlideIndex: number // slide no ar; === slides.length => slide final
-  status: 'live' | 'ended'  // hoje sempre 'live' (nenhuma tela grava 'ended')
+  currentSlideIndex: number // slide no ar; igual a slides.length: slide final
+  status: 'live' | 'ended'  // 'ended' ao chegar ao slide final ou em "Encerrar"
   createdAt: number         // epoch ms
   updatedAt: number
   timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
   revealedSlideIds?: string[]          // gabaritos cujo suspense já terminou
   revision?: number                    // quantas vezes a sala foi editada depois de iniciada
+  answersHidden?: boolean              // os quizzes da sala vão sem gabarito (ver secret/answers)
+  revealedAnswers?: Record<string, string[]>  // gabaritos já revelados, pelo id do quiz
 }
 
 interface SlideTimer {
@@ -36,6 +38,21 @@ interface SlideTimer {
 `Room` é ela mais os campos que só existem depois de publicada, **sem as
 imagens e sem as fontes**: elas vão para as subcoleções `assets` e `fonts`
 (ver abaixo), para o documento da sala continuar pequeno.
+
+`status` nasce `'live'` e vira `'ended'` na mesma escrita que leva o índice
+ao slide final (ou no botão "Encerrar"). Uma sala encerrada não muda mais: as
+regras recusam qualquer `update` e qualquer resposta nova. Apresentar de novo
+cria uma sala nova. Ver
+[07](07-tempo-real-e-comunicacao.md#encerramento-da-sala).
+
+`answersHidden` e `revealedAnswers` protegem o gabarito: numa sala com
+`answersHidden: true`, cada `quiz` é gravado com `correctOptionIds: []`, e as
+alternativas corretas ficam em `rooms/{code}/secret/answers`, que só o dono
+lê. Quando o suspense de uma revelação termina, o projetor copia as corretas
+daquela pergunta para `revealedAnswers[idDoQuiz]`, e só então os celulares as
+conhecem. Salas criadas antes dessa proteção não têm `answersHidden` e
+continuam usando o gabarito do próprio slide. Ver
+[07](07-tempo-real-e-comunicacao.md#gabarito-protegido).
 
 `revision` começa ausente (vale 0) e soma 1 a cada edição feita pelo
 apresentador numa sala já iniciada. A edição recomeça a apresentação do
@@ -61,7 +78,7 @@ interface SlideBase {
 }
 ```
 
-Cada tipo acrescenta seus campos — detalhes em [05](05-tipos-de-slide.md).
+Cada tipo acrescenta seus campos; detalhes em [05](05-tipos-de-slide.md).
 
 Dois auxiliares de tipo, usados o tempo todo:
 
@@ -72,7 +89,7 @@ isInteractiveSlide(slide): slide is WordCloudSlide | ChoiceSlide  // recebe resp
 ```
 
 `isInteractiveSlide` é um *type predicate*: quem passa por ele já pode acessar
-`options` sem checagem extra. `text` e `answer` ficam de fora — nenhum dos dois
+`options` sem checagem extra. `text` e `answer` ficam de fora: nenhum dos dois
 recebe respostas próprias. O slide livre (`free`) também fica de fora: é só
 exibição.
 
@@ -178,7 +195,7 @@ interface ResponseDoc {
   slideId: string
   participantUid: string
   type: 'word' | 'choice'
-  value: string[]            // palavras/frases enviadas, ou ids das opções
+  value: string[]            // palavras/frases enviadas, ou ids das opções (até 100)
   participantName?: string   // só quando a sala pede identificação
   createdAt: number
 }
@@ -191,15 +208,22 @@ interface ParticipantDoc {
 }
 ```
 
-`joinedAt` e `lastSeenAt` recebem o horário de cada entrada na sala (do relógio
-do aparelho). Não há atualização periódica: `lastSeenAt` é, na prática, o
-momento da última entrada.
+`joinedAt` é gravado só na primeira entrada; `lastSeenAt` recebe o horário de
+cada entrada (os dois do relógio do aparelho). Não há atualização periódica:
+`lastSeenAt` é, na prática, o momento da última entrada.
+
+Uma resposta sem itens não existe: quando o participante desmarca todas as
+opções de uma múltipla escolha, o documento é apagado, e ele deixa de contar
+em "responderam". O limite de itens por resposta é `MAX_RESPONSE_ITEMS = 100`
+([`src/lib/responses.ts`](../src/lib/responses.ts)), o mesmo que as regras
+aplicam.
 
 ## Coleções do Firestore
 
 ```
 rooms/{code}                          documento da sala (Room)
   private/presenter                   { token, ownerUid, createdAt }  (ilegível para clientes)
+  secret/answers                      { [idDoQuiz]: idsDasCorretas }  (só o dono lê)
   participants/{uid}                  ParticipantDoc (presença)
   responses/{slideId}__{uid}          ResponseDoc
   assets/{assetId}                    { dataUrl, width, height, createdAt }
@@ -209,9 +233,11 @@ rooms/{code}                          documento da sala (Room)
 ### `rooms/{code}`
 
 O **id do documento é o próprio código da sala** (6 caracteres). Criar uma sala
-sorteia códigos até achar um livre (até 6 tentativas) e grava a sala e o
-documento privado numa **escrita em lote atômica** — ver `createRoom` em
-[`src/lib/rooms.ts`](../src/lib/rooms.ts).
+sorteia códigos até achar um livre (até 6 tentativas) e grava a sala, o
+documento privado e os gabaritos numa **escrita em lote atômica** (ver
+`createRoom` em [`src/lib/rooms.ts`](../src/lib/rooms.ts)). A sala nasce com
+`status: 'live'`, `answersHidden: true`, `revealedAnswers: {}` e os quizzes sem
+gabarito.
 
 ### `rooms/{code}/private/presenter`
 
@@ -219,16 +245,27 @@ Guarda o **token secreto do apresentador**. As regras proíbem leitura por
 qualquer cliente: quem tem o token (pela URL) prova a posse reenviando-o num
 `update`, o que autoriza definir `ownerUid` como o próprio uid.
 
+### `rooms/{code}/secret/answers`
+
+Os gabaritos das perguntas, fora do documento público da sala:
+`{ [idDoQuiz]: idsDasCorretas }`. Só o dono atual lê (o projetor assina este
+documento com `useRoomAnswers`; a edição da sala e a exportação do PDF na tela
+inicial o leem uma vez com `fetchAnswers`). É gravado no mesmo lote que cria a
+sala e no mesmo lote que salva uma edição, e nunca é apagado pelos clientes.
+Funções em [`src/lib/answers.ts`](../src/lib/answers.ts).
+
 ### `rooms/{code}/participants/{uid}`
 
 Presença. O id é o uid, então reentradas **atualizam** o mesmo documento em vez
-de duplicar. É escrito com `merge: true`, que preserva os campos não enviados
-(o `name`, por exemplo, quando a sala não pede o nome). Como o payload inclui
-`joinedAt`, cada reentrada também atualiza esse campo.
+de duplicar. `joinRoom` lê o documento antes: na criação grava `joinedAt`; nas
+reentradas, só `lastSeenAt` (e o nome, se houver). É escrito com `merge: true`,
+que preserva os campos não enviados (o `name`, por exemplo, quando a sala não
+pede o nome). As regras só aceitam as chaves `uid`, `name`, `joinedAt` e
+`lastSeenAt`, com o nome de até 40 caracteres.
 
 Sem heartbeat periódico: a escrita acontece ao abrir a sala e quando o nome
 muda. Um heartbeat multiplicaria as escritas por participante e por minuto, o
-que pesa no plano gratuito sem mudar a contagem que interessa — quem entrou na
+que pesa no plano gratuito sem mudar a contagem que interessa: quem entrou na
 sala conta como participante.
 
 ### `rooms/{code}/assets/{assetId}`
@@ -260,6 +297,10 @@ Id **determinístico**: `${slideId}__${participantUid}`. Consequências:
 - assinar a própria resposta é um `onSnapshot` de documento (barato), enquanto o
   apresentador assina a coleção filtrada por `slideId`.
 
+As regras conferem esse id contra `slideId` e o uid de quem escreve, só
+aceitam as chaves de `ResponseDoc`, limitam `value` a 100 itens, o nome a 40
+caracteres e o `slideId` a 200, e só aceitam a escrita com a sala no ar.
+
 ## Formato JSON (import/export)
 
 O JSON exportado é exatamente um `Presentation`. Quando há slides livres com
@@ -278,7 +319,8 @@ as que estão em uso (as que deixaram de ser usadas não vão), então o arquivo
     "labelFontSize": 16,
     "bodyFontSize": 24,
     "quizTimerSeconds": 20,
-    "slideAspect": "16:9"
+    "slideAspect": "16:9",
+    "allowDownload": false
   },
   "slides": [
     { "id": "s1", "type": "text", "title": "Abertura",
@@ -306,16 +348,36 @@ caracteres de controle, porque vai para o CSS e para o `FontFace`.
 
 O schema foi construído para **aceitar arquivos antigos**:
 
-- `settings` é opcional e parcial — o que faltar recebe o padrão;
+- `settings` é opcional e parcial: o que faltar recebe o padrão;
 - `overrides` é opcional em todo slide;
 - num slide `quiz`, `correctOptionIds`, `revealAnswer` e `showResponses` têm
   `.default()` (`[]`, `false` e `false`), então um JSON gerado sem esses
   campos importa como pergunta sem gabarito e com as respostas ocultas;
-- `assets`, `fonts` e `settings.slideAspect` são opcionais; sem o formato,
-  vale 16:9.
+- `assets`, `fonts`, `settings.slideAspect` e `settings.allowDownload` são
+  opcionais; sem o formato, vale 16:9, e sem `allowDownload`, o download fica
+  desligado.
 
 Um JSON exportado antes destas mudanças (só `title` + `slides` com os quatro
 tipos originais) continua importando sem erro.
+
+O mesmo arquivo exporta `presentationShapeSchema`, a forma da apresentação sem
+a conferência de que toda imagem citada existe em `assets`.
+`presentationSchema` é `presentationShapeSchema.superRefine(...)`. O rascunho
+do editor usa a forma sem a conferência, porque o texto volta antes das
+imagens (guardadas à parte, no IndexedDB).
+
+## Armazenamento no navegador
+
+Além do Firestore, o aplicativo guarda algumas coisas só neste navegador:
+
+| Onde | Chave | Conteúdo |
+| --- | --- | --- |
+| `localStorage` | `ip-theme` | Tema claro ou escuro do usuário |
+| `localStorage` | `ip-presenter-sessions` | Salas apresentadas neste dispositivo (código, token, título) |
+| `localStorage` | `ip-participant-names` | Nome do participante em cada sala |
+| `localStorage` | `ip-short-urls` | Cache do link curto de cada endereço de entrada (entradas inválidas são descartadas na leitura) |
+| `localStorage` | `ip-editor-draft` | Rascunho da tela de criação: título, slides, opções e slide selecionado |
+| IndexedDB | banco `ip-editor`, store `draft`, chave `files` | Imagens e fontes usadas pelo rascunho (grandes demais para o `localStorage`) |
 
 ## Números derivados
 
@@ -336,8 +398,8 @@ puras sobre `ResponseDoc[]`:
 > `participants` (ver [07](07-tempo-real-e-comunicacao.md#presença)); a distinção
 > é o que faz o rodapé mostrar “12 participantes · 8 responderam”.
 
-> **Por que o rodapé nem sempre mostra os dois números.** Numa escolha única —
-> ou numa nuvem de uma palavra por pessoa — cada participante envia exatamente
+> **Por que o rodapé nem sempre mostra os dois números.** Numa escolha única
+> (ou numa nuvem de uma palavra por pessoa) cada participante envia exatamente
 > um item, então “8 responderam · 8 voto(s)” diria a mesma coisa duas vezes.
 > `responseSummary` só acrescenta o total quando o slide permite mais de um
 > envio (`allowMultiple`, ou `wordLimitMode` diferente de `one`). Vale para a

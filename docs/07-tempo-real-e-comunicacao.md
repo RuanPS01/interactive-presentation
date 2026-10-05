@@ -1,4 +1,4 @@
-# 07 — Tempo real e comunicação
+# 07. Tempo real e comunicação
 
 Não existe servidor da aplicação. Todos os navegadores conversam **através do
 Firestore**: quem escreve grava um documento, quem lê mantém uma assinatura
@@ -28,7 +28,8 @@ documento compartilhado é o canal.
 
 | Dado | Caminho | Quem escreve | Quem ouve |
 | --- | --- | --- | --- |
-| Slide atual, cronômetros, gabaritos revelados, slides, opções, revisão | `rooms/{code}` | Só o apresentador | Projetor, todos os celulares e a tela de edição (`useRoom`) |
+| Slide atual, status, cronômetros, gabaritos revelados e publicados, slides (sem gabarito), opções, revisão | `rooms/{code}` | Só o apresentador | Projetor, todos os celulares e a tela de edição (`useRoom`) |
+| Gabaritos das perguntas | `secret/answers` | Só o apresentador, no lote que cria ou edita a sala | Só o projetor (`useRoomAnswers`); a edição e o PDF da tela inicial leem uma vez (`fetchAnswers`) |
 | Resposta de um aluno num slide | `responses/{slideId}__{uid}` | Só o próprio aluno | O projetor (consulta das respostas do slide no ar, `useResponses`) e o próprio aluno (só o documento dele, `useMyResponse`) |
 | Presença | `participants/{uid}` | Só o próprio aluno | Projetor e tela de edição (`useParticipants`) |
 | Imagens e fontes | `assets`, `fonts` | Apresentador | Ninguém assina: leitura única sob demanda, com cache |
@@ -55,20 +56,29 @@ as respostas existentes daquele slide.
 toque duplo). O ouvinte do próprio celular marca a opção na hora; o Firestore
 valida e confirma; o ouvinte do projetor recebe a mudança, e `aggregateChoices`
 ou `aggregateWords` recalculam o gráfico, a nuvem e o rodapé. Outra aba do
-mesmo aluno também atualiza. Limpar é um `deleteDoc` que chega do mesmo jeito.
+mesmo aluno também atualiza. Limpar é um `deleteDoc` que chega do mesmo jeito,
+e desmarcar a última opção de uma múltipla escolha também apaga o documento.
 
 **Entrada.** `useParticipant` garante o `uid`; `useRoom` entrega o estado
 atual completo (slide no ar, cronômetros, gabaritos revelados), então quem
 chega atrasado não precisa de "replay"; `joinRoom` grava a presença e o
-contador do projetor sobe.
+contador do projetor sobe. Numa sala encerrada, o celular vai direto para a
+tela final.
 
 **Tempo e revelação.** O apresentador grava só o instante final
 (`timers[id].endsAt`); cada aparelho conta localmente. Quem trava a plateia é
 o encerramento gravado pelo projetor (`closed`), nunca o relógio do celular.
 No gabarito, cada aparelho conta 3 s localmente a partir de quando recebeu a
 troca de slide, absorvendo a diferença de milissegundos entre celulares; depois
-o projetor grava `revealedSlideIds` e quem chega atrasado vê a resposta na
-hora. Detalhes em [Cronômetro](#cronômetro).
+o projetor grava, numa escrita só, `revealedSlideIds` e as corretas da pergunta
+em `revealedAnswers`. O celular só mostra o resultado quando as corretas
+chegaram, e quem chega atrasado vê a resposta na hora. Detalhes em
+[Cronômetro](#cronômetro) e [Gabarito protegido](#gabarito-protegido).
+
+**Fim.** Passar do último slide (ou "Encerrar") grava o índice do slide final
+e `status: 'ended'` numa escrita só. Os celulares mostram a tela final, o
+projetor desativa a navegação e as regras passam a recusar mudanças na sala e
+respostas novas. Detalhes em [Encerramento da sala](#encerramento-da-sala).
 
 **Reinício após edição.** Uma escrita grava `currentSlideIndex: 0`, zera
 cronômetros e revelações e soma 1 em `revision`; todos seguem o índice e os
@@ -91,7 +101,9 @@ confirmação do servidor:
 
 - **Fonte única da verdade**: o Firestore.
 - **O que precisa chegar junto vai na mesma escrita**: índice e cronômetros;
-  encerramento e avanço para o gabarito; o reinício da edição.
+  encerramento e avanço para o gabarito; registro da revelação e gabarito
+  publicado; índice final e `status: 'ended'`; o reinício da edição (sala e
+  gabaritos, num lote).
 - **Ids determinísticos**: reenviar não duplica e apagar não precisa de
   consulta.
 - **Escritas idempotentes** para marcas de evento (`arrayUnion`, `increment`).
@@ -113,6 +125,7 @@ confirmação do servidor:
 | O aluno troca de aparelho | Ganha outro `uid`: conta como outro participante e começa sem respostas |
 | O apresentador recarrega | O token reivindica o controle; slide, cronômetros e revelações estão no documento. Se o tempo acabou com a página fechada, ao abrir ele encerra e avança para o gabarito |
 | O projetor fica fechado no meio de uma pergunta | Ninguém encerra a pergunta: os alunos continuam respondendo até o projetor reabrir |
+| Uma resposta chega depois do fim da apresentação | As regras recusam (a sala não está mais `live`); a tela do aluno já mostra o fim |
 
 ### Custo do sincronismo
 
@@ -129,13 +142,13 @@ com outra tecnologia (WebSocket, Socket.IO, Supabase Realtime).
 
 [`useParticipant`](../src/hooks/useParticipant.ts) garante uma sessão anônima:
 
-```
-onAuthStateChanged -> sem usuário? -> signInAnonymously -> uid
-```
+1. `onAuthStateChanged` informa se já há um usuário neste navegador;
+2. sem usuário, `signInAnonymously` cria um;
+3. o hook devolve o `uid`.
 
 O uid persiste entre recarregamentos no mesmo navegador. É ele que identifica o
 dono da sala e o autor de cada resposta. Nenhum dado pessoal é pedido pelo
-Firebase — o nome, quando existe, é digitado pela pessoa e guardado pela
+Firebase: o nome, quando existe, é digitado pela pessoa e guardado pela
 própria aplicação.
 
 ## Assinaturas
@@ -146,6 +159,7 @@ própria aplicação.
 | [`useResponses`](../src/hooks/useResponses.ts) | `responses` filtradas por `slideId` | Apresentador |
 | [`useMyResponse`](../src/hooks/useMyResponse.ts) | `responses/{slideId}__{uid}` | Participante |
 | [`useParticipants`](../src/hooks/useParticipants.ts) | `participants` | Apresentador |
+| [`useRoomAnswers`](../src/hooks/useRoomAnswers.ts) | `secret/answers` (só o dono lê) | Apresentador |
 | [`useRoomAssets`](../src/hooks/useRoomAssets.ts) | `assets/{id}` (leitura única, não é assinatura) | Apresentador e participante |
 | [`useRoomFonts`](../src/hooks/useRoomFonts.ts) | `fonts` (uma consulta por versão da sala) | Apresentador e participante |
 
@@ -159,8 +173,12 @@ O apresentador escreve `currentSlideIndex` na sala; os participantes só
 trocar de slide reinicia os controles do participante.
 
 No slide de gabarito, apresentador e participante assinam as respostas do
-**`quiz` de origem** (`resultsSlideId`), não as do próprio slide `answer` — que
+**`quiz` de origem** (`resultsSlideId`), não as do próprio slide `answer`, que
 nunca recebe respostas.
+
+Os atalhos do projetor (setas, `PageDown`, `PageUp` e `Espaço`) não valem
+dentro de campos, modais (`[role="dialog"]`) e menus (`[role="menu"]`): lá as
+teclas são deles. Numa sala encerrada, a navegação fica desativada.
 
 ### Cronômetro
 
@@ -184,7 +202,7 @@ troca de slide:
 | Sai do slide correndo | `{ endsAt: null, remainingMs: o que sobrou }` |
 | Volta a um slide pausado | `{ endsAt: agora + remainingMs, remainingMs }` |
 | A contagem do projetor zera | `{ endsAt: null, remainingMs: 0 }` (`closeTimer`) |
-| Volta a um slide esgotado | nada muda — continua em zero |
+| Volta a um slide esgotado | nada muda: continua em zero |
 
 Só o apresentador escreve, e sempre junto da troca de slide
 (`setCurrentSlide`) ou por `saveSlideTimers`, ao assumir uma sala parada num
@@ -215,37 +233,42 @@ junto o quadro de alternativas e os gráficos do slide.
 
 A revelação do gabarito segue a mesma ideia: quando o suspense termina, o
 apresentador acrescenta o id do slide a `revealedSlideIds` (com `arrayUnion`,
-que torna a escrita idempotente). É esse registro que faz voltar ao gabarito —
-ou chegar atrasado nele — mostrar a resposta na hora.
+que torna a escrita idempotente) e, na mesma escrita, publica as corretas da
+pergunta em `revealedAnswers` (`markAnswerRevealed`). É esse registro que faz
+voltar ao gabarito (ou chegar atrasado nele) mostrar a resposta na hora.
 
 > **Por que pausar em vez de deixar correr.** Se o tempo continuasse passando
 > fora do slide, pular para uma referência no meio da pergunta queimaria o
 > tempo da plateia. E um cronômetro esgotado **não** reinicia ao voltar: a
-> pergunta encerrada é para ser revista, não refeita — daí `frozen` em
+> pergunta encerrada é para ser revista, não refeita; daí `frozen` em
 > `useSlideTimer`, que também impede a troca automática para o gabarito
 > disparar de novo.
 
 Duas consequências assumidas:
 
-- **A comparação usa o relógio de cada dispositivo.** Um celular adiantado ou
-  atrasado vê alguns segundos a mais ou a menos; o tempo restante é limitado à
-  duração do slide para nunca começar acima dela. A troca para o gabarito quem
-  decide é o apresentador, então a apresentação continua sincronizada.
-- **O bloqueio é da interface, não das regras.** Ao zerar, os controles do
-  participante travam, mas as regras do Firestore não conhecem o cronômetro —
-  uma resposta já em trânsito ainda pode ser gravada. É o mesmo nível de
-  confiança do resto da sala: quem tem o código participa.
+- **O desvio do relógio não é medido.** A contagem só aparece no projetor, que
+  compara o `endsAt` que ele mesmo gravou com o próprio relógio, e o bloqueio
+  do voto vem do estado da sala (`closed`), não do relógio do celular. Medir o
+  desvio de cada aparelho (com um `serverTimestamp()`) não mudaria nada do que
+  a plateia vê. O tempo restante é limitado à duração do slide para nunca
+  começar acima dela, e a troca para o gabarito quem decide é o apresentador.
+- **O bloqueio do cronômetro é da interface, não das regras.** Ao zerar, os
+  controles do participante travam, mas as regras do Firestore não conhecem o
+  cronômetro: uma resposta já em trânsito ainda pode ser gravada. As regras
+  só barram respostas depois do **fim da apresentação** (sala `ended`). É o
+  mesmo nível de confiança do resto da sala: quem tem o código participa.
 
 ## Presença
 
 [`src/lib/participants.ts`](../src/lib/participants.ts)
 
 ```ts
-joinRoom(code, uid, name?)  // setDoc(..., { merge: true }) em participants/{uid}
+joinRoom(code, uid, name?)  // getDoc e depois setDoc(..., { merge: true }) em participants/{uid}
 ```
 
-Chamado pela [`RoomPage`](../src/pages/RoomPage.tsx) assim que a pessoa entra —
-e antes de qualquer resposta. É isso que separa os dois números do rodapé:
+Chamado pela [`RoomPage`](../src/pages/RoomPage.tsx) assim que a pessoa entra,
+antes de qualquer resposta. Lê o documento primeiro: `joinedAt` só vai na
+criação; nas reentradas, só `lastSeenAt` (e o nome, se houver). É isso que separa os dois números do rodapé:
 
 - **participantes** = `participants.length` (quem abriu a sala);
 - **responderam** = `answeredCount(responses)` (uids distintos com resposta
@@ -257,7 +280,7 @@ Duas decisões deliberadas:
   heartbeat por minuto multiplicaria as escritas por participante sem mudar a
   contagem pedida (“quem conectou já é participante”).
 - **Dependência estável no efeito.** O efeito de presença depende de
-  `Boolean(room)`, não do objeto `room` — que muda a cada snapshot, inclusive
+  `Boolean(room)`, não do objeto `room`, que muda a cada snapshot, inclusive
   quando o apresentador troca de slide. Sem esse cuidado, cada participante
   reescreveria a presença a cada slide.
 
@@ -266,34 +289,100 @@ Duas decisões deliberadas:
 [`src/lib/responses.ts`](../src/lib/responses.ts)
 
 ```ts
-saveResponse(code, slideId, uid, type, value, participantName?)  // setDoc: cria ou sobrescreve
+saveResponse(code, slideId, uid, type, value, participantName?)  // setDoc: cria ou sobrescreve; lista vazia apaga
 clearResponse(code, slideId, uid)                                // deleteDoc
+MAX_RESPONSE_ITEMS = 100                                         // itens por resposta (o mesmo limite das regras)
 ```
 
 O id determinístico `${slideId}__${uid}` garante uma resposta por pessoa por
 slide (ver [04](04-modelo-de-dados.md)). `participantName` só é gravado quando a
-sala pede identificação — campos `undefined` não são aceitos pelo Firestore, por
-isso o spread condicional.
+sala pede identificação: campos `undefined` não são aceitos pelo Firestore, por
+isso o spread condicional. Uma lista vazia (a múltipla escolha toda
+desmarcada) vira `clearResponse`, para a pessoa não contar em "responderam"
+sem ter resposta.
 
 ## Controle do apresentador
 
 Ao criar a sala, `createRoom` grava **em lote**:
 
-- `rooms/{code}` com a apresentação e `creatorUid = uid`;
-- `rooms/{code}/private/presenter` com `{ token, ownerUid }`.
+- `rooms/{code}` com a apresentação (os quizzes sem gabarito) e
+  `creatorUid = uid`;
+- `rooms/{code}/private/presenter` com `{ token, ownerUid }`;
+- `rooms/{code}/secret/answers` com os gabaritos.
 
 O token vai na URL: `/present/<código>/<token>`. Ao abrir essa URL em outro
 navegador (ou depois de limpar os dados), `claimPresenter`:
 
-1. faz `update` no documento privado reenviando **o mesmo token** — as regras só
-   aceitam se ele bater, e é esse passo que concede o controle;
+1. faz `update` no documento privado reenviando **o mesmo token** (as regras só
+   aceitam se ele bater), e é esse passo que concede o controle;
 2. tenta assumir `creatorUid` na sala, para as escritas seguintes não precisarem
    consultar o documento privado (falhar aqui não impede apresentar).
 
 O token também fica no `localStorage`
 ([`presenterSessions`](../src/lib/presenterSessions.ts)), o que permite à tela
-inicial oferecer “Retomar” e “Exportar PDF” das salas apresentadas naquele
-dispositivo.
+inicial listar as salas apresentadas naquele dispositivo. Ela lê cada sala uma
+vez (`getRoom`) para mostrar a situação ("No ar", "Encerrada" ou "Não existe
+mais"), oferece “Retomar” só para as que estão no ar e “Exportar PDF” para as
+que existem (com os gabaritos lidos por `fetchAnswers`).
+
+## Gabarito protegido
+
+[`src/lib/answers.ts`](../src/lib/answers.ts) ·
+[`useRoomAnswers`](../src/hooks/useRoomAnswers.ts)
+
+O documento da sala tem leitura pública (o código é a chave). Se o gabarito
+ficasse nele, qualquer participante poderia lê-lo pelas ferramentas do
+navegador antes da revelação. Por isso:
+
+| Onde | O que fica |
+| --- | --- |
+| `rooms/{code}` | Cada `quiz` com `correctOptionIds: []`, `answersHidden: true` e `revealedAnswers` (as corretas já reveladas, pelo id do quiz) |
+| `rooms/{code}/secret/answers` | `{ [idDoQuiz]: idsDasCorretas }`, legível só pelo dono atual |
+
+| Função | Papel |
+| --- | --- |
+| `splitAnswers(slides)` | Separa os gabaritos dos slides (usada por `createRoom` e `saveAndRestartRoom`) |
+| `withAnswers(slides, answers)` | Visão do dono: devolve os gabaritos aos slides (projetor, edição, PDF, "Apresentar de novo") |
+| `withRevealedAnswers(room)` | Visão da plateia: cada pergunta só com as corretas já publicadas |
+| `isAnswerPublished(room, quizId)` | As corretas desta pergunta já chegaram à plateia? |
+| `subscribeAnswers` / `fetchAnswers` | Assinatura (projetor) e leitura única (sem permissão, devolve `null`) |
+
+A publicação acontece no fim do suspense: `markAnswerRevealed(code,
+answerSlideId, quizSlideId, correctOptionIds)` grava
+`revealedAnswers.<idDoQuiz>` (com `FieldPath`, porque o id pode ter caracteres
+que um caminho com pontos não aceitaria) junto com `revealedSlideIds:
+arrayUnion(answerSlideId)`. No celular, `revealPending = reveal.pending ||
+!answerPublished`: se a contagem local terminar antes de a escrita chegar, a
+tela continua no suspense até o gabarito existir.
+
+Uma edição salva regrava os gabaritos no mesmo lote da sala e zera
+`revealedAnswers`. Salas criadas antes desta proteção não têm `answersHidden`:
+nelas, `withRevealedAnswers` e `withAnswers` usam o gabarito do próprio slide.
+
+## Encerramento da sala
+
+[`endRoom` e `setCurrentSlide`](../src/lib/rooms.ts) ·
+[`PresentPage`](../src/pages/PresentPage.tsx)
+
+| Gatilho | Escrita |
+| --- | --- |
+| Avançar do último slide para o slide final | `setCurrentSlide(code, slides.length, timers, { status: 'ended' })` |
+| Botão "Encerrar" (com a confirmação "Encerrar a apresentação?") | `endRoom(code, slides.length, timers)`, com o cronômetro do slide no ar pausado |
+
+Índice final e status vão na mesma escrita, então nenhum aparelho vê o slide
+final com a sala ainda aberta. Depois disso:
+
+- **Projetor**: navegação desativada, efeitos de cronômetro e revelação
+  parados, faixa "A apresentação foi encerrada." com **Apresentar de novo**,
+  que lê os gabaritos, monta a apresentação com `loadRoomPresentation`, cria
+  uma sala **nova** (`createRoom`) e navega para ela.
+- **Celular**: tela final ("Obrigado por participar!"), com **Rever os slides**
+  (`/view/<código>`) e, se `settings.allowDownload`, **Baixar slides**.
+- **Edição** (`/edit/...`): não abre o editor; mostra que a apresentação foi
+  encerrada, com "Voltar à apresentação".
+- **Regras**: `update` só com a sala `live`, então a sala encerrada não muda
+  mais (nem índice, nem cronômetro, nem dono), e respostas só com a sala
+  `live`.
 
 ## Edição de uma sala em andamento
 
@@ -323,8 +412,13 @@ slide sem elas) e então uma única escrita no documento da sala grava:
 | `currentSlideIndex` | `0`: todos voltam ao primeiro slide |
 | `timers` | `{}`: os cronômetros recomeçam |
 | `revealedSlideIds` | `[]`: os gabaritos voltam a ter o suspense |
+| `answersHidden`, `revealedAnswers` | `true` e `{}`: nenhum gabarito publicado |
 | `status` | `live` |
 | `revision` | `increment(1)` |
+
+A escrita da sala e a dos gabaritos (`secret/answers`) vão num lote
+(`writeBatch`): ninguém vê as perguntas novas com o gabarito antigo. Uma sala
+encerrada não pode ser editada (as regras recusam o `update`).
 
 Por fim, as imagens e fontes que nenhum slide usa mais são apagadas das
 subcoleções (todas as partes de cada fonte); se essa limpeza falhar, só sobra
@@ -346,9 +440,9 @@ Decisões:
   editor preserva, e as regras só deixam o próprio autor apagá-la. Respostas de
   um slide removido ficam órfãs e não aparecem em lugar nenhum; votos em uma
   opção removida deixam de ser contados.
-- **As regras do documento da sala não mudam.** Gravar a edição é um `update`
-  comum, já permitido ao dono atual. As imagens seguem a regra da subcoleção
-  `assets`, que exige o mesmo dono.
+- **Nenhuma regra especial.** Gravar a edição é um `update` comum, já
+  permitido ao dono atual com a sala no ar. Os gabaritos seguem a regra de
+  `secret`, e as imagens a de `assets`, que exigem o mesmo dono.
 - **O editor é só da tela de edição.** Ela cria o próprio `editorStore` (ver
   [08](08-componentes.md#editorstore-em-detalhe)), então o rascunho da tela de
   criação não é tocado.
@@ -368,8 +462,8 @@ plano pago (Blaze) do Firebase, e o projeto roda no plano gratuito. Para caber
 num documento, toda imagem é comprimida antes de entrar (no máximo 1920 px no
 lado maior e 900 mil caracteres de data URL).
 
-**Escrita.** `createRoom` grava a sala e o documento privado no lote atômico de
-sempre e só depois envia as imagens, porque as regras só deixam o dono da sala
+**Escrita.** `createRoom` grava a sala, o documento privado e os gabaritos no
+lote atômico de sempre e só depois envia as imagens, porque as regras só deixam o dono da sala
 gravá-las. As imagens vão em lotes de até 8 documentos ou 7 MB. Na edição, só
 as imagens que a sala ainda não tem são enviadas (o id vem do conteúdo, então
 id igual é imagem igual).
@@ -385,6 +479,7 @@ mesma imagem gerarem uma leitura só). Cada tela pede só o que vai mostrar:
 | Celular | As do slide no ar e do seguinte |
 | Edição da sala | Todas, antes de abrir o editor |
 | PDF (projetor e tela inicial) | Todas, na hora de gerar |
+| Download dos slides e modo leitura da sala | Todas, na hora de gerar ou de abrir |
 
 Enquanto uma imagem não chega, o lugar dela mostra um espaço reservado cinza;
 o slide não espera por ela.
@@ -427,35 +522,45 @@ do sistema): não é um erro de tela.
 
 ## Regras de segurança
 
-[`firestore.rules`](../firestore.rules) — a pipeline as publica sozinha sempre
+[`firestore.rules`](../firestore.rules). A pipeline as publica sozinha sempre
 que o arquivo muda (job `regras-firestore`, ver
 [02](02-arquitetura.md#deploy)); dá para publicá-las à mão no console ou com
 `npx firebase-tools deploy --only firestore:rules --project <id>`.
 
 | Caminho | Leitura | Escrita |
 | --- | --- | --- |
-| `rooms/{code}` | pública (o código é a chave) | criar: autenticado e `creatorUid == uid`; alterar/excluir: dono atual **ou** quem reivindicou pelo doc privado |
+| `rooms/{code}` | pública (o código é a chave) | criar: autenticado, `creatorUid == uid` e `status == 'live'`; alterar: dono atual **ou** quem reivindicou pelo doc privado, e só com a sala `live`; excluir: o dono |
 | `rooms/{code}/private/{doc}` | **negada a todos** | criar: autenticado e `ownerUid == uid`; atualizar: autenticado, reenviando o **mesmo token** e com `ownerUid == uid`; excluir: negado |
-| `rooms/{code}/participants/{uid}` | pública | criar e atualizar: só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`); excluir: só o próprio uid |
-| `rooms/{code}/responses/{id}` | pública | criar/atualizar: `participantUid == uid`; excluir: só o autor |
+| `rooms/{code}/secret/{doc}` | só o dono atual (`isRoomOwner`) | criar e atualizar: o dono, conferido na sala **depois** da escrita (`getAfter`), porque na criação a sala nasce no mesmo lote; excluir: negado |
+| `rooms/{code}/participants/{uid}` | pública | criar e atualizar: só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`), só com as chaves `uid`, `name`, `joinedAt` e `lastSeenAt`, nome até 40 caracteres; excluir: só o próprio uid |
+| `rooms/{code}/responses/{id}` | pública | criar e atualizar: `participantUid == uid`, só as chaves de `ResponseDoc`, `slideId` texto de até 200 caracteres, id igual a `slideId + '__' + uid`, `type` `word` ou `choice`, `value` lista de até 100 itens, `createdAt` número, nome até 40 caracteres e sala `live`; excluir: só o autor (sempre) |
 | `rooms/{code}/assets/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
 | `rooms/{code}/fonts/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
 
 Consequências práticas:
 
 - Quem tem o código **lê** a sala e os resultados, mas não apresenta.
-- Ninguém consegue ler o token de outra pessoa — nem mesmo o dono, depois de
+- Ninguém consegue ler o token de outra pessoa, nem mesmo o dono, depois de
   gravado.
+- Ninguém além do dono lê o gabarito antes da revelação.
+- Uma sala encerrada não muda mais e não recebe respostas.
+- Campos extras, listas enormes e nomes longos são recusados; a resposta não
+  pode ser gravada num id que não seja o do próprio autor.
 - Ninguém edita nem apaga a resposta alheia, nem forja presença com outro uid.
 - Como a leitura das respostas é pública, **não envie dados sensíveis** por
   esses campos: qualquer pessoa com o código pode consultá-los.
 
+As regras podem ser testadas sem tocar no projeto real, com os emuladores do
+Firebase: ver [11](11-desenvolvimento.md#emuladores-do-firebase).
+
 ## Limites e custos
 
-- Escrita típica por participante: **1 doc de presença** + 1 doc por slide
-  respondido (sobrescrito, não acumulado).
+- Escrita típica por participante: **1 doc de presença** (com uma leitura
+  antes) + 1 doc por slide respondido (sobrescrito, não acumulado). Cada
+  escrita de resposta custa também uma leitura da sala nas regras (a
+  conferência de que ela está no ar).
 - Leitura típica do apresentador: 1 assinatura da sala + 1 das respostas do
-  slide atual + 1 dos participantes.
+  slide atual + 1 dos participantes + 1 dos gabaritos.
 - O relatório em PDF faz uma leitura única de **todas** as respostas da sala
   (`getAllResponses`).
 - Fontes: uma consulta por aparelho e por versão da sala, só em salas com

@@ -1,9 +1,11 @@
-# 10 — Exportações e integrações
+# 10. Exportações e integrações
 
 ## Importar
 
-O botão **Importar** do editor abre um modal com duas opções, e as duas aceitam
-o arquivo escolhido ou arrastado:
+**Importar** (botão na barra do editor a partir de 1280 px, item do menu
+"Mais" abaixo disso) abre o modal
+[`ImportDialog`](../src/components/editor/ImportDialog.tsx), com duas opções,
+e as duas aceitam o arquivo escolhido ou arrastado:
 
 | Opção | O que faz |
 | --- | --- |
@@ -76,7 +78,8 @@ OpenType ou WOFF dentro do `.fntdata` também são aceitas.
 
 ## Exportar
 
-O botão **Exportar** abre um modal com duas opções:
+**Exportar** (botão ou item do menu "Mais", como o Importar) abre um modal com
+duas opções:
 
 | Opção | O que faz |
 | --- | --- |
@@ -99,6 +102,15 @@ no formato dela (16:9 ou 4:3).
 | Alternativas, barras e pizza | Título, as alternativas em cartões (com letras nas alternativas) e a instrução "Responda pelo celular", no tema da página |
 | Resposta correta | Título e as alternativas, com a correta destacada em verde, no tema da página |
 | Nuvem de palavras | Título e a instrução para enviar a resposta pelo celular, no tema da página |
+
+A versão estática dos slides comuns é `standardSlideToFree`
+([`standard.ts`](../src/utils/pptxExport/standard.ts)), que aceita
+`StaticSlideOptions { hints?, revealQuiz? }`: `hints: false` tira as
+instruções de participação ("Responda pelo celular" e afins) e `revealQuiz`
+destaca a correta na própria pergunta. A exportação do editor usa os padrões
+(com instruções, sem destaque na pergunta); o download dos slides no fim e o
+modo leitura usam outras combinações (ver abaixo). `exportPptx` repassa
+`hints` por `PptxExportOptions`.
 
 **Tema.** Os slides comuns (perguntas, gabarito, nuvem, barras, pizza e texto
 simples) saem com as cores do tema escolhido na página no momento da
@@ -136,7 +148,7 @@ de volta na própria plataforma com textos, imagens e fontes.
   mostrados no formato `caminho: mensagem`, apontando o campo problemático.
 
 O formato e as garantias de compatibilidade estão em
-[04 — Modelo de dados](04-modelo-de-dados.md#formato-json-importexport).
+[04 (Modelo de dados)](04-modelo-de-dados.md#formato-json-importexport).
 
 > A importação **substitui** o conteúdo do editor. Exporte antes se não quiser
 > perder o que estava montado.
@@ -150,7 +162,7 @@ dinamicamente, então só é baixada quando alguém exporta.
 
 Estrutura:
 
-1. **Capa** — faixa azul, título, data/hora, número de slides e quantos
+1. **Capa**: faixa azul, título, data/hora, número de slides e quantos
    participantes responderam.
 2. **Uma página por slide** (com quebra automática quando não cabe):
    - `bar`/`pie`: barra horizontal por opção, com votos e porcentagem;
@@ -162,7 +174,7 @@ Estrutura:
      ([`freeSlideRaster.ts`](../src/utils/freeSlideRaster.ts), com o texto
      rico de [`canvasText.ts`](../src/utils/canvasText.ts)), na largura da
      página;
-   - `answer`: **não vira página** — a página da pergunta já traz o gabarito.
+   - `answer`: **não vira página**: a página da pergunta já traz o gabarito.
 3. **Uma página de tabela logo depois de cada slide interativo que recebeu
    respostas**, com o que cada pessoa respondeu:
 
@@ -174,11 +186,12 @@ Estrutura:
    - A coluna **Resultado** só aparece em perguntas (`quiz`) com gabarito.
    - Com nomes coletados, as linhas vêm em **ordem alfabética**; sem nomes, a
      tabela cai para **“Participante N”**, numerado pela ordem de chegada das
-     respostas — assim a página continua útil sem inventar uma identidade que
+     respostas; assim a página continua útil sem inventar uma identidade que
      ninguém informou.
+   - Uma resposta vazia aparece como hífen (`-`).
    - Tabelas longas quebram em várias páginas, **repetindo o cabeçalho**.
 4. **Rodapé** com a mesma contagem da tela na página do slide (“N responderam”,
-   e o total de envios só quando ele pode ser diferente — ver
+   e o total de envios só quando ele pode ser diferente; ver
    [04](04-modelo-de-dados.md#números-derivados)), e com o total de
    participantes na página da tabela.
 
@@ -195,13 +208,57 @@ Quando é gerado:
 O PDF não baixa sozinho ao chegar no slide final: só quando o apresentador
 pede. Nos três casos, as imagens dos slides livres são lidas da sala antes de gerar
 o relatório; uma imagem que falhar fica de fora do desenho, sem impedir o PDF.
+Como a sala guarda as perguntas sem gabarito, o relatório junta os gabaritos
+antes de gerar: o projetor já os tem (`useRoomAnswers`), e a tela inicial os
+lê com `fetchAnswers` (o mesmo dono, então a leitura é permitida).
+
+## Baixar os slides no fim
+
+[`useSlideDownload`](../src/hooks/useSlideDownload.ts) ·
+[`exportSlidesPdf`](../src/utils/exportSlidesPdf.ts) ·
+[`toStaticSlides`](../src/utils/staticSlides.ts) ·
+[`DownloadSlides`](../src/components/present/DownloadSlides.tsx)
+
+Com a opção **"Permitir que os participantes baixem os slides no fim"**
+(`allowDownload`, ver [06](06-configuracoes.md)), a tela final do celular
+mostra "Baixar slides", com dois botões. Os arquivos levam **só os slides**,
+sem a resposta de ninguém e sem as instruções de participação, no tema da
+página de quem baixa:
+
+| Botão | O que gera |
+| --- | --- |
+| **PDF dos slides** | `exportSlidesPdf(presentation, { theme })`: uma página por slide, na proporção da apresentação (largura de 960 pt), cada uma com o slide desenhado em canvas (`renderFreeSlide`) e gravado como JPEG. As fontes embutidas são registradas antes, porque o canvas usa as fontes do documento |
+| **PowerPoint (.pptx)** | `exportPptx(presentation, { theme, hints: false })`, o mesmo gerador da exportação do editor, sem as instruções |
+
+`useSlideDownload(loadPresentation)` devolve `{ download, working, error }`.
+Os dois geradores são importados só no clique (`import()` dinâmico). No
+celular, `loadPresentation` monta a apresentação a partir da sala como a
+plateia a vê (`withRevealedAnswers`): os slides de gabarito saem com a
+correta destacada só nas perguntas que foram reveladas. O nome do arquivo vem
+do título (`presentationFileName`).
+
+## Modo leitura
+
+[`ViewPage`](../src/pages/ViewPage.tsx)
+
+| Rota | Fonte |
+| --- | --- |
+| `/view` | Um `.json` exportado (ou gerado pelo prompt de IA), lido e validado no navegador, sem Firebase |
+| `/view/<código>` | Uma sala encerrada (com as imagens e as fontes dela); com a sala no ar, a página avisa que a leitura fica disponível quando a apresentação terminar |
+
+Os slides passam por `toStaticSlides(presentation, { hints: false,
+revealQuiz: mostrarRespostas, skipAnswerSlides: true })`: tudo vira slide
+livre estático, os slides de gabarito ficam de fora e a caixa **Mostrar
+respostas certas** destaca a correta na própria pergunta. O menu **Baixar**
+(PDF dos slides e PowerPoint, pelo `useSlideDownload`) aparece sempre para um
+arquivo local e, numa sala, só com `allowDownload`.
 
 ## Prompt de IA
 
 [`src/utils/aiPrompt.ts`](../src/utils/aiPrompt.ts) ·
 [`AiPromptButton`](../src/components/editor/AiPromptButton.tsx)
 
-Texto pronto que descreve **todo o formato JSON aceito** — campos comuns, os
+Texto pronto que descreve **todo o formato JSON aceito**: campos comuns, os
 tipos de slide, as opções globais (inclusive o formato 16:9 ou 4:3), as
 sobrescritas por slide, as regras de preenchimento e um exemplo completo
 válido. O fluxo é: copiar, colar no assistente, trocar o tema, salvar a
@@ -214,40 +271,61 @@ imagens podem ser incluídas depois, no editor.
 O prompt instrui explicitamente a IA a **não** gerar slides `answer`: eles são
 criados pela plataforma a partir do `revealAnswer` do `quiz`.
 
-> Ao mexer em `utils/validation.ts`, atualize este prompt — ele é a
+O prompt também descreve `allowDownload` entre as opções globais (e o deixa
+de fora das sobrescritas por slide).
+
+> Ao mexer em `utils/validation.ts`, atualize este prompt: ele é a
 > documentação que a IA lê.
 
 ## Encurtador do link da sala
 
 [`src/lib/shortUrl.ts`](../src/lib/shortUrl.ts) ·
-[`ShareRoom`](../src/components/present/ShareRoom.tsx)
+[`RoomCodeDialog`](../src/components/present/RoomCodeDialog.tsx)
 
-O modal do QR mostra o link curto **em texto grande**, para quem prefere digitar
-a apertar a câmera.
+O modal "Código da sala" mostra o link curto ao lado do QR, e a projeção em
+tela cheia o mostra em letra grande, para quem prefere digitar a apontar a
+câmera.
 
 Como funciona:
 
-1. Ao abrir o modal, a aplicação encurta o link de entrada da sala.
-2. O resultado vai para o `localStorage`, indexado pela URL longa: reabrir o
-   modal não cria um link novo.
-3. O texto exibido perde o `https://` e o `www.` (fica, por exemplo,
-   `tinyurl.com/2xoh2ngp`).
-4. Se falhar, o modal mostra o link completo e um botão **“Tentar de novo”**.
-5. O link aparece num único lugar do modal: o curto em destaque e um botão
-   para alternar para o completo ("Ver link completo" e "Ver link curto");
-   "Copiar" leva o que estiver em destaque.
+1. Ao abrir o modal (ou a projeção), a aplicação pede o link curto ao
+   **da.gd**: `https://da.gd/s?url=<link de entrada codificado>`, que responde
+   com o link em texto puro.
+2. A resposta só vale se for um link `https`, do próprio `da.gd` e com caminho
+   (`validShortUrl`): uma página de erro em texto não vira "link curto".
+3. Cada tentativa tem **8 s** de tempo limite (`AbortController`). Sem resposta
+   válida, `shortenUrl` lança "Nenhum encurtador respondeu.".
+4. O resultado vai para o `localStorage` (`ip-short-urls`), indexado pela URL
+   longa: reabrir o modal não cria um link novo. A leitura do cache descarta
+   entradas inválidas (por exemplo, de um serviço usado antes).
+5. O texto exibido perde o `https://` e o `www.` (`displayShortUrl`; fica, por
+   exemplo, `da.gd/e0SS8g`).
+6. Enquanto encurta, o modal mostra "Encurtando o link...". Se falhar, mostra
+   o link completo, o aviso "Não foi possível encurtar o link agora." e
+   **Tentar de novo**; a projeção mostra o endereço do site no lugar do link
+   curto.
+
+Os provedores ficam numa lista (`PROVIDERS`, com o domínio aceito e o
+endereço da chamada): um serviço novo entra ali, desde que responda com
+`Access-Control-Allow-Origin: *` e devolva o link em texto puro.
 
 ### Decisões
 
 - **O QR sempre codifica a URL completa.** Se o encurtador sair do ar, a câmera
   continua funcionando; o link curto é uma conveniência, não uma dependência.
-- **Serviço: TinyURL.** Sendo um site estático, a chamada sai do navegador e o
-  serviço precisa responder com CORS liberado. Entre os encurtadores públicos
-  testados (**is.gd, cleanuri, spoo.me, ulvis**), só o TinyURL envia
-  `Access-Control-Allow-Origin` — os demais são bloqueados pelo navegador. O
-  redirecionamento do TinyURL **preserva o fragmento** `#/room/<código>`, que o
-  `HashRouter` exige.
+- **Serviço: da.gd.** Sendo um site estático, a chamada sai do navegador e o
+  serviço precisa responder com CORS liberado para qualquer origem. O TinyURL,
+  usado antes, passou a responder `Access-Control-Allow-Origin:
+  https://tinyurl.com`, e o navegador descarta a resposta (mesmo com status
+  200); o is.gd não libera CORS. O da.gd responde com
+  `Access-Control-Allow-Origin: *`, é gratuito, não pede chave, aceita
+  endereços de `localhost` e **preserva o fragmento** `#/room/<código>` no
+  redirecionamento, que o `HashRouter` exige.
+- **Sem servidor.** Uma alternativa seria encurtar numa função de servidor
+  (que não depende de CORS e poderia usar o TinyURL), mas o projeto continua
+  100% estático.
 - **Só sob demanda.** A URL da sala só é enviada ao serviço externo quando o
-  apresentador abre o QR — não em toda visita à página.
-- **Em `localhost` o encurtamento falha** (o serviço recusa endereços locais).
-  É esperado em desenvolvimento: a interface cai no link completo.
+  apresentador abre o código da sala, não em toda visita à página.
+- **Serviço lento.** O da.gd costuma responder em menos de um segundo, mas
+  pode demorar mais numa rede com proxy; passando de 8 s, a interface cai no
+  link completo e o "Tentar de novo" resolve.
