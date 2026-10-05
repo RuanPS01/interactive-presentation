@@ -44,14 +44,20 @@ export interface PresentationSettings {
    * slide livre novo. A tela do projetor continua ocupando a tela inteira.
    */
   slideAspect: SlideAspect
+  /**
+   * A plateia pode baixar os slides (PDF e PowerPoint) quando a apresentação
+   * termina. Os arquivos levam só os slides, sem a resposta de ninguém.
+   */
+  allowDownload: boolean
 }
 
 /**
  * Sobrescritas por slide. Campo ausente = herda a configuração global.
- * `askName` e `slideAspect` não aparecem aqui: o nome é pedido uma única vez,
- * antes de entrar na sala, e o formato vale para a apresentação inteira.
+ * `askName`, `slideAspect` e `allowDownload` não aparecem aqui: o nome é pedido
+ * uma única vez, antes de entrar na sala, e o formato e o download valem para
+ * a apresentação inteira.
  */
-export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect'>>
+export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect' | 'allowDownload'>>
 
 interface SlideBase {
   id: string
@@ -353,6 +359,17 @@ export interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
    * primeira revelação, não para atrasar a revisão.
    */
   revealedSlideIds?: string[]
+  /**
+   * A sala guarda as perguntas SEM gabarito: os `correctOptionIds` ficam em
+   * `rooms/{code}/secret/answers`, que só o dono lê (ver `lib/answers.ts`).
+   * Ausente nas salas criadas antes dessa proteção.
+   */
+  answersHidden?: boolean
+  /**
+   * Gabaritos já revelados à plateia, pelo id do `quiz`. O projetor grava a
+   * pergunta aqui quando o suspense do gabarito dela termina.
+   */
+  revealedAnswers?: Record<string, string[]>
   /**
    * Quantas vezes o apresentador editou a sala depois de iniciada. Cada edição
    * recomeça a apresentação do primeiro slide e soma 1 aqui; é por esse número

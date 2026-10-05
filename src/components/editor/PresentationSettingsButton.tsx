@@ -1,5 +1,6 @@
 import { Settings } from 'lucide-react'
-import { useState } from 'react'
+import { useDialogControl } from '../../hooks/useDialogControl'
+import type { DialogControlProps } from '../../hooks/useDialogControl'
 import { useEditorStore } from '../../store/editorStore'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -14,21 +15,23 @@ import { FontSizeRow, TimerRow } from './SettingsControls'
  * todas elas (ver `SlideSettingsSection`); a única exclusivamente global é o
  * pedido de nome, que acontece uma vez, antes de entrar na sala.
  */
-export function PresentationSettingsButton() {
-  const [open, setOpen] = useState(false)
+export function PresentationSettingsButton(props: DialogControlProps) {
+  const [open, setOpen] = useDialogControl(props)
   const settings = useEditorStore((s) => s.settings)
   const updateSettings = useEditorStore((s) => s.updateSettings)
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-        title="Opções que valem para todos os slides"
-      >
-        <Settings size={16} /> Opções
-      </Button>
+      {props.trigger !== false && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen(true)}
+          title="Opções que valem para todos os slides"
+        >
+          <Settings size={16} /> Opções
+        </Button>
+      )}
 
       <Modal
         open={open}
@@ -67,6 +70,13 @@ export function PresentationSettingsButton() {
             hint="O participante pode apagar o que enviou e escolher de novo."
             checked={settings.allowChangeAnswer}
             onChange={(allowChangeAnswer) => updateSettings({ allowChangeAnswer })}
+          />
+
+          <Checkbox
+            label="Permitir que os participantes baixem os slides no fim"
+            hint="Quando a apresentação termina, o celular oferece os slides em PDF e PowerPoint, sem a resposta de ninguém."
+            checked={settings.allowDownload}
+            onChange={(allowDownload) => updateSettings({ allowDownload })}
           />
 
           <Checkbox

@@ -1,5 +1,7 @@
 import { Check, Copy, Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { useDialogControl } from '../../hooks/useDialogControl'
+import type { DialogControlProps } from '../../hooks/useDialogControl'
 import { AI_IMPORT_PROMPT } from '../../utils/aiPrompt'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -9,8 +11,8 @@ import { Modal } from '../ui/Modal'
  * descreve o formato JSON aceito na importação, então o resultado gerado pode ser
  * salvo como .json e carregado em "Importar JSON".
  */
-export function AiPromptButton() {
-  const [open, setOpen] = useState(false)
+export function AiPromptButton(props: DialogControlProps) {
+  const [open, setOpen] = useDialogControl(props)
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState(false)
 
@@ -29,14 +31,16 @@ export function AiPromptButton() {
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => setOpen(true)}
-        title="Prompt para gerar slides com IA"
-      >
-        <Sparkles size={16} /> Prompt de IA
-      </Button>
+      {props.trigger !== false && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setOpen(true)}
+          title="Prompt para gerar slides com IA"
+        >
+          <Sparkles size={16} /> Prompt de IA
+        </Button>
+      )}
 
       <Modal
         open={open}
@@ -46,7 +50,8 @@ export function AiPromptButton() {
         description={
           <>
             Copie o prompt, cole no assistente de IA, substitua o tema, salve a resposta
-            em um arquivo <code>.json</code> e carregue em <strong>Importar JSON</strong>.
+            em um arquivo <code>.json</code> e carregue em <strong>Importar</strong>, opção
+            &quot;Apresentação (.json)&quot;.
           </>
         }
         footer={

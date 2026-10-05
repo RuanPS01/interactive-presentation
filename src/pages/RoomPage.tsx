@@ -1,4 +1,4 @@
-import { ChevronLeft, RotateCcw } from 'lucide-react'
+import { BookOpen, ChevronLeft, PartyPopper, RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
@@ -8,12 +8,15 @@ import { useRoomAssets } from '../hooks/useRoomAssets'
 import { useRoomFonts } from '../hooks/useRoomFonts'
 import { useSlideTimer } from '../hooks/useSlideTimer'
 import { useThemeStore } from '../store/themeStore'
+import { isAnswerPublished, withRevealedAnswers } from '../lib/answers'
 import { joinRoom } from '../lib/participants'
+import { loadRoomPresentation } from '../lib/rooms'
 import { getParticipantName, saveParticipantName } from '../lib/participantName'
 import { collectAssetIds } from '../utils/freeSlide'
 import { resolveSlideSettings, withDefaults } from '../utils/settings'
 import { ParticipateView } from '../components/participate/ParticipateView'
 import { NamePrompt } from '../components/participate/NamePrompt'
+import { DownloadSlides } from '../components/present/DownloadSlides'
 import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Banner } from '../components/ui/Banner'
 import { Button } from '../components/ui/Button'
@@ -75,17 +78,20 @@ export function RoomPage() {
     setName(value)
   }
 
-  const total = room?.slides.length ?? 0
-  // O apresentador passou do último slide: apresentação encerrada (slide final).
-  const finished = !!room && total > 0 && room.currentSlideIndex >= total
+  // Cada pergunta só com o gabarito já revelado (ver lib/answers.ts).
+  const slides = room ? withRevealedAnswers(room) : []
+  const total = slides.length
+  // Sala encerrada, ou o apresentador passou do último slide: tela final.
+  const finished =
+    !!room && (room.status === 'ended' || (total > 0 && room.currentSlideIndex >= total))
   const currentSlide =
-    room && total > 0 && room.currentSlideIndex < total
-      ? room.slides[room.currentSlideIndex]
+    room && !finished && total > 0 && room.currentSlideIndex < total
+      ? slides[room.currentSlideIndex]
       : undefined
   const slideSettings = resolveSlideSettings(room?.settings, currentSlide)
   // Imagens do slide no ar e do seguinte (já chega carregado quando o
   // apresentador avançar).
-  const nextSlide = room && currentSlide ? room.slides[room.currentSlideIndex + 1] : undefined
+  const nextSlide = room && currentSlide ? slides[room.currentSlideIndex + 1] : undefined
   const assets = useRoomAssets(
     code,
     collectAssetIds([currentSlide, nextSlide].filter((s): s is NonNullable<typeof s> => Boolean(s))),
@@ -105,20 +111,33 @@ export function RoomPage() {
     // direto, sem uma espera que não sincroniza mais nada.
     revealed: Boolean(answerSlideId && room?.revealedSlideIds?.includes(answerSlideId)),
   })
+  // O gabarito só chega quando o projetor o publica, no fim do suspense dele.
+  // Até lá a tela continua em "A resposta certa é...", em vez de mostrar a
+  // pergunta sem a alternativa correta por uma fração de segundo.
+  const answerPublished =
+    currentSlide?.type !== 'answer' || !room || isAnswerPublished(room, currentSlide.quizSlideId)
+  const revealPending = reveal.pending || !answerPublished
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col px-4 py-6">
-      <header className="mb-4 flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/join')}>
-          <ChevronLeft size={16} /> Trocar sala
+    <div className="mx-auto flex min-h-[100dvh] max-w-lg flex-col px-4 py-6">
+      <header className="mb-4 flex items-center justify-between gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0 px-2 sm:px-3"
+          onClick={() => navigate('/join')}
+          aria-label="Trocar sala"
+          title="Trocar sala"
+        >
+          <ChevronLeft size={16} /> <span className="hidden sm:inline">Trocar sala</span>
         </Button>
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {name && (
-            <span className="max-w-[8rem] truncate text-sm text-neutral-500 dark:text-neutral-400">
+            <span className="min-w-0 max-w-[8rem] truncate text-sm text-neutral-500 dark:text-neutral-400">
               {name}
             </span>
           )}
-          <span className="text-sm text-neutral-500 dark:text-neutral-400">
+          <span className="shrink-0 whitespace-nowrap text-sm text-neutral-500 dark:text-neutral-400">
             Sala <strong className="tracking-widest">{code}</strong>
           </span>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
@@ -180,13 +199,30 @@ export function RoomPage() {
 
             {ready && finished && (
               <div className="py-4 text-center">
-                <p className="text-3xl">🎉</p>
+                <PartyPopper
+                  size={40}
+                  strokeWidth={1.5}
+                  className="mx-auto text-blue-600 dark:text-blue-400"
+                  aria-hidden="true"
+                />
                 <p className="mt-2 text-lg font-semibold text-neutral-900 dark:text-neutral-50">
                   Obrigado por participar!
                 </p>
                 <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                   A apresentação foi encerrada.
                 </p>
+                {room.status === 'ended' && code && (
+                  <Button variant="secondary" size="sm" className="mt-4" onClick={() => navigate(`/view/${code}`)}>
+                    <BookOpen size={16} /> Rever os slides
+                  </Button>
+                )}
+                {settings.allowDownload && code && (
+                  <DownloadSlides
+                    className="mt-5 border-t border-neutral-200 pt-4 dark:border-neutral-800"
+                    // Só os gabaritos já revelados vão junto, como na tela.
+                    loadPresentation={() => loadRoomPresentation(code, room, withRevealedAnswers(room))}
+                  />
+                )}
               </div>
             )}
 
@@ -196,12 +232,12 @@ export function RoomPage() {
                 key={currentSlide.id}
                 code={code}
                 slide={currentSlide}
-                slides={room.slides}
+                slides={slides}
                 participantUid={uid}
                 participantName={askName ? name : null}
                 settings={slideSettings}
                 timeUp={timer.closed}
-                revealPending={reveal.pending}
+                revealPending={revealPending}
                 revealDots={reveal.dots}
                 assets={assets}
               />

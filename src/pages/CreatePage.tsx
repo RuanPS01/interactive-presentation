@@ -1,27 +1,26 @@
-import { ChevronLeft, Play } from 'lucide-react'
+import { ChevronLeft, FilePlus2, Play, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useParticipant } from '../hooks/useParticipant'
-import { useEditorStore } from '../store/editorStore'
-import { useThemeStore } from '../store/themeStore'
+import { defaultEditorStore, useEditorStore } from '../store/editorStore'
+import { discardDraft, startDraftPersistence, useDraftStatus } from '../store/editorDraft'
 import { createRoom } from '../lib/rooms'
 import { savePresenterSession } from '../lib/presenterSessions'
 import { isFirebaseConfigured } from '../lib/firebase'
-import { AiPromptButton } from '../components/editor/AiPromptButton'
+import { EditorToolbar } from '../components/editor/EditorToolbar'
 import { EditorWorkspace } from '../components/editor/EditorWorkspace'
-import { ImportExportButtons } from '../components/editor/ImportExportButtons'
-import { PresentationSettingsButton } from '../components/editor/PresentationSettingsButton'
-import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { Banner } from '../components/ui/Banner'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 
 export function CreatePage() {
+  // O rascunho desta tela fica no navegador: restaurado na primeira
+  // renderização (antes de qualquer leitura do editor, para não piscar o
+  // editor vazio) e gravado a cada mudança.
+  useState(() => startDraftPersistence(defaultEditorStore))
   const navigate = useNavigate()
   const { uid, error: authError } = useParticipant()
 
-  const theme = useThemeStore((s) => s.theme)
-  const toggleTheme = useThemeStore((s) => s.toggleTheme)
   const title = useEditorStore((s) => s.title)
   const setTitle = useEditorStore((s) => s.setTitle)
   const slideCount = useEditorStore((s) => s.slides.length)
@@ -29,6 +28,16 @@ export function CreatePage() {
 
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const draftStatus = useDraftStatus((s) => s.status)
+  const draftLabel =
+    draftStatus === 'saving'
+      ? 'Salvando…'
+      : draftStatus === 'saved'
+        ? 'Rascunho salvo neste navegador'
+        : draftStatus === 'error'
+          ? 'Não foi possível salvar o rascunho'
+          : null
 
   async function startPresentation() {
     if (!uid) {
@@ -62,28 +71,47 @@ export function CreatePage() {
     // Em telas grandes o editor ocupa exatamente a altura da janela e cada
     // coluna rola por conta própria (ver `EditorWorkspace`).
     // Ocupa a largura inteira da janela: em telas largas a prévia ganha espaço.
-    <div className="flex min-h-screen w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
+    <div className="flex min-h-[100dvh] w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
       {/* Barra superior */}
-      <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
-          <ChevronLeft size={16} /> Início
-        </Button>
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Título da apresentação"
-          aria-label="Título da apresentação"
-          className="max-w-xs flex-1"
+      <div className="mb-4 shrink-0">
+        <EditorToolbar
+          back={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 px-2 sm:px-3"
+              onClick={() => navigate('/')}
+              aria-label="Início"
+              title="Início"
+            >
+              <ChevronLeft size={16} /> <span className="hidden sm:inline">Início</span>
+            </Button>
+          }
+          title={title}
+          onTitleChange={setTitle}
+          onImportError={setError}
+          status={draftLabel}
+          rareItems={[
+            {
+              key: 'discard',
+              label: 'Começar do zero',
+              hint: 'Esvazia o editor e apaga o rascunho deste navegador',
+              icon: <FilePlus2 size={16} />,
+              danger: true,
+              onSelect: () => setConfirmDiscard(true),
+            },
+          ]}
+          primary={
+            <Button
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => void startPresentation()}
+              disabled={starting}
+            >
+              <Play size={16} /> {starting ? 'Iniciando…' : 'Iniciar apresentação'}
+            </Button>
+          }
         />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <PresentationSettingsButton />
-          <AiPromptButton />
-          <ImportExportButtons onError={setError} />
-          <Button size="sm" onClick={() => void startPresentation()} disabled={starting}>
-            <Play size={16} /> {starting ? 'Iniciando…' : 'Iniciar apresentação'}
-          </Button>
-        </div>
       </div>
 
       <div className="shrink-0">
@@ -107,6 +135,29 @@ export function CreatePage() {
       </div>
 
       <EditorWorkspace />
+
+      <ConfirmDialog
+        open={confirmDiscard}
+        title="Começar uma apresentação nova?"
+        icon={
+          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300">
+            <Trash2 size={20} />
+          </span>
+        }
+        tone="danger"
+        confirmLabel="Apagar e começar do zero"
+        onConfirm={() => {
+          setConfirmDiscard(false)
+          setError(null)
+          void discardDraft(defaultEditorStore)
+        }}
+        onCancel={() => setConfirmDiscard(false)}
+      >
+        <p>
+          O editor fica vazio e o rascunho guardado neste navegador é apagado. Se quiser
+          guardar o que montou, use Exportar antes.
+        </p>
+      </ConfirmDialog>
     </div>
   )
 }

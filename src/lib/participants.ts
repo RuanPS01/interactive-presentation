@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore'
+import { collection, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore'
 import { db } from './firebase'
 import type { ParticipantDoc } from '../types/presentation'
 
@@ -16,23 +16,29 @@ export function participantsCol(code: string) {
 
 /**
  * Registra (ou atualiza) a presença do participante. É chamado ao abrir a sala
- * e sempre que o nome muda — não há heartbeat periódico, para não multiplicar
+ * e sempre que o nome muda; não há heartbeat periódico, para não multiplicar
  * escritas no Firestore com plateias grandes.
+ *
+ * `joinedAt` só é gravado na criação: reentrar (recarregar a página, voltar
+ * para a sala) não muda quando a pessoa chegou. `lastSeenAt` guarda a última
+ * entrada.
  */
 export async function joinRoom(
   code: string,
   uid: string,
   name?: string,
 ): Promise<void> {
+  const ref = doc(participantsCol(code), uid)
   const now = Date.now()
-  const payload: ParticipantDoc = {
+  const existing = await getDoc(ref)
+  const payload: Partial<ParticipantDoc> & { uid: string } = {
     uid,
-    joinedAt: now,
     lastSeenAt: now,
+    ...(existing.exists() ? {} : { joinedAt: now }),
     ...(name?.trim() ? { name: name.trim() } : {}),
   }
-  // `merge` preserva o joinedAt original em reentradas.
-  await setDoc(doc(participantsCol(code), uid), payload, { merge: true })
+  // `merge` preserva os campos não enviados (o `joinedAt` e o nome).
+  await setDoc(ref, payload, { merge: true })
 }
 
 /** Assina a lista de participantes da sala (visão do apresentador). */

@@ -81,7 +81,7 @@ export function ChoiceInput({
     <div className="space-y-3">
       {timeUp ? (
         <p className="flex items-center gap-2 rounded-xl bg-red-100 px-4 py-3 font-semibold text-red-800 dark:bg-red-950 dark:text-red-200">
-          <TimerOff size={18} /> Tempo esgotado — as respostas foram encerradas.
+          <TimerOff size={18} /> Tempo esgotado: as respostas foram encerradas.
         </p>
       ) : (
         <p
