@@ -1,16 +1,17 @@
 import { clsx } from 'clsx'
-import { CheckCircle2, FileBraces, FileDown, FileUp, Loader2, Presentation, TriangleAlert } from 'lucide-react'
+import { CheckCircle2, FileBraces, FileUp, Loader2, Presentation, TriangleAlert } from 'lucide-react'
 import { useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
+import { useDialogControl } from '../../hooks/useDialogControl'
+import type { DialogControlProps } from '../../hooks/useDialogControl'
 import { useEditorStoreApi, useEditorStore } from '../../store/editorStore'
 import { importPresentationFromFile } from '../../utils/importExport'
 import type { PptxProgress } from '../../utils/pptx'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { ExportDialog } from './ExportDialog'
 
-interface ImportExportButtonsProps {
+interface ImportDialogProps extends DialogControlProps {
   /** Mensagem de erro da importação (ou `null` quando ela deu certo). */
   onError: (message: string | null) => void
 }
@@ -24,18 +25,17 @@ type Status =
   | { kind: 'error'; message: string }
 
 /**
- * "Importar" e "Exportar", cada um com a escolha do formato, sobre o editor
- * em uso.
+ * "Importar", com a escolha do formato, sobre o editor em uso. A abertura pode
+ * vir do próprio botão ou de fora (o menu "Mais" da barra do editor).
  *
  * O JSON substitui a apresentação inteira, como sempre. O PowerPoint vira
  * slides livres, que entram no fim da apresentação ou no lugar dela; o
  * leitor de PPTX só é baixado quando alguém o usa.
  */
-export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
+export function ImportDialog({ onError, ...control }: ImportDialogProps) {
   const store = useEditorStoreApi()
   const loadPresentation = useEditorStore((s) => s.loadPresentation)
-  const [open, setOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
+  const [open, setOpen] = useDialogControl(control)
   const [mode, setMode] = useState<PptxMode>('append')
   const [status, setStatus] = useState<Status>({ kind: 'idle' })
   const jsonRef = useRef<HTMLInputElement>(null)
@@ -119,13 +119,11 @@ export function ImportExportButtons({ onError }: ImportExportButtonsProps) {
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <FileUp size={16} /> Importar
-      </Button>
-      <Button variant="secondary" size="sm" onClick={() => setExportOpen(true)}>
-        <FileDown size={16} /> Exportar
-      </Button>
-      <ExportDialog open={exportOpen} onClose={() => setExportOpen(false)} />
+      {control.trigger !== false && (
+        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
+          <FileUp size={16} /> Importar
+        </Button>
+      )}
 
       <input
         ref={jsonRef}

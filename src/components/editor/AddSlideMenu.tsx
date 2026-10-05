@@ -1,27 +1,50 @@
+import { clsx } from 'clsx'
+import { Plus } from 'lucide-react'
 import { useEditorStore } from '../../store/editorStore'
+import type { SlideType } from '../../types/presentation'
 import { CREATABLE_SLIDE_TYPES, SLIDE_TYPE_LABELS } from '../../utils/slideFactory'
+import { Menu } from '../ui/Menu'
 import { SLIDE_TYPE_ICONS } from './slideTypeIcons'
 
-/** Botões para adicionar um novo slide de cada tipo criável manualmente. */
-export function AddSlideMenu() {
-  const addSlide = useEditorStore((s) => s.addSlide)
+/** Uma linha do que cada tipo faz, abaixo do nome no menu. */
+const HINTS: Partial<Record<SlideType, string>> = {
+  wordcloud: 'Respostas curtas viram uma nuvem ao vivo',
+  bar: 'Votação com o resultado em barras',
+  pie: 'Votação com o resultado em pizza',
+  quiz: 'Pergunta com alternativas e gabarito',
+  text: 'Um texto grande, sem respostas',
+  free: 'Caixas de texto e imagens livres',
+}
 
+/**
+ * "Adicionar slide": um botão da largura da coluna que abre o menu dos tipos
+ * criáveis, cada um com o ícone, o nome e uma linha do que faz. Ocupa uma
+ * linha só, e a lista de slides fica à vista logo abaixo.
+ */
+export function AddSlideMenu({ className }: { className?: string }) {
+  const addSlide = useEditorStore((s) => s.addSlide)
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {CREATABLE_SLIDE_TYPES.map((type) => {
+    <Menu
+      label="Adicionar slide"
+      heading="Escolha o tipo"
+      align="start"
+      className={clsx('w-full', className)}
+      buttonClassName="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+      button={
+        <>
+          <Plus size={16} aria-hidden="true" /> Adicionar slide
+        </>
+      }
+      items={CREATABLE_SLIDE_TYPES.map((type) => {
         const Icon = SLIDE_TYPE_ICONS[type]
-        return (
-          <button
-            key={type}
-            type="button"
-            onClick={() => addSlide(type)}
-            className="flex flex-col items-center gap-1.5 rounded-xl border border-neutral-300 bg-white p-3 text-center text-xs font-medium text-neutral-700 transition hover:border-blue-400 hover:bg-blue-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          >
-            <Icon size={24} strokeWidth={1.75} />
-            {SLIDE_TYPE_LABELS[type]}
-          </button>
-        )
+        return {
+          key: type,
+          label: SLIDE_TYPE_LABELS[type],
+          hint: HINTS[type],
+          icon: <Icon size={16} className="text-neutral-500 dark:text-neutral-400" />,
+          onSelect: () => addSlide(type),
+        }
       })}
-    </div>
+    />
   )
 }

@@ -1,5 +1,6 @@
-import { BarChart3, FileText, Play, Presentation, Users, X } from 'lucide-react'
-import { useState } from 'react'
+import { BarChart3, BookOpen, FileText, Play, Presentation, Radio, Users, X } from 'lucide-react'
+import { clsx } from 'clsx'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore'
 import {
@@ -8,6 +9,8 @@ import {
   type PresenterSession,
 } from '../lib/presenterSessions'
 import { getRoom } from '../lib/rooms'
+import { fetchAnswers, withAnswers } from '../lib/answers'
+import type { RoomStatus } from '../types/presentation'
 import { getAllResponses } from '../lib/responses'
 import { fetchAssets } from '../lib/assets'
 import { loadRoomFonts } from '../lib/fonts'
@@ -27,6 +30,38 @@ export function HomePage() {
   const [sessions, setSessions] = useState<PresenterSession[]>(listPresenterSessions)
   const [exportingCode, setExportingCode] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  // Situação de cada sala lembrada: no ar, encerrada ou que não existe mais.
+  const [statuses, setStatuses] = useState<Record<string, RoomStatus | 'missing'>>({})
+
+  const sessionCodes = sessions.map((s) => s.code).join('|')
+  useEffect(() => {
+    if (!sessionCodes) return
+    let cancelled = false
+    // Uma leitura por sala (no máximo 8), só ao abrir a tela inicial.
+    void Promise.all(
+      sessionCodes.split('|').map(async (code) => {
+        try {
+          const room = await getRoom(code)
+          return [code, room ? room.status : 'missing'] as const
+        } catch {
+          return null
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return
+      const next: Record<string, RoomStatus | 'missing'> = {}
+      for (const entry of entries) if (entry) next[entry[0]] = entry[1]
+      setStatuses(next)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionCodes])
+
+  // No ar primeiro; dentro de cada grupo, a ordem de uso mais recente.
+  const orderedSessions = [...sessions].sort(
+    (a, b) => Number(statuses[b.code] === 'live') - Number(statuses[a.code] === 'live'),
+  )
 
   async function exportSession(s: PresenterSession) {
     setExportingCode(s.code)
@@ -37,12 +72,14 @@ export function HomePage() {
         setExportError(`A sala ${s.code} não existe mais.`)
         return
       }
-      const [all, assets] = await Promise.all([
+      // Os gabaritos ficam num documento que só o dono lê (lib/answers.ts).
+      const [all, assets, answers] = await Promise.all([
         getAllResponses(s.code),
         fetchAssets(s.code, collectAssetIds(room.slides)),
+        fetchAnswers(s.code),
         loadRoomFonts(s.code, room.revision ?? 0).catch(() => {}),
       ])
-      await exportResultsPdf(room, all, assets)
+      await exportResultsPdf({ ...room, slides: withAnswers(room.slides, answers) }, all, assets)
     } catch (e) {
       setExportError((e as Error).message)
     } finally {
@@ -111,6 +148,12 @@ export function HomePage() {
         </Card>
       </div>
 
+      <div className="mx-auto mt-6 flex max-w-3xl justify-center">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/view')}>
+          <BookOpen size={16} /> Ler uma apresentação (.json)
+        </Button>
+      </div>
+
       {sessions.length > 0 && (
         <div className="mx-auto mt-10 max-w-3xl">
           <h2 className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
@@ -120,24 +163,37 @@ export function HomePage() {
             <p className="mb-2 text-sm text-red-600 dark:text-red-400">{exportError}</p>
           )}
           <ul className="space-y-2">
-            {sessions.map((s) => (
+            {orderedSessions.map((s) => {
+              const status = statuses[s.code]
+              const live = status === 'live'
+              return (
               <li key={s.code}>
-                <Card className="flex flex-wrap items-center gap-3 p-3">
+                <Card
+                  className={clsx(
+                    'flex flex-wrap items-center gap-3 p-3',
+                    live && 'border-blue-400 dark:border-blue-600',
+                  )}
+                >
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-neutral-900 dark:text-neutral-50">
                       {s.title || 'Apresentação'}
                     </p>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      Sala <strong className="tracking-widest">{s.code}</strong>
+                    <p className="flex flex-wrap items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                      <span>
+                        Sala <strong className="tracking-widest">{s.code}</strong>
+                      </span>
+                      {status && <StatusBadge status={status} />}
                     </p>
                   </div>
-                  <Button size="sm" onClick={() => navigate(`/present/${s.code}/${s.token}`)}>
-                    <Play size={16} /> Retomar
-                  </Button>
+                  {live && (
+                    <Button size="sm" onClick={() => navigate(`/present/${s.code}/${s.token}`)}>
+                      <Play size={16} /> Retomar
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={exportingCode === s.code}
+                    disabled={exportingCode === s.code || status === 'missing'}
                     onClick={() => void exportSession(s)}
                   >
                     <FileText size={16} /> {exportingCode === s.code ? 'Gerando…' : 'Exportar PDF'}
@@ -152,10 +208,27 @@ export function HomePage() {
                   </button>
                 </Card>
               </li>
-            ))}
+              )
+            })}
           </ul>
         </div>
       )}
     </PageShell>
+  )
+}
+
+/** Selo da situação de uma sala lembrada neste dispositivo. */
+function StatusBadge({ status }: { status: RoomStatus | 'missing' }) {
+  if (status === 'live') {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-800 dark:bg-blue-950 dark:text-blue-200">
+        <Radio size={12} aria-hidden="true" /> No ar
+      </span>
+    )
+  }
+  return (
+    <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+      {status === 'ended' ? 'Encerrada' : 'Não existe mais'}
+    </span>
   )
 }

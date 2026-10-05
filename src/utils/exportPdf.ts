@@ -321,7 +321,7 @@ function buildRows(slide: Slide, responses: ResponseDoc[]): TableRow[] {
     const nome = r.participantName?.trim()
     const row: TableRow = {
       participante: nome || `Participante ${numero.get(r.participantUid)}`,
-      resposta: respostas.length > 0 ? respostas.join(', ') : '—',
+      resposta: respostas.length > 0 ? respostas.join(', ') : '-',
     }
     if (correct && correct.size > 0) {
       const escolhidas = new Set(r.value)

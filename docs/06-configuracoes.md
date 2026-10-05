@@ -92,8 +92,10 @@ texto tem o próprio tamanho).
 
 Na interface, cada opção booleana do slide é um seletor de três estados —
 **Herdar da apresentação (sim/não)**, **Sim**, **Não**; cada tamanho de fonte
-tem uma caixa “personalizar” que libera o controle deslizante; e o cronômetro
-tem a mesma caixa, liberando um campo numérico (valor exato, não deslizante).
+tem uma caixa de seleção com o nome da opção que, marcada, libera o controle
+deslizante (desmarcada, mostra o valor global com "(herdado)"); e o
+cronômetro tem a mesma caixa, liberando um campo numérico (valor exato, não
+deslizante).
 Quando um slide tem sobrescritas, a seção mostra um selo com quantas são.
 
 ## Como o valor efetivo é calculado
@@ -121,7 +123,9 @@ Onde é usado:
 | PDF | `resolveSlideSettings(settings, slide)` em [`exportPdf`](../src/utils/exportPdf.ts) |
 
 No celular os tamanhos são **limitados** (`Math.min`) para o texto não estourar
-a tela pequena: título até 30 px, corpo até 22–28 px conforme o controle.
+a tela pequena: título até 30 px; texto do slide de texto até 28 px; botões
+de voto até 22 px; suspense do gabarito até 24 px; lista do gabarito até
+20 px.
 
 ## Persistência
 

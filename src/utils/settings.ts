@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS: PresentationSettings = {
   bodyFontSize: 24,
   quizTimerSeconds: 20,
   slideAspect: '16:9',
+  allowDownload: false,
 }
 
 /**
@@ -91,4 +92,5 @@ export const SETTING_LABELS = {
   bodyFontSize: 'Tamanho do corpo',
   quizTimerSeconds: 'Tempo do cronômetro (questionário)',
   slideAspect: 'Formato dos slides',
+  allowDownload: 'Permitir que os participantes baixem os slides no fim',
 } as const

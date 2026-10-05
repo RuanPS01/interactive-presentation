@@ -29,11 +29,12 @@ export const settingsSchema = z
       .min(QUIZ_TIMER_RANGE.min)
       .max(QUIZ_TIMER_RANGE.max),
     slideAspect: z.enum(['16:9', '4:3']),
+    allowDownload: z.boolean(),
   })
   .partial()
 
-/** Sobrescritas por slide (mesmas opções, sem `askName` e `slideAspect`). */
-export const overridesSchema = settingsSchema.omit({ askName: true, slideAspect: true })
+/** Sobrescritas por slide (mesmas opções, sem `askName`, `slideAspect` e `allowDownload`). */
+export const overridesSchema = settingsSchema.omit({ askName: true, slideAspect: true, allowDownload: true })
 
 /* Slide livre ------------------------------------------------------------ */
 
@@ -195,14 +196,20 @@ export const slideSchema = z.discriminatedUnion('type', [
   }),
 ])
 
-export const presentationSchema = z
-  .object({
-    title: z.string(),
-    slides: z.array(slideSchema),
-    settings: settingsSchema.optional(),
-    assets: z.record(z.string(), assetSchema).optional(),
-    fonts: z.record(z.string(), fontSchema).optional(),
-  })
+/**
+ * Forma da apresentação, sem a conferência das imagens. Serve para o rascunho
+ * do editor, que pode voltar sem as imagens (guardadas à parte, no IndexedDB):
+ * a imagem que faltar aparece como espaço reservado.
+ */
+export const presentationShapeSchema = z.object({
+  title: z.string(),
+  slides: z.array(slideSchema),
+  settings: settingsSchema.optional(),
+  assets: z.record(z.string(), assetSchema).optional(),
+  fonts: z.record(z.string(), fontSchema).optional(),
+})
+
+export const presentationSchema = presentationShapeSchema
   .superRefine((presentation, ctx) => {
     // Toda imagem citada por um slide livre precisa vir no arquivo.
     const assets = presentation.assets ?? {}

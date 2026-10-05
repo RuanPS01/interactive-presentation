@@ -66,8 +66,8 @@ Não há administrador, moderador nem limite de participantes por sala.
   no tema da página (claro ou escuro).
 - **Opções globais e por slide**: troca de resposta, pedido de nome,
   identificação das respostas, tamanhos de fonte (título, rótulos, corpo) e o
-  tempo do cronômetro das perguntas. O formato dos slides (16:9 ou 4:3) é só
-  global.
+  tempo do cronômetro das perguntas. O pedido de nome e o formato dos slides
+  (16:9 ou 4:3) são só globais.
 - **Cronômetro nas perguntas**: contagem regressiva grande na tela; ao zerar,
   as respostas são encerradas e o gabarito entra sozinho, depois de três
   segundos de "A resposta certa é…".

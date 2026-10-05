@@ -1,10 +1,13 @@
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Eye, ListOrdered, Maximize2, Minimize2, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { useEditorStore } from '../../store/editorStore'
-import type { FreeSlide, SlideAspect } from '../../types/presentation'
+import type { FreeSlide, Slide, SlideAspect } from '../../types/presentation'
 import { registerFonts } from '../../utils/fonts/faces'
 import { resolveSlideSettings, SLIDE_ASPECTS, SLIDE_FRAMES } from '../../utils/settings'
+import { SLIDE_TYPE_LABELS } from '../../utils/slideFactory'
 import { slideTimerSeconds } from '../../utils/timer'
 import { FreeSlideCanvas } from '../free/FreeSlideCanvas'
 import { ScaledFrame } from '../slides/ScaledFrame'
@@ -13,26 +16,34 @@ import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { ScrollArea } from '../ui/ScrollArea'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { StackSection } from '../ui/StackSection'
 import { AddSlideMenu } from './AddSlideMenu'
 import { FreeSlideConfig } from './FreeSlideConfig'
 import { SlideEditor } from './SlideEditor'
 import { SlideList } from './SlideList'
+import { SLIDE_TYPE_ICONS } from './slideTypeIcons'
 
 const ASPECT_OPTIONS = SLIDE_ASPECTS.map((aspect) => ({ value: aspect, label: aspect }))
 
+/** A partir desta largura, as três colunas; abaixo, a pilha de seções. */
+const WIDE_QUERY = '(min-width: 1024px)'
+
 /**
- * Editor em 3 colunas: adicionar e listar slides, configurar o selecionado e a
- * prévia. Usado na criação de uma apresentação e na edição de uma sala já
+ * Editor da apresentação, usado na criação e na edição de uma sala já
  * iniciada; trabalha sobre o editor do contexto (ver `store/editorStore`).
+ *
+ * - A partir de 1024 px: três colunas (slides, configuração, prévia), cada
+ *   uma com rolagem própria, e a página com a altura da janela.
+ * - Abaixo disso: uma pilha de seções recolhíveis (slides, prévia,
+ *   configuração), na rolagem natural da página.
+ *
+ * Cada painel é escrito uma vez e encaixado na montagem escolhida pela
+ * largura (uma montagem por vez, nunca as duas escondidas por CSS).
  *
  * A prévia desenha o slide na moldura do formato escolhido (16:9 ou 4:3, em
  * 1920 x 1080 ou 1440 x 1080) e reduz por inteiro: o que se vê nela tem a
  * mesma proporção da tela do projetor. No slide livre, a prévia é o próprio
  * editor visual, que pode ser ampliado para a tela inteira.
- *
- * Em telas grandes cada coluna rola por conta própria e a página não cresce
- * conforme os slides são adicionados. Abaixo de `lg` volta ao empilhamento
- * natural, sem limite de altura.
  */
 export function EditorWorkspace() {
   const slides = useEditorStore((s) => s.slides)
@@ -47,6 +58,9 @@ export function EditorWorkspace() {
   }, [fonts])
   const updateSettings = useEditorStore((s) => s.updateSettings)
   const [expanded, setExpanded] = useState(false)
+  const wide = useMediaQuery(WIDE_QUERY)
+  const [open, setOpen] = useState({ slides: true, preview: true, config: true })
+  const toggle = (key: keyof typeof open) => setOpen((o) => ({ ...o, [key]: !o[key] }))
 
   const selectedSlide = slides[selectedIndex]
   const freeSlide = selectedSlide?.type === 'free' ? selectedSlide : undefined
@@ -66,102 +80,157 @@ export function EditorWorkspace() {
     />
   )
 
-  return (
-    <div className="grid gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[260px_minmax(0,0.9fr)_minmax(0,1.35fr)]">
-      {/* Coluna 1: adicionar + lista de slides */}
-      <div className="flex flex-col gap-4 lg:min-h-0">
-        <Card className="shrink-0 p-3">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-            Adicionar slide
-          </h2>
-          <AddSlideMenu />
-        </Card>
-        <Card className="flex flex-col p-3 lg:min-h-0 lg:flex-1">
-          <h2 className="mb-2 shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-            Slides ({slides.length})
-          </h2>
-          <ScrollArea className="lg:min-h-0 lg:flex-1 lg:pr-1">
-            <SlideList />
-          </ScrollArea>
-        </Card>
-      </div>
+  const previewControls = (
+    <div className="flex flex-wrap items-center gap-2">
+      {aspectControl}
+      {freeSlide && (
+        <Button variant="secondary" size="sm" onClick={() => setExpanded(true)} title="Editar o slide em tela cheia">
+          <Maximize2 size={15} /> Ampliar
+        </Button>
+      )}
+    </div>
+  )
 
-      {/* Coluna 2: configuração do slide */}
-      <Card className="flex flex-col p-4 lg:min-h-0">
-        <h2 className="mb-4 shrink-0 text-sm font-semibold text-neutral-700 dark:text-neutral-200">
-          Configuração
-        </h2>
-        <ScrollArea className="lg:min-h-0 lg:flex-1 lg:pr-1">
-          {selectedSlide ? (
-            <SlideEditor slide={selectedSlide} />
-          ) : (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              Selecione ou adicione um slide para editar.
-            </p>
-          )}
+  const typeBadge = selectedSlide ? <TypeBadge slide={selectedSlide} /> : null
+
+  const configBody = selectedSlide ? (
+    <SlideEditor slide={selectedSlide} />
+  ) : (
+    <p className="text-sm text-neutral-500 dark:text-neutral-400">Selecione ou adicione um slide para editar.</p>
+  )
+
+  const previewStage = freeSlide ? (
+    expanded ? (
+      <p className="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
+        Editando no modo ampliado.
+      </p>
+    ) : (
+      <FreeSlideCanvas slide={freeSlide} assets={assets} />
+    )
+  ) : selectedSlide ? (
+    <ScaledFrame
+      width={frame.width}
+      height={frame.height}
+      frameClassName="bg-neutral-50 shadow-md ring-1 ring-black/10 dark:bg-neutral-950 dark:ring-white/10"
+    >
+      {/* O mesmo respiro da tela do projetor. */}
+      <div className="flex h-full w-full flex-col px-6 py-6">
+        <SlideDisplay
+          slide={selectedSlide}
+          slides={slides}
+          responses={[]}
+          settings={previewSettings}
+          assets={assets}
+          countdown={
+            previewTimerSeconds > 0 ? { endsAt: null, remainingMs: previewTimerSeconds * 1000 } : null
+          }
+        />
+      </div>
+    </ScaledFrame>
+  ) : (
+    <p className="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
+      Sem slide.
+    </p>
+  )
+
+  const expandedEditor =
+    freeSlide && expanded ? (
+      <ExpandedFreeEditor slide={freeSlide} aspectControl={aspectControl} onClose={() => setExpanded(false)} />
+    ) : null
+
+  if (!wide) {
+    return (
+      <div className="min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
+        <StackSection
+          title={`Slides (${slides.length})`}
+          icon={ListOrdered}
+          open={open.slides}
+          onToggle={() => toggle('slides')}
+        >
+          <div className="space-y-3 p-3">
+            <AddSlideMenu />
+            <SlideList />
+          </div>
+        </StackSection>
+        <StackSection
+          title={freeSlide ? 'Prévia e edição' : 'Prévia'}
+          icon={Eye}
+          open={open.preview}
+          onToggle={() => toggle('preview')}
+        >
+          <div className="space-y-3 p-3">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+              {typeBadge}
+              {previewControls}
+            </div>
+            <div
+              className="w-full overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-800/60"
+              style={{ aspectRatio: `${frame.width} / ${frame.height}` }}
+            >
+              {previewStage}
+            </div>
+          </div>
+        </StackSection>
+        <StackSection
+          title="Configuração"
+          icon={SlidersHorizontal}
+          badge={typeBadge}
+          open={open.config}
+          onToggle={() => toggle('config')}
+        >
+          <div className="p-3">{configBody}</div>
+        </StackSection>
+        {expandedEditor}
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid min-h-0 flex-1 grid-cols-[250px_minmax(0,1fr)_minmax(0,1.2fr)] gap-4 xl:grid-cols-[290px_minmax(0,0.9fr)_minmax(0,1.35fr)]">
+      {/* Coluna 1: adicionar + lista de slides */}
+      <Card className="flex min-h-0 min-w-0 flex-col p-3">
+        <div className="mb-3 shrink-0 space-y-3">
+          <AddSlideMenu />
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Slides ({slides.length})</h2>
+        </div>
+        <ScrollArea className="min-h-0 flex-1 pr-1">
+          <SlideList />
         </ScrollArea>
       </Card>
 
+      {/* Coluna 2: configuração do slide */}
+      <Card className="flex min-h-0 min-w-0 flex-col p-4">
+        <div className="mb-4 flex shrink-0 min-w-0 items-center gap-2">
+          <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Configuração</h2>
+          <span className="ml-auto min-w-0">{typeBadge}</span>
+        </div>
+        <ScrollArea className="min-h-0 flex-1 pr-1">{configBody}</ScrollArea>
+      </Card>
+
       {/* Coluna 3: prévia (e editor visual do slide livre) */}
-      <Card className="flex flex-col p-4 lg:min-h-0">
+      <Card className="flex min-h-0 min-w-0 flex-col p-4">
         <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">
             {freeSlide ? 'Prévia e edição' : 'Prévia'}
           </h2>
-          <div className="ml-auto flex items-center gap-2">
-            {aspectControl}
-            {freeSlide && (
-              <Button variant="secondary" size="sm" onClick={() => setExpanded(true)} title="Editar o slide em tela cheia">
-                <Maximize2 size={15} /> Ampliar
-              </Button>
-            )}
-          </div>
+          <div className="ml-auto">{previewControls}</div>
         </div>
-        <div className="aspect-video min-h-[240px] lg:aspect-auto lg:min-h-0 lg:flex-1">
-          {freeSlide ? (
-            expanded ? (
-              <p className="flex h-full items-center justify-center text-sm text-neutral-500 dark:text-neutral-400">
-                Editando no modo ampliado.
-              </p>
-            ) : (
-              <FreeSlideCanvas slide={freeSlide} assets={assets} />
-            )
-          ) : selectedSlide ? (
-            <ScaledFrame
-              width={frame.width}
-              height={frame.height}
-              frameClassName="bg-neutral-50 shadow-md ring-1 ring-black/10 dark:bg-neutral-950 dark:ring-white/10"
-            >
-              {/* O mesmo respiro da tela do projetor. */}
-              <div className="flex h-full w-full flex-col px-6 py-6">
-                <SlideDisplay
-                  slide={selectedSlide}
-                  slides={slides}
-                  responses={[]}
-                  settings={previewSettings}
-                  assets={assets}
-                  countdown={
-                    previewTimerSeconds > 0
-                      ? { endsAt: null, remainingMs: previewTimerSeconds * 1000 }
-                      : null
-                  }
-                />
-              </div>
-            </ScaledFrame>
-          ) : (
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">Sem slide.</p>
-          )}
-        </div>
+        <div className="min-h-0 flex-1">{previewStage}</div>
       </Card>
 
-      {freeSlide && expanded && (
-        <ExpandedFreeEditor
-          slide={freeSlide}
-          aspectControl={aspectControl}
-          onClose={() => setExpanded(false)}
-        />
-      )}
+      {expandedEditor}
     </div>
+  )
+}
+
+/** Selo com o ícone e o nome do tipo do slide selecionado. */
+function TypeBadge({ slide }: { slide: Slide }) {
+  const Icon = SLIDE_TYPE_ICONS[slide.type]
+  return (
+    <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+      <Icon size={12} className="shrink-0" aria-hidden="true" />
+      <span className="truncate">{SLIDE_TYPE_LABELS[slide.type]}</span>
+    </span>
   )
 }
 
@@ -172,16 +241,10 @@ function ExpandedFreeEditor({
   onClose,
 }: {
   slide: FreeSlide
-  aspectControl: React.ReactNode
+  aspectControl: ReactNode
   onClose: () => void
 }) {
   const assets = useEditorStore((s) => s.assets)
-  const fonts = useEditorStore((s) => s.fonts)
-  // Fontes embutidas (de um PowerPoint ou de um JSON): registradas no
-  // documento, os textos que as citam passam a usá-las sozinhos.
-  useEffect(() => {
-    void registerFonts(Object.values(fonts))
-  }, [fonts])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -211,7 +274,7 @@ function ExpandedFreeEditor({
         </div>
       </div>
       <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,40%)] lg:grid-cols-[minmax(0,1fr)_400px] lg:grid-rows-1">
-        <div className="min-h-0 p-4 lg:p-8">
+        <div className="min-h-0 min-w-0 p-4 lg:p-8">
           <FreeSlideCanvas slide={slide} assets={assets} />
         </div>
         <ScrollArea className="min-h-0 border-t border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900 lg:border-l lg:border-t-0">

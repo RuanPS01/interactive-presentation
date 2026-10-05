@@ -4,6 +4,127 @@ Não existe servidor da aplicação. Todos os navegadores conversam **através d
 Firestore**: quem escreve grava um documento, quem lê mantém uma assinatura
 (`onSnapshot`) e recebe a atualização em milissegundos.
 
+## Como o sincronismo funciona
+
+É o que permite à plateia interagir com a apresentação enquanto ela acontece:
+o apresentador troca de slide e todos os celulares acompanham; um aluno toca
+numa alternativa e o gráfico do projetor muda; o tempo acaba e as respostas
+travam para todos juntos.
+
+**A ideia:** o estado da apresentação mora em documentos do Firestore; cada
+navegador escreve só a sua parte e **assina** (`onSnapshot`) os documentos de
+que precisa; o Firestore empurra cada mudança para todos os ouvintes. Não há
+mensagem direta entre apresentador e aluno, nem um processo central: o
+documento compartilhado é o canal.
+
+- **Publicar** é gravar (`setDoc`, `updateDoc`, `deleteDoc`, `writeBatch`).
+- **Assinar** é abrir um ouvinte (`onSnapshot`): ele entrega primeiro o estado
+  atual completo e depois uma versão nova a cada mudança, até ser cancelado no
+  cleanup do `useEffect`.
+- A tela **nunca guarda cópia própria** do estado compartilhado: o React só
+  desenha o último snapshot recebido.
+
+### Quem escreve e quem ouve
+
+| Dado | Caminho | Quem escreve | Quem ouve |
+| --- | --- | --- | --- |
+| Slide atual, cronômetros, gabaritos revelados, slides, opções, revisão | `rooms/{code}` | Só o apresentador | Projetor, todos os celulares e a tela de edição (`useRoom`) |
+| Resposta de um aluno num slide | `responses/{slideId}__{uid}` | Só o próprio aluno | O projetor (consulta das respostas do slide no ar, `useResponses`) e o próprio aluno (só o documento dele, `useMyResponse`) |
+| Presença | `participants/{uid}` | Só o próprio aluno | Projetor e tela de edição (`useParticipants`) |
+| Imagens e fontes | `assets`, `fonts` | Apresentador | Ninguém assina: leitura única sob demanda, com cache |
+
+Consequências: alunos nunca disputam o mesmo documento (cada um grava só o
+que tem o próprio `uid` no id); a sala tem um único escritor; e cada tela ouve
+só o que mostra (o aluno não baixa as respostas dos colegas, e o projetor só
+ouve as do slide no ar).
+
+### Fluxos
+
+**Troca de slide.** O apresentador avança; `goTo` calcula o índice e os
+cronômetros (`advanceTimers`) e grava os dois numa **única** escrita
+(`setCurrentSlide`). A tela dele muda na hora; o Firestore valida pelas regras
+e envia a versão nova a todos os ouvintes da sala. Em cada celular, a
+`RoomPage` recalcula o slide atual; a `key={currentSlide.id}` da
+`ParticipateView` recria os controles limpos; `useMyResponse` passa a ouvir a
+resposta do novo slide (se o aluno já tinha respondido, ela reaparece). No
+projetor, `useResponses` troca de consulta e o primeiro snapshot já traz todas
+as respostas existentes daquele slide.
+
+**Resposta.** O aluno toca na opção; `saveResponse` faz `setDoc` no documento
+`{slideId}__{uid}` (os botões ficam ocupados até a confirmação, para evitar
+toque duplo). O ouvinte do próprio celular marca a opção na hora; o Firestore
+valida e confirma; o ouvinte do projetor recebe a mudança, e `aggregateChoices`
+ou `aggregateWords` recalculam o gráfico, a nuvem e o rodapé. Outra aba do
+mesmo aluno também atualiza. Limpar é um `deleteDoc` que chega do mesmo jeito.
+
+**Entrada.** `useParticipant` garante o `uid`; `useRoom` entrega o estado
+atual completo (slide no ar, cronômetros, gabaritos revelados), então quem
+chega atrasado não precisa de "replay"; `joinRoom` grava a presença e o
+contador do projetor sobe.
+
+**Tempo e revelação.** O apresentador grava só o instante final
+(`timers[id].endsAt`); cada aparelho conta localmente. Quem trava a plateia é
+o encerramento gravado pelo projetor (`closed`), nunca o relógio do celular.
+No gabarito, cada aparelho conta 3 s localmente a partir de quando recebeu a
+troca de slide, absorvendo a diferença de milissegundos entre celulares; depois
+o projetor grava `revealedSlideIds` e quem chega atrasado vê a resposta na
+hora. Detalhes em [Cronômetro](#cronômetro).
+
+**Reinício após edição.** Uma escrita grava `currentSlideIndex: 0`, zera
+cronômetros e revelações e soma 1 em `revision`; todos seguem o índice e os
+celulares mostram o aviso. Detalhes em
+[Edição de uma sala em andamento](#edição-de-uma-sala-em-andamento).
+
+### Por que a resposta aparece na hora (compensação de latência)
+
+O código não mantém estado otimista próprio. O próprio SDK do Firestore aplica
+a escrita no cache local e dispara os ouvintes daquele navegador antes da
+confirmação do servidor:
+
+| Momento | Celular do aluno | Projetor |
+| --- | --- | --- |
+| Toque | Ouvinte local recebe a versão pendente: botão marcado | Nada ainda |
+| Confirmação | Nada muda; a promessa do `setDoc` resolve e os botões voltam a ficar livres | Recebe a resposta; o gráfico atualiza |
+| Escrita recusada pelas regras (raro) | O SDK desfaz e o ouvinte recebe o estado anterior | Nada muda |
+
+### Garantias de consistência
+
+- **Fonte única da verdade**: o Firestore.
+- **O que precisa chegar junto vai na mesma escrita**: índice e cronômetros;
+  encerramento e avanço para o gabarito; o reinício da edição.
+- **Ids determinísticos**: reenviar não duplica e apagar não precisa de
+  consulta.
+- **Escritas idempotentes** para marcas de evento (`arrayUnion`, `increment`).
+- **Última escrita vence** em cada documento; como cada aluno só escreve os
+  próprios documentos e a sala tem um escritor, não há conflito (a exceção é o
+  apresentador com duas abas do projetor abertas).
+- **Ordem**: versões de um mesmo documento chegam em ordem; entre documentos
+  diferentes não há ordem global, e o projeto não depende dela.
+- **Efeitos com dependências estáveis** (ids e booleanos, nunca o objeto da
+  sala), para os snapshots não dispararem escritas em cascata.
+
+### Conexão instável, recarregar e trocar de aparelho
+
+| Situação | O que acontece |
+| --- | --- |
+| A rede cai por alguns segundos | O SDK reconecta sozinho e os ouvintes recebem o estado atual |
+| O aluno responde sem rede | A marcação aparece pela compensação local; a escrita fica na fila em memória e sai quando a conexão volta, se a página continuar aberta (não há persistência em disco configurada) |
+| O aluno recarrega | O `uid` anônimo continua o mesmo, o nome vem do `localStorage` e a resposta reaparece |
+| O aluno troca de aparelho | Ganha outro `uid`: conta como outro participante e começa sem respostas |
+| O apresentador recarrega | O token reivindica o controle; slide, cronômetros e revelações estão no documento. Se o tempo acabou com a página fechada, ao abrir ele encerra e avança para o gabarito |
+| O projetor fica fechado no meio de uma pergunta | Ninguém encerra a pergunta: os alunos continuam respondendo até o projetor reabrir |
+
+### Custo do sincronismo
+
+Cada mudança entregue a um ouvinte conta como leitura, e o ouvinte de um
+documento recebe o documento inteiro. Por isso a sala fica pequena (imagens e
+fontes em subcoleções lidas uma vez), cada resposta é um documento próprio (em
+vez de contadores na sala, que seriam um único documento disputado por toda a
+plateia), o cronômetro grava só o instante final e não há heartbeat de
+presença. A [especificação completa](especificacao-completa.md#80-como-o-sincronismo-em-tempo-real-funciona)
+traz uma estimativa de operações por aula e como reproduzir este sincronismo
+com outra tecnologia (WebSocket, Socket.IO, Supabase Realtime).
+
 ## Autenticação
 
 [`useParticipant`](../src/hooks/useParticipant.ts) garante uma sessão anônima:
@@ -314,8 +435,8 @@ que o arquivo muda (job `regras-firestore`, ver
 | Caminho | Leitura | Escrita |
 | --- | --- | --- |
 | `rooms/{code}` | pública (o código é a chave) | criar: autenticado e `creatorUid == uid`; alterar/excluir: dono atual **ou** quem reivindicou pelo doc privado |
-| `rooms/{code}/private/{doc}` | **negada a todos** | criar/atualizar: autenticado e reenviando o **mesmo token**; excluir: negado |
-| `rooms/{code}/participants/{uid}` | pública | só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`) |
+| `rooms/{code}/private/{doc}` | **negada a todos** | criar: autenticado e `ownerUid == uid`; atualizar: autenticado, reenviando o **mesmo token** e com `ownerUid == uid`; excluir: negado |
+| `rooms/{code}/participants/{uid}` | pública | criar e atualizar: só o próprio uid (id do doc e `data.uid` precisam bater com `request.auth.uid`); excluir: só o próprio uid |
 | `rooms/{code}/responses/{id}` | pública | criar/atualizar: `participantUid == uid`; excluir: só o autor |
 | `rooms/{code}/assets/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |
 | `rooms/{code}/fonts/{id}` | pública | criar, atualizar e excluir: autenticado e dono da sala (`isRoomOwner`) |

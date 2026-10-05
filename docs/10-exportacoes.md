@@ -233,6 +233,9 @@ Como funciona:
 3. O texto exibido perde o `https://` e o `www.` (fica, por exemplo,
    `tinyurl.com/2xoh2ngp`).
 4. Se falhar, o modal mostra o link completo e um botão **“Tentar de novo”**.
+5. O link aparece num único lugar do modal: o curto em destaque e um botão
+   para alternar para o completo ("Ver link completo" e "Ver link curto");
+   "Copiar" leva o que estiver em destaque.
 
 ### Decisões
 

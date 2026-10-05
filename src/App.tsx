@@ -5,6 +5,7 @@ import { PresentPage } from './pages/PresentPage'
 import { EditRoomPage } from './pages/EditRoomPage'
 import { JoinPage } from './pages/JoinPage'
 import { RoomPage } from './pages/RoomPage'
+import { ViewPage } from './pages/ViewPage'
 import { useApplyTheme } from './hooks/useApplyTheme'
 import { useThemeStore } from './store/themeStore'
 
@@ -22,6 +23,8 @@ export default function App() {
       <Route path="/edit/:code/:token" element={<EditRoomPage />} />
       <Route path="/join" element={<JoinPage />} />
       <Route path="/room/:code" element={<RoomPage />} />
+      <Route path="/view" element={<ViewPage />} />
+      <Route path="/view/:code" element={<ViewPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )

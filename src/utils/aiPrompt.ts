@@ -29,7 +29,8 @@ CAMPOS COMUNS A TODO SLIDE
 - "type": um de "wordcloud", "bar", "pie", "quiz", "answer", "text", "free".
 - "title": título exibido no slide e para os participantes.
 - "overrides": opcional. Objeto com as mesmas chaves de "settings" (menos
-  "askName" e "slideAspect") para valer só neste slide. Omita se não precisar.
+  "askName", "slideAspect" e "allowDownload") para valer só neste slide. Omita
+  se não precisar.
 
 TIPOS DE SLIDE
 
@@ -208,6 +209,9 @@ Todas opcionais; inclua apenas as que quiser mudar.
 - "slideAspect": "16:9" (padrão) ou "4:3". Formato dos slides: define o
   tamanho dos slides "free" e a prévia no editor. Vale para a apresentação
   inteira (não use em "overrides").
+- "allowDownload": booleano. true deixa os participantes baixarem os slides
+  (PDF e PowerPoint) quando a apresentação termina. Padrão false. Vale para a
+  apresentação inteira (não use em "overrides").
 
   "settings": {
     "allowChangeAnswer": true,
@@ -217,7 +221,8 @@ Todas opcionais; inclua apenas as que quiser mudar.
     "labelFontSize": 16,
     "bodyFontSize": 24,
     "quizTimerSeconds": 20,
-    "slideAspect": "16:9"
+    "slideAspect": "16:9",
+    "allowDownload": false
   }
 
 REGRAS

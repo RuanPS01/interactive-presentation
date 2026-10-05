@@ -1,6 +1,6 @@
 import { Eraser, X } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { clearResponse, saveResponse } from '../../lib/responses'
+import { clearResponse, MAX_RESPONSE_ITEMS, saveResponse } from '../../lib/responses'
 import type { PresentationSettings, WordCloudSlide } from '../../types/presentation'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -23,7 +23,8 @@ const MAX_TEXT_LENGTH = 80
 function maxAllowed(slide: WordCloudSlide): number {
   if (slide.wordLimitMode === 'one') return 1
   if (slide.wordLimitMode === 'range') return slide.maxWords
-  return Infinity
+  // "Quantas quiser" ainda tem um teto técnico, o mesmo das regras.
+  return MAX_RESPONSE_ITEMS
 }
 
 export function WordCloudInput({
@@ -89,7 +90,7 @@ export function WordCloudInput({
     slide.wordLimitMode === 'one'
       ? 'Você pode enviar 1 resposta (palavra ou frase).'
       : slide.wordLimitMode === 'range'
-        ? `Você pode enviar até ${slide.maxWords} resposta(s) — palavra ou frase.`
+        ? `Você pode enviar até ${slide.maxWords} resposta(s), palavra ou frase.`
         : 'Você pode enviar quantas respostas quiser (palavra ou frase).'
 
   return (

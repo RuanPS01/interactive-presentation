@@ -10,21 +10,17 @@ import { saveAndRestartRoom } from '../lib/rooms'
 import type { StoredRoomFiles } from '../lib/rooms'
 import { fetchAssets } from '../lib/assets'
 import { fetchRoomFonts } from '../lib/fonts'
+import { fetchAnswers, withAnswers } from '../lib/answers'
 import { collectAssetIds } from '../utils/freeSlide'
 import { createEditorStore, EditorStoreContext } from '../store/editorStore'
-import { useThemeStore } from '../store/themeStore'
 import type { Presentation } from '../types/presentation'
-import { AiPromptButton } from '../components/editor/AiPromptButton'
+import { EditorToolbar } from '../components/editor/EditorToolbar'
 import { EditorWorkspace } from '../components/editor/EditorWorkspace'
-import { ImportExportButtons } from '../components/editor/ImportExportButtons'
-import { PresentationSettingsButton } from '../components/editor/PresentationSettingsButton'
 import { FullScreenMessage } from '../components/layout/FullScreenMessage'
-import { ThemeToggle } from '../components/layout/ThemeToggle'
 import { PresenterAccessDenied } from '../components/present/PresenterAccessDenied'
 import { Banner } from '../components/ui/Banner'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
-import { Input } from '../components/ui/Input'
 
 /** Forma comparável da apresentação, para saber se algo mudou desde a carga. */
 function snapshot(presentation: Presentation): string {
@@ -51,8 +47,6 @@ export function EditRoomPage() {
   const { uid } = useParticipant()
   const access = usePresenterAccess(code, token, room, uid)
   const participants = useParticipants(code)
-  const theme = useThemeStore((s) => s.theme)
-  const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   const [store] = useState(createEditorStore)
   const title = useStore(store, (s) => s.title)
@@ -79,15 +73,17 @@ export function EditRoomPage() {
     let cancelled = false
     // As imagens e as fontes dos slides livres vêm das subcoleções da sala.
     // Sem as fontes (falha de rede), o editor abre assim mesmo.
+    // Os gabaritos ficam num documento que só o dono lê (lib/answers.ts).
     void Promise.all([
       fetchAssets(code, collectAssetIds(current.slides)),
       fetchRoomFonts(code, current.revision ?? 0).catch(() => ({ fonts: {}, docIds: {} })),
-    ]).then(([assets, roomFonts]) => {
+      fetchAnswers(code),
+    ]).then(([assets, roomFonts, answers]) => {
       if (cancelled) return
       const { loadPresentation, getPresentation } = store.getState()
       loadPresentation({
         title: current.title,
-        slides: current.slides,
+        slides: withAnswers(current.slides, answers),
         settings: current.settings,
         assets,
         fonts: roomFonts.fonts,
@@ -154,6 +150,21 @@ export function EditRoomPage() {
   if (access === 'denied') {
     return <PresenterAccessDenied code={code} />
   }
+  if (room.status === 'ended') {
+    // As regras recusam qualquer gravação numa sala encerrada.
+    return (
+      <FullScreenMessage>
+        Esta apresentação foi encerrada e não pode mais ser editada.
+        <span className="mt-2 block max-w-md text-sm text-neutral-500 dark:text-neutral-400">
+          Na tela de apresentação, &quot;Apresentar de novo&quot; abre uma sala nova com o mesmo
+          conteúdo.
+        </span>
+        <Button className="mt-4" onClick={() => navigate(presentPath)}>
+          Voltar à apresentação
+        </Button>
+      </FullScreenMessage>
+    )
+  }
   if (baseline === null) {
     return <FullScreenMessage>Abrindo a apresentação no editor…</FullScreenMessage>
   }
@@ -164,32 +175,36 @@ export function EditRoomPage() {
     <EditorStoreContext.Provider value={store}>
       {/* Mesmo layout da criação: em telas grandes, altura da janela e colunas
           com rolagem própria. */}
-      <div className="flex min-h-screen w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
-        <div className="mb-4 flex shrink-0 flex-wrap items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={leave}>
-            <ChevronLeft size={16} /> Voltar à apresentação
-          </Button>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Título da apresentação"
-            aria-label="Título da apresentação"
-            className="max-w-xs flex-1"
+      <div className="flex min-h-[100dvh] w-full flex-col px-4 py-4 lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
+        <div className="mb-4 shrink-0">
+          <EditorToolbar
+            back={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="shrink-0 px-2 sm:px-3"
+                onClick={leave}
+                aria-label="Voltar à apresentação"
+                title="Voltar à apresentação"
+              >
+                <ChevronLeft size={16} /> <span className="hidden sm:inline">Voltar</span>
+              </Button>
+            }
+            title={title}
+            onTitleChange={setTitle}
+            onImportError={setError}
+            primary={
+              <Button
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={requestSave}
+                disabled={!dirty || saving}
+                title={dirty ? 'Salvar e recomeçar a apresentação' : 'Nenhuma alteração para salvar'}
+              >
+                <Save size={16} /> Salvar alterações
+              </Button>
+            }
           />
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <PresentationSettingsButton />
-            <AiPromptButton />
-            <ImportExportButtons onError={setError} />
-            <Button
-              size="sm"
-              onClick={requestSave}
-              disabled={!dirty || saving}
-              title={dirty ? 'Salvar e recomeçar a apresentação' : 'Nenhuma alteração para salvar'}
-            >
-              <Save size={16} /> Salvar alterações
-            </Button>
-          </div>
         </div>
 
         <div className="shrink-0">

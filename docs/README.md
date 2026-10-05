@@ -18,11 +18,12 @@ arquivo.
 | [04 — Modelo de dados](04-modelo-de-dados.md) | Tipos do domínio, coleções do Firestore e formato JSON |
 | [05 - Tipos de slide](05-tipos-de-slide.md) | Os 7 tipos, seus campos e como cada um se comporta (inclusive a edição do slide livre) |
 | [06 — Configurações](06-configuracoes.md) | Opções globais, sobrescritas por slide e resolução |
-| [07 — Tempo real e comunicação](07-tempo-real-e-comunicacao.md) | Assinaturas, presença, autenticação e regras de segurança |
+| [07 — Tempo real e comunicação](07-tempo-real-e-comunicacao.md) | Como o sincronismo em tempo real funciona, assinaturas, presença, autenticação e regras de segurança |
 | [08 — Componentes e estado](08-componentes.md) | Catálogo de componentes, hooks e stores |
 | [09 — Fluxos de uso](09-fluxos-de-uso.md) | Passo a passo do apresentador e do participante |
 | [10 - Exportações e integrações](10-exportacoes.md) | Importar e exportar (JSON e PowerPoint, com fontes embutidas), PDF, prompt de IA e encurtador de URL |
 | [11 — Desenvolvimento](11-desenvolvimento.md) | Rodar localmente, scripts, convenções e solução de problemas |
+| [Especificação completa](especificacao-completa.md) | Documento único que reúne todos os anteriores, com requisitos, o funcionamento do sincronismo em tempo real, exemplos de execução por tipo de slide, algoritmos, apêndices com código de referência e guia para embutir a funcionalidade em outro projeto |
 
 ## Como manter esta documentação
 
@@ -44,3 +45,5 @@ atualize o documento correspondente:
 | `src/utils/pptx/` | [05](05-tipos-de-slide.md#o-que-vem-de-um-powerpoint), [09](09-fluxos-de-uso.md#importar-um-powerpoint) e [10](10-exportacoes.md#importar) |
 | `src/utils/pptxExport/` | [05](05-tipos-de-slide.md#o-que-vai-para-um-powerpoint), [09](09-fluxos-de-uso.md#exportar-um-powerpoint) e [10](10-exportacoes.md#exportar-powerpoint) |
 | `src/utils/fonts/`, `src/lib/fonts.ts` | [04](04-modelo-de-dados.md), [07](07-tempo-real-e-comunicacao.md#fontes-embutidas) e [10](10-exportacoes.md#fontes-embutidas) |
+| `src/lib/` ou `src/hooks/` (escritas e assinaturas do Firestore) | [07](07-tempo-real-e-comunicacao.md#como-o-sincronismo-funciona) |
+| Qualquer um dos itens acima | Também a [especificação completa](especificacao-completa.md), que consolida tudo num único arquivo |

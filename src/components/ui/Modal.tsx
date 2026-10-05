@@ -109,7 +109,7 @@ function ModalPanel({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={clsx(
-          'relative flex max-h-[90vh] w-full flex-col rounded-2xl bg-white shadow-2xl outline-none dark:bg-neutral-900',
+          'relative flex max-h-[90dvh] w-full flex-col rounded-2xl bg-white shadow-2xl outline-none dark:bg-neutral-900',
           SIZES[size],
         )}
         onClick={(e) => e.stopPropagation()}

@@ -1,6 +1,7 @@
 import {
   arrayUnion,
   doc,
+  FieldPath,
   getDoc,
   increment,
   onSnapshot,
@@ -8,9 +9,11 @@ import {
   writeBatch,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import { deleteAssets, uploadAssets } from './assets'
-import { deleteFontDocs, uploadFonts } from './fonts'
+import { answersRef, splitAnswers } from './answers'
+import { deleteAssets, fetchAssets, uploadAssets } from './assets'
+import { deleteFontDocs, fetchRoomFonts, uploadFonts } from './fonts'
 import { generatePresenterToken, generateRoomCode } from './roomCode'
+import { collectAssetIds } from '../utils/freeSlide'
 import { withDefaults } from '../utils/settings'
 import type { Presentation, Room, RoomStatus, SlideTimers } from '../types/presentation'
 
@@ -77,8 +80,11 @@ export async function createRoom(
     const token = generatePresenterToken()
     // Imagens e fontes não entram no documento da sala: vão para as subcoleções.
     const { assets = {}, fonts = {}, ...content } = presentation
+    // Os gabaritos não vão no documento público da sala (ver lib/answers.ts).
+    const { slides, answers } = splitAnswers(content.slides)
     const room: Room = {
       ...content,
+      slides,
       // O Firestore rejeita `undefined`: a sala sempre nasce com a configuração
       // completa, mesmo que a apresentação importada não a traga.
       settings: withDefaults(presentation.settings),
@@ -91,12 +97,15 @@ export async function createRoom(
       // apresentador quando o slide correspondente entra no ar.
       timers: {},
       revealedSlideIds: [],
+      answersHidden: true,
+      revealedAnswers: {},
     }
     assertRoomFits(room)
-    // Sala + doc privado (token) numa escrita atômica.
+    // Sala, doc privado (token) e gabaritos numa escrita atômica.
     const batch = writeBatch(db)
     batch.set(ref, room)
     batch.set(presenterRef(code), { token, ownerUid: creatorUid, createdAt: now })
+    batch.set(answersRef(code), answers)
     await batch.commit()
     // Depois da sala, porque as regras só deixam o dono dela gravar imagens e fontes.
     try {
@@ -151,21 +160,34 @@ export function subscribeRoom(
 }
 
 /**
- * Troca o slide atual e grava os cronômetros na mesma escrita — o slide que
- * sai é pausado e o que entra é iniciado/retomado de uma vez só (ver
+ * Troca o slide atual e grava os cronômetros na mesma escrita: o slide que
+ * sai é pausado e o que entra é iniciado ou retomado de uma vez só (ver
  * `advanceTimers`). Separar as duas escritas abriria um intervalo em que a
  * plateia veria o novo slide com o tempo do anterior.
+ *
+ * `extra.status` vai junto quando a troca encerra a sala (o slide final).
  */
 export async function setCurrentSlide(
   code: string,
   index: number,
   timers: SlideTimers,
+  extra?: { status?: RoomStatus },
 ): Promise<void> {
   await updateDoc(roomRef(code), {
     currentSlideIndex: index,
     timers,
     updatedAt: Date.now(),
+    ...(extra?.status ? { status: extra.status } : {}),
   })
+}
+
+/**
+ * Encerra a sala: vai para o slide final (índice igual ao número de slides) e
+ * grava `status: 'ended'` na mesma escrita. Depois disso a sala não muda mais
+ * (as regras recusam qualquer alteração numa sala encerrada).
+ */
+export async function endRoom(code: string, slideCount: number, timers: SlideTimers): Promise<void> {
+  await setCurrentSlide(code, slideCount, timers, { status: 'ended' })
 }
 
 /**
@@ -180,21 +202,44 @@ export async function saveSlideTimers(
 }
 
 /**
- * Registra que o suspense de um gabarito terminou. `arrayUnion` deixa a
- * escrita idempotente: repetir não duplica o id.
+ * Registra que o suspense de um gabarito terminou e, na mesma escrita, publica
+ * as corretas daquela pergunta em `revealedAnswers` (a plateia só conhece o
+ * gabarito a partir daqui). `arrayUnion` deixa a escrita idempotente.
  */
 export async function markAnswerRevealed(
   code: string,
-  slideId: string,
+  answerSlideId: string,
+  quizSlideId: string,
+  correctOptionIds: string[],
 ): Promise<void> {
-  await updateDoc(roomRef(code), {
-    revealedSlideIds: arrayUnion(slideId),
-    updatedAt: Date.now(),
-  })
+  await updateDoc(
+    roomRef(code),
+    new FieldPath('revealedAnswers', quizSlideId),
+    correctOptionIds,
+    'revealedSlideIds',
+    arrayUnion(answerSlideId),
+    'updatedAt',
+    Date.now(),
+  )
 }
 
-export async function setStatus(code: string, status: RoomStatus): Promise<void> {
-  await updateDoc(roomRef(code), { status, updatedAt: Date.now() })
+/**
+ * A apresentação completa de uma sala (título, slides, opções, imagens e
+ * fontes), para abrir uma sala nova com o mesmo conteúdo ("Apresentar de
+ * novo") ou exportar. `slides` deve vir com os gabaritos (ver `withAnswers`).
+ */
+export async function loadRoomPresentation(code: string, room: Room, slides = room.slides): Promise<Presentation> {
+  const [assets, roomFonts] = await Promise.all([
+    fetchAssets(code, collectAssetIds(slides)),
+    fetchRoomFonts(code, room.revision ?? 0).catch(() => ({ fonts: {}, docIds: {} })),
+  ])
+  return {
+    title: room.title,
+    slides,
+    settings: withDefaults(room.settings),
+    ...(Object.keys(assets).length > 0 ? { assets } : {}),
+    ...(Object.keys(roomFonts.fonts).length > 0 ? { fonts: roomFonts.fonts } : {}),
+  }
 }
 
 /**
@@ -222,15 +267,18 @@ export async function saveAndRestartRoom(
 ): Promise<void> {
   const { assets = {}, fonts = {}, ...content } = presentation
   const storedAssets = new Set(stored.assetIds)
+  const { slides, answers } = splitAnswers(content.slides)
   const data = {
     title: content.title,
-    slides: content.slides,
+    slides,
     // O Firestore rejeita `undefined`: grava a configuração completa.
     settings: withDefaults(content.settings),
     currentSlideIndex: 0,
     status: 'live',
     timers: {},
     revealedSlideIds: [],
+    answersHidden: true,
+    revealedAnswers: {},
     updatedAt: Date.now(),
   }
   assertRoomFits(data)
@@ -244,11 +292,16 @@ export async function saveAndRestartRoom(
       Object.values(fonts).filter((font) => !stored.fontDocIds[font.id]),
     ),
   ])
-  await updateDoc(roomRef(code), {
+  // Sala e gabaritos numa escrita só: ninguém vê perguntas novas com o
+  // gabarito antigo.
+  const batch = writeBatch(db)
+  batch.update(roomRef(code), {
     ...data,
     // Avisa quem está na sala que a apresentação mudou (ver `RoomPage`).
     revision: increment(1),
   })
+  batch.set(answersRef(code), answers)
+  await batch.commit()
   // Limpeza: falhar aqui só deixa uma imagem ou fonte sobrando, nada quebra.
   const unusedAssets = stored.assetIds.filter((id) => !assets[id])
   if (unusedAssets.length > 0) await deleteAssets(code, unusedAssets).catch(() => {})

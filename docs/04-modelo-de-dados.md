@@ -18,7 +18,7 @@ interface Presentation {
 interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
   creatorUid: string        // dono atual (quem criou ou reivindicou com o token)
   currentSlideIndex: number // slide no ar; === slides.length => slide final
-  status: 'live' | 'ended'
+  status: 'live' | 'ended'  // hoje sempre 'live' (nenhuma tela grava 'ended')
   createdAt: number         // epoch ms
   updatedAt: number
   timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id
@@ -191,6 +191,10 @@ interface ParticipantDoc {
 }
 ```
 
+`joinedAt` e `lastSeenAt` recebem o horário de cada entrada na sala (do relógio
+do aparelho). Não há atualização periódica: `lastSeenAt` é, na prática, o
+momento da última entrada.
+
 ## Coleções do Firestore
 
 ```
@@ -218,7 +222,9 @@ qualquer cliente: quem tem o token (pela URL) prova a posse reenviando-o num
 ### `rooms/{code}/participants/{uid}`
 
 Presença. O id é o uid, então reentradas **atualizam** o mesmo documento em vez
-de duplicar. É escrito com `merge: true`, preservando o `joinedAt` original.
+de duplicar. É escrito com `merge: true`, que preserva os campos não enviados
+(o `name`, por exemplo, quando a sala não pede o nome). Como o payload inclui
+`joinedAt`, cada reentrada também atualiza esse campo.
 
 Sem heartbeat periódico: a escrita acontece ao abrir a sala e quando o nome
 muda. Um heartbeat multiplicaria as escritas por participante e por minuto, o
@@ -302,8 +308,9 @@ O schema foi construído para **aceitar arquivos antigos**:
 
 - `settings` é opcional e parcial — o que faltar recebe o padrão;
 - `overrides` é opcional em todo slide;
-- num slide `quiz`, `correctOptionIds` e `revealAnswer` têm `.default()`, então
-  um JSON gerado sem esses campos importa como pergunta sem gabarito;
+- num slide `quiz`, `correctOptionIds`, `revealAnswer` e `showResponses` têm
+  `.default()` (`[]`, `false` e `false`), então um JSON gerado sem esses
+  campos importa como pergunta sem gabarito e com as respostas ocultas;
 - `assets`, `fonts` e `settings.slideAspect` são opcionais; sem o formato,
   vale 16:9.
 
