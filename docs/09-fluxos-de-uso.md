@@ -1,36 +1,91 @@
-# 09 — Fluxos de uso
+# 09. Fluxos de uso
 
 ## Apresentador: da criação à exportação
 
-1. **Início → “Criar sala”** (`/create`). O editor abre vazio, com o título
-   “Minha apresentação”.
-2. **Monta os slides** na coluna 1 (6 tipos criáveis), configura na coluna 2 e
-   confere na coluna 3, que mostra a prévia com as fontes reais, na proporção
-   escolhida (16:9 ou 4:3). No slide livre, a própria prévia é editável.
-3. **Ajusta as opções** em **Opções** (globais) e, se precisar, em “Opções deste
-   slide” (individuais) — ver [06](06-configuracoes.md).
-4. *(Opcional)* **Prompt de IA** → cola num assistente, salva a resposta como
+1. **Início, “Criar sala”** (`/create`). O editor abre vazio, com o título
+   “Minha apresentação”, ou com o rascunho deixado neste navegador (ver
+   [Rascunho](#rascunho-da-criação)).
+2. **Monta os slides**: o botão **Adicionar slide** abre o menu "Escolha o
+   tipo" (6 tipos criáveis, cada um com uma dica). A partir de 1024 px, a
+   coluna 1 lista os slides, a coluna 2 configura e a coluna 3 mostra a prévia
+   com as fontes reais, na proporção escolhida (16:9 ou 4:3); abaixo disso, as
+   mesmas partes ficam empilhadas em seções recolhíveis ("Slides", "Prévia" e
+   "Configuração"). No slide livre, a própria prévia é editável.
+3. **Ordena os slides** arrastando na lista (no celular, pela alça à esquerda
+   de cada slide) ou pelo menu do slide ("Mover para cima", "Mover para
+   baixo"). O gabarito de uma pergunta acompanha a pergunta.
+4. **Ajusta as opções** em **Opções** (globais) e, se precisar, em “Opções deste
+   slide” (individuais); ver [06](06-configuracoes.md). Abaixo de 1280 px,
+   Opções, Prompt de IA, Importar, Exportar e o tema ficam no menu **Mais** da
+   barra.
+5. *(Opcional)* **Prompt de IA**: cola num assistente, salva a resposta como
    `.json` e usa **Importar**, opção "Apresentação (.json)". Ou importa um
    PowerPoint (ver abaixo). **Exportar** guarda o que montou: em JSON, com as
-   imagens e as fontes, para importar de volta; ou em PowerPoint, para abrir
-   em outros programas (o editor não persiste ao recarregar).
-5. **Iniciar apresentação**:
-   - autentica anonimamente (se ainda não estiver);
-   - `createRoom` sorteia um código livre e grava sala + token, e depois as
-     imagens dos slides livres na subcoleção `assets`;
+   imagens e as fontes, para importar de volta ou levar a outro aparelho; ou em
+   PowerPoint, para abrir em outros programas.
+6. **Iniciar apresentação**:
+   - usa o uid anônimo obtido ao abrir a página (se a conexão ainda não
+     terminou, pede para aguardar um instante; sem slides, pede para
+     adicionar ao menos um);
+   - `createRoom` sorteia um código livre e grava sala, token e gabaritos num
+     lote, e depois as imagens e as fontes dos slides livres nas subcoleções
+     `assets` e `fonts`;
    - a sessão é salva no `localStorage` deste dispositivo;
    - navega para `/present/<código>/<token>`.
-6. **Apresenta**: `→`, `PageDown` ou `Espaço` avançam; `←` e `PageUp` voltam
-   (funciona com passador de slides). Os botões do cabeçalho fazem o mesmo, e o
-   cabeçalho pode ser ocultado (reaparece ao encostar o mouse no topo).
-7. **Compartilha**: o código aparece grande no cabeçalho; clicar no QR abre o
-   modal com o QR ampliado, o **link curto** e o link completo.
-8. **Acompanha ao vivo**: gráficos e nuvem se atualizam a cada resposta; o
+7. **Apresenta**: seta para a direita, `PageDown` ou `Espaço` avançam; seta
+   para a esquerda e `PageUp` voltam (funciona com passador de slides). Os
+   botões do cabeçalho fazem o mesmo, e o cabeçalho pode ser ocultado
+   (reaparece ao encostar o mouse no topo). Com um modal ou menu aberto, as
+   teclas ficam com ele.
+8. **Compartilha** (ver [Mostrar e projetar o código](#mostrar-e-projetar-o-código)):
+   o código no cabeçalho, a miniatura do QR ou "Mostrar o código da sala" no
+   menu abrem o modal com o código, o QR e o **link curto**, de onde dá para
+   **projetar em tela cheia**.
+9. **Acompanha ao vivo**: gráficos e nuvem se atualizam a cada resposta; o
    rodapé mostra “N participantes · M responderam · …”.
-9. **Passa do último slide** → slide final de agradecimento, com a grade de
-   miniaturas e, no centro, o botão **Baixar resultados (PDF)**. Nada baixa
-   sozinho: o PDF só é gerado quando o apresentador pede. O botão **Exportar
-   PDF** do cabeçalho gera o mesmo relatório a qualquer momento.
+10. **Passa do último slide**: a sala é **encerrada** e o projetor mostra o
+    slide final de agradecimento, com a grade de miniaturas e, no centro, o
+    botão **Baixar resultados (PDF)**. Nada baixa sozinho: o PDF só é gerado
+    quando o apresentador pede. O botão **Exportar PDF** do cabeçalho gera o
+    mesmo relatório a qualquer momento. Ver
+    [Encerrar a apresentação](#encerrar-a-apresentação).
+
+### Rascunho da criação
+
+Na tela de criação, tudo o que é montado (título, slides, opções, imagens e
+fontes) é gravado sozinho neste navegador, e a barra mostra "Salvando…" e
+depois "Rascunho salvo neste navegador". Recarregar a página, fechar a aba ou
+voltar depois reabre o editor como estava. O rascunho é deste navegador: para
+outro aparelho, use **Exportar**. No menu **Mais**, "Começar do zero" pede
+confirmação, esvazia o editor e apaga o rascunho. A edição de uma sala em
+andamento não usa rascunho: parte sempre do que está no ar.
+
+### Mostrar e projetar o código
+
+1. Clique no código no cabeçalho do projetor (ou na miniatura do QR, ou em
+   "Mostrar o código da sala" no menu **Mais ações**). O modal "Código da
+   sala" mostra o código, o QR e o link curto, com botões para copiar.
+2. O link curto é gerado pelo da.gd na primeira abertura ("Encurtando o
+   link...") e fica guardado neste navegador. Se o serviço não responder, o
+   modal avisa e oferece "Tentar de novo"; o QR e o código continuam valendo.
+3. **Projetar em tela cheia** fecha o modal e cobre a tela com o código
+   grande, o QR e o link curto (ou o endereço do site, se não houver link
+   curto), em tela cheia. Dá para alternar o tema ali mesmo.
+4. Clicar no QR projetado o amplia para ocupar a tela. **Esc** fecha primeiro o
+   QR ampliado e depois a projeção; as teclas não trocam o slide por trás.
+
+### Encerrar a apresentação
+
+1. Passar do último slide encerra a sala. Para encerrar antes, **Encerrar**
+   (botão a partir de 1280 px, ou no menu **Mais ações**) pede confirmação
+   ("Encerrar a apresentação?") e leva ao slide final.
+2. Com a sala encerrada, a navegação fica desativada, os celulares mostram a
+   tela final e as respostas novas são recusadas. Uma faixa avisa "A
+   apresentação foi encerrada.".
+3. **Apresentar de novo** (na faixa) abre uma **sala nova**, com outro código,
+   o mesmo conteúdo (imagens, fontes e gabaritos) e sem respostas. A sala
+   antiga continua disponível para o PDF dos resultados e para o modo
+   leitura.
 
 ### Importar um PowerPoint
 
@@ -112,9 +167,11 @@ O que cada slide vira está em [10](10-exportacoes.md#exportar-powerpoint).
 
 ### Retomar uma sala
 
-A tela inicial lista as salas apresentadas naquele dispositivo:
-**Retomar** volta para `/present/<código>/<token>` e **Exportar PDF** rebaixa o
-relatório sem reabrir a apresentação. Abrir a URL com o token em **outro**
+A tela inicial lista as salas apresentadas naquele dispositivo, com a
+situação de cada uma ("No ar", "Encerrada" ou "Não existe mais"; as que estão
+no ar vêm primeiro, destacadas). **Retomar** (só nas salas no ar) volta para
+`/present/<código>/<token>`, e **Exportar PDF** rebaixa o relatório sem reabrir
+a apresentação. Abrir a URL com o token em **outro**
 navegador também funciona: `claimPresenter` prova o token e transfere o
 controle.
 
@@ -136,50 +193,80 @@ controle.
 5. **Voltar à apresentação** com alterações não salvas pede para descartá-las;
    descartando, a sala fica como estava e ninguém é redirecionado.
 
+Uma sala encerrada não pode ser editada: `/edit/...` mostra "Esta apresentação
+foi encerrada e não pode mais ser editada." e o botão "Voltar à
+apresentação", onde "Apresentar de novo" abre uma sala nova.
+
 ## Participante: da entrada à resposta
 
-1. **Entra** pelo QR, pelo link curto ou por “Entrar na sala” + código
+1. **Entra** pelo QR, pelo link curto ou por “Entrar na sala” e o código
    (`/join` normaliza para maiúsculas e sem espaços).
 2. **Nome** (se a sala pedir): preenche uma vez; fica salvo por sala neste
    dispositivo.
 3. **Presença**: assim que a tela do slide abre, o participante é registrado em
-   `participants/{uid}` — já conta no número do apresentador, mesmo sem
+   `participants/{uid}`: já conta no número do apresentador, mesmo sem
    responder nada.
 4. **Responde** conforme o tipo do slide:
    - nuvem de palavras: digita textos (palavra ou frase) e envia;
    - barras/pizza/alternativas: toca na opção; a resposta é gravada na hora;
    - gabarito: vê se acertou;
-   - texto: só acompanha.
+   - texto e slide livre: só acompanha.
 5. **Troca a resposta** (se permitido): “Limpar resposta” / “Limpar tudo”, ou
    simplesmente escolhe outra opção. Se não for permitido, a resposta trava
-   depois do primeiro envio.
-6. **A tela acompanha o apresentador** automaticamente. Ao fim, aparece o
-   agradecimento.
+   depois do primeiro envio. Desmarcar todas as opções de uma múltipla escolha
+   apaga a resposta.
+6. **A tela acompanha o apresentador** automaticamente. Ao fim, aparece
+   "Obrigado por participar!", com **Rever os slides** (abre o modo leitura da
+   sala) e, se o apresentador permitiu, **Baixar slides** ("PDF dos slides" e
+   "PowerPoint (.pptx)").
+
+## Modo leitura
+
+Lê os slides sem interação, num celular ou num computador:
+
+| Rota | De onde vêm os slides | Quando |
+| --- | --- | --- |
+| `/view` | Um `.json` exportado (ou gerado pelo prompt de IA), escolhido ou arrastado para a página, lido no próprio navegador | Sempre ("Ler uma apresentação (.json)" na tela inicial) |
+| `/view/<código>` | A sala, com imagens e fontes | Só com a sala encerrada; antes disso, "A leitura fica disponível quando a apresentação terminar." |
+
+1. O leitor mostra os slides em **Rolagem** (todos, um embaixo do outro) ou
+   **Um por vez** (setas do teclado, deslizar o dedo para os lados ou os
+   botões; com tela cheia).
+2. Com perguntas na apresentação, a caixa **Mostrar respostas certas** marca a
+   correta em cada pergunta. Numa sala, só aparecem as corretas que foram
+   reveladas durante a apresentação.
+3. O menu **Baixar** (PDF dos slides e PowerPoint) aparece no arquivo local e,
+   numa sala, só se o apresentador permitiu o download.
+4. Os slides vêm na versão estática (ver
+   [05](05-tipos-de-slide.md#slides-estáticos-download-e-modo-leitura)): sem
+   dicas de participação, sem a resposta de ninguém e sem os slides de
+   gabarito.
 
 ## Ciclo de uma resposta
 
-```
-Participante toca na opção
-      |
-      v
-saveResponse() -> setDoc em rooms/{code}/responses/{slideId}__{uid}
-      |
-      +--> onSnapshot do apresentador (useResponses)
-      |         -> aggregateChoices -> gráfico/quadro se redesenha
-      |
-      +--> onSnapshot do próprio participante (useMyResponse)
-                -> o botão aparece marcado (e reflete em outras abas dele)
-```
+1. O participante toca na opção.
+2. `saveResponse()` faz `setDoc` em `rooms/{code}/responses/{slideId}__{uid}`;
+   os botões ficam ocupados até a confirmação.
+3. O ouvinte do próprio participante (`useMyResponse`) recebe na hora a
+   versão local da escrita: o botão aparece marcado (e reflete em outras abas
+   dele).
+4. O Firestore valida pelas regras e confirma.
+5. O ouvinte do apresentador (`useResponses`) recebe a mudança;
+   `aggregateChoices` recalcula e o gráfico ou o quadro se redesenha.
 
-Não há confirmação nem botão “enviar” nos slides de escolha: o toque **é** o
-envio, e o estado exibido vem sempre do Firestore — nunca de um estado local
-otimista. É isso que mantém abas e dispositivos do mesmo participante em sincronia.
+Não há confirmação nem botão "enviar" nos slides de escolha: o toque **é** o
+envio, e o estado exibido vem sempre de um snapshot do Firestore, nunca de um
+estado local otimista guardado pela aplicação. A marcação aparece na hora
+porque o próprio SDK do Firestore entrega a escrita pendente ao ouvinte local
+(compensação de latência). É isso que mantém abas e dispositivos do mesmo
+participante em sincronia. O mecanismo completo está em
+[07](07-tempo-real-e-comunicacao.md#como-o-sincronismo-funciona).
 
 ## Fluxo de pergunta e resposta (`quiz` + `answer`)
 
 1. O apresentador cria um slide **Alternativas (sem gráfico)**, escreve a
    pergunta, marca a alternativa correta e liga **“Adicionar um slide de
-   resposta logo depois”** — o gabarito aparece na lista, recuado.
+   resposta logo depois”**: o gabarito aparece na lista, recuado.
 2. Na apresentação, o slide da pergunta mostra as alternativas grandes, sem
    revelar a distribuição (só quantos já votaram), com o card do cronômetro na
    base da tela.
@@ -187,10 +274,12 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
    contagem: quem marca o tempo é o projetor.
 4. **O tempo acaba no projetor**: o apresentador encerra a pergunta, os
    controles do celular travam e a apresentação passa sozinha para o gabarito.
-   (Sem cronômetro — `0` segundos — o apresentador avança quando quiser.)
+   (Sem cronômetro, com `0` segundos, o apresentador avança quando quiser.)
 5. Por 3 segundos a tela mostra **“A resposta certa é…”**, ganhando um ponto por
    segundo, e só então o gabarito destaca a correta em verde com votos e
-   porcentagem por alternativa. No celular, cada pessoa vê se acertou.
+   porcentagem por alternativa. Na mesma hora o projetor publica as corretas
+   na sala, e cada celular mostra se a pessoa acertou. Até ali, o gabarito não
+   estava em nenhum documento que a plateia pudesse ler.
 
 ## O que acontece em situações de borda
 
@@ -201,10 +290,16 @@ otimista. É isso que mantém abas e dispositivos do mesmo participante em sincr
 | Apresentador recarrega a página | O token na URL reivindica o controle de volta |
 | Apresentação sem slides | “Esta apresentação ainda não tem slides.” |
 | Firebase sem configuração (`.env` vazio) | A interface carrega normalmente e mostra um aviso; só as chamadas de rede falham |
-| Encurtador indisponível (ou `localhost`) | O modal mostra o link completo e um botão “Tentar de novo” |
+| Encurtador indisponível, lento (mais de 8 s) ou em `localhost` | O modal avisa e mostra “Tentar de novo”; a projeção mostra o endereço do site no lugar do link curto |
 | Gabarito cuja pergunta foi removida | “A pergunta deste gabarito não existe mais.” (o editor remove órfãos sozinho) |
 | Tempo esgotado sem slide de gabarito depois | A pergunta continua no ar, já travada para novas respostas; o apresentador avança |
 | Relógio do celular adiantado ou atrasado | Não muda nada: a votação só trava quando o projetor encerra a pergunta |
+| Participante tenta ler o gabarito antes da revelação | Não há o que ler: a sala guarda as perguntas sem gabarito, e o documento dos gabaritos só o apresentador lê |
+| O suspense do celular termina antes de o projetor publicar o gabarito | O celular continua no suspense por um instante, até as corretas chegarem |
+| Resposta enviada depois do fim da apresentação | Recusada pelas regras; a tela já mostra o fim |
+| Apresentador tenta voltar slides numa sala encerrada | A navegação está desativada; "Apresentar de novo" abre uma sala nova |
+| Participante abre `/view/<código>` com a sala no ar | "A leitura fica disponível quando a apresentação terminar." |
+| Recarregar a tela de criação | O rascunho volta como estava, com imagens e fontes |
 | Apresentador sai de uma pergunta no meio da contagem | O cronômetro pausa; voltar retoma de onde parou |
 | Apresentador volta para uma pergunta que já zerou | Continua zerada: sem contagem nova, respostas congeladas e sem avanço automático |
 | Apresentador volta para um gabarito já revelado | A resposta aparece na hora, sem repetir os 3 s de suspense |

@@ -9,9 +9,13 @@ rules_version = '2';
 //    clientes NÃO podem ler. Quem tem o token pode "reivindicar" a sala
 //    (recarregar a página / trocar de navegador) e vira o dono; a plateia,
 //    que só tem o código, não consegue apresentar.
-//  - Só o dono atual da sala altera/exclui a sala.
+//  - Só o dono atual da sala altera/exclui a sala, e só enquanto ela está no
+//    ar: uma sala encerrada (`status: 'ended'`) não muda mais.
+//  - Os gabaritos das perguntas ficam em rooms/{code}/secret/answers, que só o
+//    dono lê; a plateia recebe cada gabarito pela sala, quando ele é revelado.
 //  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta e o
-//    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}).
+//    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}), com os
+//    campos e tamanhos esperados, e só responde enquanto a sala está no ar.
 //  - As imagens e as fontes dos slides livres (rooms/{code}/assets e
 //    rooms/{code}/fonts) são lidas por todos na sala e gravadas só pelo dono.
 service cloud.firestore {
@@ -21,6 +25,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function roomPath(code) {
+      return /databases/$(database)/documents/rooms/$(code);
+    }
+
     // Uid dono registrado no doc privado da sala (fonte da verdade do controle).
     function presenterOwner(code) {
       return get(/databases/$(database)/documents/rooms/$(code)/private/presenter).data.ownerUid;
@@ -28,16 +36,28 @@ service cloud.firestore {
 
     // Dono atual da sala: o mesmo critério que autoriza alterar o documento dela.
     function isRoomOwner(code) {
-      return get(/databases/$(database)/documents/rooms/$(code)).data.creatorUid == request.auth.uid
+      return get(roomPath(code)).data.creatorUid == request.auth.uid
         || presenterOwner(code) == request.auth.uid;
+    }
+
+    // A sala ainda está no ar (aceita respostas).
+    function isRoomLive(code) {
+      return get(roomPath(code)).data.status == 'live';
     }
 
     match /rooms/{code} {
       allow read: if true;
       allow create: if isSignedIn()
-        && request.resource.data.creatorUid == request.auth.uid;
-      // Dono atual (uid) OU quem acabou de reivindicar via token (doc privado).
-      allow update, delete: if isSignedIn()
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.status == 'live';
+      // Dono atual (uid) OU quem acabou de reivindicar via token (doc privado),
+      // e só com a sala no ar: encerrada, ela não muda mais (nem índice, nem
+      // cronômetro, nem dono). Apresentar de novo abre uma sala nova.
+      allow update: if isSignedIn()
+        && (resource.data.creatorUid == request.auth.uid
+            || presenterOwner(code) == request.auth.uid)
+        && resource.data.status == 'live';
+      allow delete: if isSignedIn()
         && (resource.data.creatorUid == request.auth.uid
             || presenterOwner(code) == request.auth.uid);
 
@@ -54,13 +74,27 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Gabaritos das perguntas, só para o dono. São gravados no mesmo lote
+      // que cria (ou reinicia) a sala, por isso a regra olha a sala DEPOIS da
+      // escrita (`getAfter`): na criação, a sala ainda não existia antes.
+      match /secret/{doc} {
+        allow read: if isSignedIn() && isRoomOwner(code);
+        allow create, update: if isSignedIn()
+          && (getAfter(roomPath(code)).data.creatorUid == request.auth.uid
+              || presenterOwner(code) == request.auth.uid);
+        allow delete: if false;
+      }
+
       // Presença: um doc por participante (id = uid). Serve para o apresentador
       // saber quantas pessoas estão na sala, mesmo antes de qualquer resposta.
       match /participants/{participantUid} {
         allow read: if true;
         allow create, update: if isSignedIn()
           && participantUid == request.auth.uid
-          && request.resource.data.uid == request.auth.uid;
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'joinedAt', 'lastSeenAt'])
+          && (!('name' in request.resource.data)
+              || (request.resource.data.name is string && request.resource.data.name.size() <= 40));
         allow delete: if isSignedIn() && participantUid == request.auth.uid;
       }
 
@@ -77,10 +111,25 @@ service cloud.firestore {
         allow create, update, delete: if isSignedIn() && isRoomOwner(code);
       }
 
+      // Respostas: id `{slideId}__{uid}`, só os campos esperados, listas e
+      // nomes com tamanho limitado, e só com a sala no ar (custa uma leitura
+      // da sala por escrita). Apagar a própria resposta é sempre permitido.
       match /responses/{responseId} {
         allow read: if true;
         allow create, update: if isSignedIn()
-          && request.resource.data.participantUid == request.auth.uid;
+          && request.resource.data.participantUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['slideId', 'participantUid', 'type', 'value', 'participantName', 'createdAt'])
+          && request.resource.data.slideId is string
+          && request.resource.data.slideId.size() <= 200
+          && responseId == request.resource.data.slideId + '__' + request.auth.uid
+          && request.resource.data.type in ['word', 'choice']
+          && request.resource.data.value is list
+          && request.resource.data.value.size() <= 100
+          && request.resource.data.createdAt is number
+          && (!('participantName' in request.resource.data)
+              || (request.resource.data.participantName is string
+                  && request.resource.data.participantName.size() <= 40))
+          && isRoomLive(code);
         allow delete: if isSignedIn()
           && resource.data.participantUid == request.auth.uid;
       }

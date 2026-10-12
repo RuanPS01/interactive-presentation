@@ -56,7 +56,7 @@ export function SegmentedControl<T extends string>({
             // Não rouba o foco de um texto em edição: o estilo vai para a seleção dele.
             onMouseDown={(e) => e.preventDefault()}
             className={clsx(
-              'inline-flex flex-1 items-center justify-center gap-1 rounded-md font-medium transition',
+              'inline-flex flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-md font-medium transition',
               'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:cursor-not-allowed',
               size === 'sm' ? 'h-7 min-w-7 px-1.5 text-xs' : 'h-8 min-w-8 px-2.5 text-sm',
               checked

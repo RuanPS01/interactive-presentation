@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { connectAuthEmulator, getAuth } from 'firebase/auth'
+import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
 const envConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -37,3 +37,11 @@ if (!isFirebaseConfigured) {
 export const app = initializeApp(isFirebaseConfigured ? envConfig : FALLBACK_CONFIG)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+// Desenvolvimento: com VITE_FIREBASE_EMULATORS=true o app usa os emuladores
+// locais (`npx firebase-tools emulators:start --only auth,firestore`), com as
+// regras do firestore.rules e sem tocar no projeto real. Ver docs/11.
+if (import.meta.env.VITE_FIREBASE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+}

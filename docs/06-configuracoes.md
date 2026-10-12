@@ -1,4 +1,4 @@
-# 06 — Configurações (globais e por slide)
+# 06. Configurações (globais e por slide)
 
 Fonte: [`src/utils/settings.ts`](../src/utils/settings.ts) e
 [`src/types/presentation.ts`](../src/types/presentation.ts).
@@ -15,6 +15,7 @@ interface PresentationSettings {
   bodyFontSize: number         // padrão: 24 px
   quizTimerSeconds: number     // padrão: 20 s (0 = sem cronômetro)
   slideAspect: '16:9' | '4:3'  // padrão: '16:9'
+  allowDownload: boolean       // padrão: false
 }
 ```
 
@@ -23,14 +24,15 @@ Cronômetro: **0 a 300 s** (`QUIZ_TIMER_RANGE`).
 
 | Opção | O que muda |
 | --- | --- |
-| **Permitir limpar e trocar a resposta** | Ligado: o participante vê “Limpar resposta” / “Limpar tudo” e pode escolher de novo. Desligado: a resposta vira definitiva — na escolha única o primeiro toque encerra; na múltipla escolha só o **desmarcar** é bloqueado (senão a pessoa não conseguiria terminar a própria seleção); na nuvem de palavras, os itens enviados perdem o botão de remover. |
+| **Permitir limpar e trocar a resposta** | Ligado: o participante vê “Limpar resposta” / “Limpar tudo” e pode escolher de novo. Desligado: a resposta vira definitiva: na escolha única o primeiro toque encerra; na múltipla escolha só o **desmarcar** é bloqueado (senão a pessoa não conseguiria terminar a própria seleção); na nuvem de palavras, os itens enviados perdem o botão de remover. |
 | **Solicitar o nome antes de entrar na sala** | Ligado: quem abre `/room/<código>` preenche o nome antes de ver qualquer slide. O nome fica salvo por sala neste dispositivo, acompanha o registro de presença e vai junto de cada resposta. |
-| **Identificar as respostas com o nome** | Ligado: abaixo do slide (e no PDF) aparece a lista “Nome: resposta”. **Depende** de “Solicitar o nome”. Nos slides de alternativas a lista só aparece se o slide também autorizar mostrar as respostas (ver [05](05-tipos-de-slide.md#quiz--alternativas-sem-gráfico)). |
+| **Identificar as respostas com o nome** | Ligado: abaixo do slide (e no PDF) aparece a lista “Nome: resposta”. **Depende** de “Solicitar o nome”. Nos slides de alternativas a lista só aparece se o slide também autorizar mostrar as respostas (ver [05](05-tipos-de-slide.md#quiz---alternativas-sem-gráfico)). |
 | **Tamanho do título** | Título do slide no projetor (e, limitado a 30 px, no celular). |
 | **Tamanho dos rótulos** | Eixos e legendas dos gráficos, contador acima das barras, textos de instrução, nomes na lista de identificação e o rodapé de contagem. |
 | **Tamanho do corpo** | Conteúdo principal: alternativas do `quiz`/gabarito e os controles do participante. Nos slides de texto, quem manda é o `fontSize` do próprio slide. |
 | **Tempo do cronômetro** | Segundos que uma pergunta (`quiz`) fica aberta. Ao zerar, as respostas são encerradas e a apresentação passa para o slide de resposta. `0` deixa a pergunta sem cronômetro. |
 | **Formato dos slides** | Proporção da prévia no editor e da moldura dos slides livres: 16:9 (padrão, 1920 x 1080) ou 4:3 (1440 x 1080). Só global. |
+| **Permitir que os participantes baixem os slides no fim** | Ligado: quando a apresentação termina, a tela final do celular mostra "Baixar slides", com "PDF dos slides" e "PowerPoint (.pptx)", e o modo leitura da sala encerrada (`/view/<código>`) oferece o menu "Baixar". Os arquivos levam só os slides, sem a resposta de ninguém. Só global. |
 
 ### Formato dos slides
 
@@ -58,7 +60,7 @@ substitui tudo (ou o editor está vazio), a apresentação adota esse formato.
 O tempo só tem efeito em slides `quiz`
 ([`slideTimerSeconds`](../src/utils/timer.ts)); nos demais o controle aparece
 desativado, com a explicação. Um slide pode ter tempo próprio pela sobrescrita
-`quizTimerSeconds` — inclusive `0`, para deixar **aquela** pergunta sem
+`quizTimerSeconds`, inclusive `0`, para deixar **aquela** pergunta sem
 cronômetro numa apresentação que tem tempo em todas as outras.
 
 A contagem aparece só na tela do apresentador. O cronômetro pausa quando ele
@@ -69,7 +71,8 @@ encerra a votação é sempre o projetor, não o relógio de cada celular. Ver
 
 ## Global × por slide
 
-- **Globais**: botão **Opções** na barra do editor
+- **Globais**: **Opções** na barra do editor (botão a partir de 1280 px, item
+  do menu "Mais" abaixo disso), que abre o modal
   ([`PresentationSettingsButton`](../src/components/editor/PresentationSettingsButton.tsx)).
   Valem para todos os slides e vão para o Firestore em `room.settings`.
 - **Por slide**: seção **“Opções deste slide”** no painel de configuração
@@ -77,36 +80,39 @@ encerra a votação é sempre o projetor, não o relógio de cada celular. Ver
   O que for alterado ali é gravado em `slide.overrides` e vale só para ele.
 
 ```ts
-type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect'>>
+type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect' | 'allowDownload'>>
 ```
 
 > **Por que `askName` não tem versão por slide:** o nome é pedido **uma única
-> vez, antes de entrar na sala** — antes de existir “slide atual”. Uma
+> vez, antes de entrar na sala**, antes de existir “slide atual”. Uma
 > sobrescrita por slide não teria momento para acontecer. O formato dos slides
 > também é só global: ele é a moldura de todos os slides livres, que precisam
-> combinar entre si no projetor. As outras opções aceitam sobrescrita.
+> combinar entre si no projetor. O download vale para a apresentação inteira,
+> que é o que se baixa. As outras opções aceitam sobrescrita.
 
 O slide livre não mostra a seção "Opções deste slide": ele não recebe
 respostas, não tem cronômetro e não usa os tamanhos de fonte globais (cada
 texto tem o próprio tamanho).
 
-Na interface, cada opção booleana do slide é um seletor de três estados —
-**Herdar da apresentação (sim/não)**, **Sim**, **Não**; cada tamanho de fonte
-tem uma caixa “personalizar” que libera o controle deslizante; e o cronômetro
-tem a mesma caixa, liberando um campo numérico (valor exato, não deslizante).
+Na interface, cada opção booleana do slide é um seletor de três estados
+(**Herdar da apresentação (sim/não)**, **Sim**, **Não**); cada tamanho de fonte
+tem uma caixa de seleção com o nome da opção que, marcada, libera o controle
+deslizante (desmarcada, mostra o valor global com "(herdado)"); e o
+cronômetro tem a mesma caixa, liberando um campo numérico (valor exato, não
+deslizante).
 Quando um slide tem sobrescritas, a seção mostra um selo com quantas são.
 
 ## Como o valor efetivo é calculado
 
 ```ts
-resolveSlideSettings(global, slide) =>
-  { ...DEFAULT_SETTINGS, ...global, ...slide.overrides }
+// resolveSlideSettings(global, slide) devolve:
+{ ...DEFAULT_SETTINGS, ...global, ...slide.overrides }
 ```
 
 Com dois ajustes de coerência aplicados depois da mesclagem:
 
 1. `identifyResponses` só permanece verdadeiro se **`askName` global** for
-   verdadeiro — um slide não consegue identificar respostas numa sala que nunca
+   verdadeiro: um slide não consegue identificar respostas numa sala que nunca
    pediu o nome.
 2. Em slides `text`, `bodyFontSize` recebe o `slide.fontSize`, mantendo o
    controle que já existia como a fonte da verdade do corpo desse tipo.
@@ -121,12 +127,16 @@ Onde é usado:
 | PDF | `resolveSlideSettings(settings, slide)` em [`exportPdf`](../src/utils/exportPdf.ts) |
 
 No celular os tamanhos são **limitados** (`Math.min`) para o texto não estourar
-a tela pequena: título até 30 px, corpo até 22–28 px conforme o controle.
+a tela pequena: título até 30 px; texto do slide de texto até 28 px; botões
+de voto até 22 px; suspense do gabarito até 24 px; lista do gabarito até
+20 px.
 
 ## Persistência
 
-- **No editor**: dentro do `editorStore` (memória). Some ao recarregar a página
-  — exporte o JSON para não perder.
+- **No editor**: dentro do `editorStore`. Na tela de criação, o rascunho
+  (opções incluídas) é gravado neste navegador e volta depois de recarregar a
+  página; para levar a outro aparelho, exporte o JSON. Na edição de uma sala,
+  o editor parte sempre do que está no ar.
 - **Na sala**: gravadas em `room.settings` na criação (`createRoom` completa os
   padrões, porque o Firestore rejeita `undefined`). Numa sala já iniciada, o
   apresentador muda as opções (globais e por slide) pelo botão **Editar** da

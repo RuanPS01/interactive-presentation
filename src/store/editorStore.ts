@@ -56,6 +56,11 @@ export interface EditorState {
   updateSlide: (id: string, patch: Partial<Slide>) => void
   removeSlide: (id: string) => void
   moveSlide: (from: number, to: number) => void
+  /**
+   * Nova ordem pela lista de ids (o arraste na lista de slides). A seleção
+   * fica no mesmo slide, e cada gabarito volta para logo depois da pergunta.
+   */
+  reorderSlides: (ids: string[]) => void
   select: (index: number) => void
 
   addAssets: (assets: PresentationAsset[]) => void
@@ -227,6 +232,18 @@ export function createEditorStore(): EditorStore {
         return applySlides(slides, moved.id, to)
       }),
 
+    reorderSlides: (ids) =>
+      set((s) => {
+        const byId = new Map(s.slides.map((slide) => [slide.id, slide]))
+        const ordered = ids.map((id) => byId.get(id)).filter((x): x is Slide => Boolean(x))
+        // Um id que a lista não trouxe (slide criado durante o arraste) não se perde.
+        const seen = new Set(ordered.map((slide) => slide.id))
+        const slides = [...ordered, ...s.slides.filter((slide) => !seen.has(slide.id))]
+        // Nada mudou: não gera estado novo (nem renderização).
+        if (slides.every((slide, i) => slide.id === s.slides[i]?.id)) return {}
+        return applySlides(slides, s.slides[s.selectedIndex]?.id, s.selectedIndex)
+      }),
+
     select: (index) =>
       set((s) => {
         const selectedIndex = clampIndex(index, s.slides.length)
@@ -322,9 +339,13 @@ export function createEditorStore(): EditorStore {
 
 /**
  * Editor que os componentes de `components/editor/` enxergam. Sem provedor em
- * volta, é o da tela de criação; a edição de sala troca por um editor próprio.
+ * volta, é o da tela de criação (`defaultEditorStore`, cujo rascunho é
+ * guardado no navegador, ver `store/editorDraft.ts`); a edição de sala troca
+ * por um editor próprio.
  */
-export const EditorStoreContext = createContext<EditorStore>(createEditorStore())
+export const defaultEditorStore = createEditorStore()
+
+export const EditorStoreContext = createContext<EditorStore>(defaultEditorStore)
 
 /** Lê (e assina) uma parte do editor em uso. */
 export function useEditorStore<T>(selector: (state: EditorState) => T): T {

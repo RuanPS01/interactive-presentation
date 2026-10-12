@@ -67,11 +67,16 @@ export interface PptxExportOptions {
    * do projetor. Os slides livres têm cores próprias e não mudam.
    */
   theme?: ThemeMode
+  /**
+   * Instruções de como responder nas perguntas (padrão: sim). Os slides
+   * baixados pela plateia no fim saem sem elas.
+   */
+  hints?: boolean
 }
 
 export async function exportPptx(
   presentation: Presentation,
-  { theme = 'light' }: PptxExportOptions = {},
+  { theme = 'light', hints = true }: PptxExportOptions = {},
 ): Promise<PptxExportResult> {
   const warnings = new Set<string>()
   const settings = withDefaults(presentation.settings)
@@ -79,9 +84,9 @@ export async function exportPptx(
   const slides: FreeSlide[] = presentation.slides.map((slide) =>
     slide.type === 'free'
       ? fitFreeSlideToFrame(slide, frame)
-      : standardSlideToFree(slide, presentation.slides, presentation.settings, frame, theme),
+      : standardSlideToFree(slide, presentation.slides, presentation.settings, frame, theme, { hints }),
   )
-  if (presentation.slides.some((s) => s.type !== 'free')) {
+  if (hints && presentation.slides.some((s) => s.type !== 'free')) {
     warnings.add('As perguntas viraram slides estáticos com as alternativas: a votação só funciona aqui na plataforma.')
   }
 

@@ -51,7 +51,7 @@ export function SummarySlide({
     <div className="flex h-full flex-col">
       <div className="mb-6 text-center">
         <h2 className="text-3xl font-extrabold text-neutral-900 dark:text-neutral-50 md:text-4xl">
-          Obrigado por participar! 🎉
+          Obrigado por participar!
         </h2>
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
           Resumo de “{room.title}”{loading && ' · carregando resultados…'}
@@ -134,7 +134,7 @@ function Miniature({ slide, slides, responses, bySlide, assets }: MiniatureProps
       return (
         <div className="h-full overflow-hidden">
           <p className="whitespace-pre-wrap text-xs text-neutral-600 dark:text-neutral-300">
-            {slide.content || '—'}
+            {slide.content || '-'}
           </p>
         </div>
       )

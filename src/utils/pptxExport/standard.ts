@@ -169,12 +169,24 @@ function optionCards(
   })
 }
 
+export interface StaticSlideOptions {
+  /**
+   * Instrução de como responder ("Responda pelo celular.") no rodapé das
+   * perguntas. Desligada nos slides baixados no fim e no modo leitura, em que
+   * ninguém responde mais.
+   */
+  hints?: boolean
+  /** Destaca o gabarito na própria pergunta (o modo leitura com "Mostrar respostas certas"). */
+  revealQuiz?: boolean
+}
+
 export function standardSlideToFree(
   slide: Exclude<Slide, FreeSlide>,
   slides: Slide[],
   globalSettings: Partial<PresentationSettings> | undefined,
   frame: Frame,
   theme: ThemeMode = 'light',
+  { hints = true, revealQuiz = false }: StaticSlideOptions = {},
 ): FreeSlide {
   const palette = PALETTES[theme]
   const settings = resolveSlideSettings(globalSettings, slide)
@@ -197,7 +209,7 @@ export function standardSlideToFree(
   }
   const bodyTop = PAD + titleHeight + GAP
   const bodyBottom = frame.height - PAD
-  const hintSpace = hintSize(settings) * 1.6 + GAP
+  const hintSpace = hints ? hintSize(settings) * 1.6 + GAP : 0
   const fontSize = Math.max(settings.bodyFontSize, MIN_BODY)
 
   switch (slide.type) {
@@ -225,7 +237,9 @@ export function standardSlideToFree(
           'Nuvem de palavras',
           { fontFamily: 'Arial', fontSize: Math.max(titleSize, 72), color: palette.placeholder },
         ),
-        hint(frame, 'Envie sua resposta pelo celular: as palavras aparecem ao vivo na apresentação.', settings, palette),
+        ...(hints
+          ? [hint(frame, 'Envie sua resposta pelo celular: as palavras aparecem ao vivo na apresentação.', settings, palette)]
+          : []),
       )
       break
     case 'bar':
@@ -237,17 +251,28 @@ export function standardSlideToFree(
           { top: bodyTop, bottom: bodyBottom - hintSpace },
           frame,
           fontSize,
-          { letters: slide.type === 'quiz' },
+          {
+            letters: slide.type === 'quiz',
+            // Pergunta sem gabarito não destaca nada (nem apaga as alternativas).
+            correct:
+              revealQuiz && slide.type === 'quiz' && slide.correctOptionIds.length > 0
+                ? slide.correctOptionIds
+                : undefined,
+          },
           palette,
         ),
-        hint(
-          frame,
-          slide.type === 'quiz'
-            ? 'Responda pelo celular.'
-            : 'Vote pelo celular: o resultado aparece ao vivo na apresentação.',
-          settings,
-          palette,
-        ),
+        ...(hints
+          ? [
+              hint(
+                frame,
+                slide.type === 'quiz'
+                  ? 'Responda pelo celular.'
+                  : 'Vote pelo celular: o resultado aparece ao vivo na apresentação.',
+                settings,
+                palette,
+              ),
+            ]
+          : []),
       )
       break
     case 'answer':

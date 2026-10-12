@@ -7,7 +7,10 @@ interface ThemeToggleProps {
   onToggle: () => void
 }
 
-/** Botão de alternância claro/escuro. O apresentador pode usar a qualquer momento. */
+/**
+ * Botão de alternância claro/escuro. No celular fica só o ícone (o rótulo
+ * aparece a partir de `sm`), para caber na linha com as outras ações.
+ */
 export function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
   return (
     <Button
@@ -19,11 +22,11 @@ export function ThemeToggle({ theme, onToggle }: ThemeToggleProps) {
     >
       {theme === 'dark' ? (
         <>
-          <Sun size={16} /> Claro
+          <Sun size={16} /> <span className="hidden sm:inline">Claro</span>
         </>
       ) : (
         <>
-          <Moon size={16} /> Escuro
+          <Moon size={16} /> <span className="hidden sm:inline">Escuro</span>
         </>
       )}
     </Button>

@@ -1,6 +1,7 @@
-# 05 — Tipos de slide
+# 05. Tipos de slide
 
-Sete tipos. Seis são adicionados pelo apresentador; o `answer` é gerado
+Sete tipos. Seis são adicionados pelo apresentador, pelo menu "Adicionar slide"
+do editor (cada tipo com uma dica do que faz); o `answer` é gerado
 automaticamente.
 
 | Tipo | Rótulo na interface | Interativo | Criável no menu |
@@ -9,7 +10,7 @@ automaticamente.
 | `bar` | Gráfico de barras | sim | sim |
 | `pie` | Gráfico de pizza | sim | sim |
 | `quiz` | Alternativas (sem gráfico) | sim | sim |
-| `answer` | Resposta correta | não (usa os dados do `quiz`) | **não** — automático |
+| `answer` | Resposta correta | não (usa os dados do `quiz`) | **não** (automático) |
 | `text` | Texto simples | não | sim |
 | `free` | Slide livre | não | sim (e pela importação de PowerPoint) |
 
@@ -19,7 +20,7 @@ Controles do participante: [`src/components/participate/ParticipateView.tsx`](..
 
 ---
 
-## `wordcloud` — Nuvem de palavras
+## `wordcloud` - Nuvem de palavras
 
 ```ts
 { type: 'wordcloud', wordLimitMode: 'one' | 'range' | 'unlimited', maxWords: number }
@@ -29,10 +30,11 @@ O participante envia textos curtos; eles aparecem com tamanho proporcional à
 frequência.
 
 - `wordLimitMode`: `unlimited` (padrão), `one` (um envio) ou `range` (até
-  `maxWords`, 1–50).
+  `maxWords`, de 1 a 50). "Sem limite" para em 100 envios por pessoa
+  (`MAX_RESPONSE_ITEMS`), o mesmo teto que as regras do Firestore aplicam.
 - Envios repetidos pela **mesma pessoa** são recusados (comparação sem
   diferenciar maiúsculas/minúsculas), para ninguém inflar o próprio voto.
-- O campo aceita **palavra ou frase** (até 80 caracteres) — a interface diz
+- O campo aceita **palavra ou frase** (até 80 caracteres): a interface diz
   “Entre com seu texto” justamente para não sugerir uma única palavra.
 - Com “permitir limpar e trocar a resposta” ligado, o participante remove
   itens individualmente ou usa “Limpar tudo”.
@@ -40,11 +42,11 @@ frequência.
 O layout ([`WordCloudView`](../src/components/charts/WordCloudView.tsx)) é
 próprio: mede a caixa de tinta de cada palavra num canvas, posiciona em espiral
 (testando alguns alongamentos para preencher a área disponível) e reescala o
-conjunto para caber sem cortar. O layout é refeito a cada atualização — as
-palavras se reacomodam em vez de crescer umas sobre as outras — com transição
+conjunto para caber sem cortar. O layout é refeito a cada atualização (as
+palavras se reacomodam em vez de crescer umas sobre as outras), com transição
 em CSS.
 
-## `bar` — Gráfico de barras
+## `bar` - Gráfico de barras
 
 ```ts
 { type: 'bar', options: ChoiceOption[], allowMultiple: boolean }
@@ -52,9 +54,10 @@ em CSS.
 
 Votação com resultado em barras verticais, contador acima de cada barra e
 rótulos quebrados em até 4 linhas. `allowMultiple` alterna entre caixas de
-seleção e escolha única.
+seleção e escolha única. Numa múltipla escolha, desmarcar todas as opções
+apaga a resposta: a pessoa deixa de contar em "responderam".
 
-## `pie` — Gráfico de pizza
+## `pie` - Gráfico de pizza
 
 ```ts
 { type: 'pie', options: ChoiceOption[], allowMultiple: boolean }
@@ -64,7 +67,7 @@ Mesmos campos de `bar`. Só fatia opções com votos; cada fatia mostra a
 porcentagem e a contagem, e a legenda abaixo traz o rótulo completo. Prefira
 pizza quando as opções são mutuamente exclusivas.
 
-## `quiz` — Alternativas (sem gráfico)
+## `quiz` - Alternativas (sem gráfico)
 
 ```ts
 {
@@ -73,25 +76,37 @@ pizza quando as opções são mutuamente exclusivas.
   allowMultiple: boolean,
   correctOptionIds: string[],   // vazio = pergunta sem gabarito
   revealAnswer: boolean,        // mantém um slide `answer` logo depois
+  showResponses: boolean,       // mostra os votos no projetor durante a pergunta (padrão: false)
 }
 ```
 
 Formato de **pergunta e resposta**. As alternativas aparecem grandes no centro
 da tela do apresentador (com letras A, B, C…) e também na tela dos
-participantes — **sem gráfico**.
+participantes, **sem gráfico**.
 
 Por padrão a distribuição fica **oculta**, para não entregar a resposta enquanto
 a pergunta está no ar: o rodapé mostra só quantas pessoas já votaram. Ligando
 **"Mostrar as respostas dos participantes na tela do apresentador"**
-(`showResponses`), cada alternativa passa a exibir votos e porcentagem ao vivo —
+(`showResponses`), cada alternativa passa a exibir votos e porcentagem ao vivo,
 e, se a sala identificar as respostas, a lista de nomes aparece junto. Com a
 opção desligada essa lista fica suprimida mesmo com a identificação ativa, já
 que mostrar "Ana: Lista" revelaria a resposta do mesmo jeito.
 
+### Gabarito protegido
+
+O documento da sala é público (quem tem o código lê), então o gabarito não
+fica nele: ao criar a sala, cada `quiz` é gravado com `correctOptionIds: []`, e
+as alternativas corretas vão para `rooms/{code}/secret/answers`, que só o dono
+lê. O projetor junta os dois para desenhar o gabarito; o celular só recebe as
+corretas de uma pergunta quando a revelação dela termina (ver o slide
+`answer` abaixo). Antes disso, nem as ferramentas do navegador mostram a
+resposta. Detalhes em
+[07](07-tempo-real-e-comunicacao.md#gabarito-protegido).
+
 ### Cronômetro
 
 Por padrão a pergunta fica no ar por **20 segundos** (opção global
-`quizTimerSeconds`, com tempo próprio por slide — ver
+`quizTimerSeconds`, com tempo próprio por slide; ver
 [06](06-configuracoes.md#cronômetro-das-perguntas)).
 
 A contagem aparece **só no projetor**, num card na base do slide (acima do
@@ -103,8 +118,8 @@ confundem mais do que ajudam.
 Ao zerar **no projetor**:
 
 1. o apresentador encerra a pergunta para a sala inteira;
-2. os controles do participante travam (“Tempo esgotado — as respostas foram
-   encerradas”);
+2. os controles do participante travam (“Tempo esgotado: as respostas foram
+   encerradas.”);
 3. se houver um slide `answer` logo depois, a apresentação avança sozinha.
 
 A ordem importa: quem trava a plateia é o encerramento gravado na sala, nunca a
@@ -115,12 +130,12 @@ O cronômetro **acompanha o slide, não a apresentação**:
 
 | O apresentador… | O cronômetro… |
 | --- | --- |
-| sai da pergunta no meio da contagem | **pausa** — nada corre enquanto ele está fora |
+| sai da pergunta no meio da contagem | **pausa**: nada corre enquanto ele está fora |
 | volta para essa pergunta | **retoma de onde parou** |
-| volta para uma pergunta que já zerou | **continua zerado** — sem contagem nova, e as respostas seguem congeladas como estavam |
+| volta para uma pergunta que já zerou | **continua zerado**: sem contagem nova, e as respostas seguem congeladas como estavam |
 
 A última linha é o que permite revisitar uma pergunta encerrada para comentá-la
-sem reabrir a votação — e sem que a apresentação pule sozinha para o gabarito
+sem reabrir a votação, e sem que a apresentação pule sozinha para o gabarito
 de novo.
 
 No editor ([`QuizConfig`](../src/components/editor/QuizConfig.tsx)) cada
@@ -129,7 +144,7 @@ alternativa tem um marcador de “correta” ao lado: caixa de seleção quando
 “sem gabarito”). Desligar `allowMultiple` mantém no máximo um gabarito; remover
 uma alternativa remove o gabarito correspondente.
 
-## `answer` — Resposta correta (automático)
+## `answer` - Resposta correta (automático)
 
 ```ts
 { type: 'answer', quizSlideId: string }
@@ -143,7 +158,7 @@ corretas e qual foi a sua escolha.
 ### Suspense antes de revelar
 
 O gabarito não aparece de imediato: por **3 segundos** a tela mostra, no
-centro, **“A resposta certa é…”** — e as reticências são a própria contagem,
+centro, **“A resposta certa é…”**, e as reticências são a própria contagem,
 ganhando um ponto por segundo. Só então as alternativas surgem.
 
 O atraso não é enfeite: cada celular recebe a troca de slide com alguns
@@ -152,12 +167,16 @@ resposta antes dos colegas. A contagem é local
 ([`useRevealCountdown`](../src/hooks/useRevealCountdown.ts)).
 
 **Só a primeira vez.** Quando o suspense termina, o apresentador registra o
-slide em `room.revealedSlideIds`. A partir daí o gabarito abre direto:
+slide em `room.revealedSlideIds` e, na mesma escrita, publica as corretas da
+pergunta em `room.revealedAnswers` (`markAnswerRevealed`). O celular só mostra
+"Você acertou!" ou "Não foi dessa vez" quando o gabarito chegou: se a contagem
+local terminar antes da escrita do projetor, a tela continua no suspense por
+mais um instante. A partir daí o gabarito abre direto:
 
 | Situação | O que aparece |
 | --- | --- |
 | 1ª vez no gabarito | 3 s de “A resposta certa é…” e então a resposta |
-| Voltar depois de revelado | A resposta na hora — não há mais nada a sincronizar |
+| Voltar depois de revelado | A resposta na hora: não há mais nada a sincronizar |
 | Sair antes dos 3 s e voltar | O suspense recomeça: a revelação não chegou a acontecer |
 | Participante que chega atrasado | A resposta na hora, sem esperar por uma contagem que já passou |
 
@@ -171,20 +190,22 @@ toda alteração na lista:
 | --- | --- |
 | Ligar “Adicionar um slide de resposta” | Insere o `answer` logo depois do `quiz` |
 | Desligar a opção | Remove o `answer` |
-| Mover o `quiz` | O `answer` acompanha, sempre logo atrás |
+| Mover o `quiz` (arrastando ou pelo menu do slide) | O `answer` acompanha, sempre logo atrás |
 | Apagar o `answer` pela lista | Equivale a desligar a opção no `quiz` |
 | Apagar o `quiz` | O `answer` órfão é removido junto |
 
-O slide reaproveitado preserva id, título e sobrescritas — desligar e religar a
+O slide reaproveitado preserva id, título e sobrescritas: desligar e religar a
 opção não perde o que foi personalizado na mesma sessão. Na lista, o gabarito
-aparece recuado, com ícone de vínculo e sem botões de mover.
+aparece recuado, com ícone de vínculo no lugar da alça de arraste, e o menu
+dele só tem "Remover o slide de resposta" (que desliga a revelação na
+pergunta).
 
 > Ele **é** um slide de verdade na apresentação: ocupa um índice, aparece para
 > os participantes e é exportado no JSON. No relatório PDF, porém, não vira
-> página própria — a página da pergunta já sai com a alternativa correta
+> página própria: a página da pergunta já sai com a alternativa correta
 > marcada.
 
-## `text` — Texto simples
+## `text` - Texto simples
 
 ```ts
 { type: 'text', content: string, align: 'left'|'center'|'right', fontSize: number }
@@ -229,7 +250,7 @@ do meio, o painel do slide
 | Redimensionar | 8 alças, que respeitam a rotação. Imagens mantêm a proporção (Shift inverte); textos não |
 | Editar texto | Clique duplo, ou Enter com a caixa selecionada; Esc sai da edição |
 | Formatar | Barra do painel ou Ctrl+B, Ctrl+I, Ctrl+U. Com texto selecionado, vale para a seleção; sem seleção, para a caixa inteira |
-| Duplicar e excluir | Ctrl+D e Delete, ou os botões do painel |
+| Duplicar e excluir | Ctrl+D e Delete (ou Backspace), ou os botões do painel |
 | Ordem | Lista de camadas (uma posição por vez) ou "Trazer para a frente" e "Enviar para trás" no painel do elemento |
 | Imagens | Botão "Adicionar imagem", arrastar arquivos para a prévia ou colar com Ctrl+V |
 | Editor ampliado | Botão "Ampliar": a mesma área de trabalho ocupando a tela inteira |
@@ -281,3 +302,25 @@ inverso: cada caixa de texto vira uma caixa de texto do PowerPoint, com os
 trechos, marcadores, recuos e espaçamentos; cada imagem vira uma imagem, com
 o encaixe, os cantos e a transparência; a cor de fundo vira o fundo do slide;
 e as fontes embutidas usadas vão junto no arquivo.
+
+## Slides estáticos: download e modo leitura
+
+O download dos slides no fim ([10](10-exportacoes.md#baixar-os-slides-no-fim))
+e o modo leitura ([09](09-fluxos-de-uso.md#modo-leitura)) mostram a
+apresentação sem interação. Para isso,
+[`toStaticSlides`](../src/utils/staticSlides.ts) converte todos os slides em
+slides livres, com a mesma versão estática usada na exportação para
+PowerPoint:
+
+| Tipo | Versão estática |
+| --- | --- |
+| `wordcloud`, `bar`, `pie` | Título e alternativas (ou o enunciado), sem a resposta de ninguém |
+| `quiz` | Enunciado e alternativas; no modo leitura, a correta vem marcada quando a caixa "Mostrar respostas certas" está ligada |
+| `answer` | Nos downloads, as alternativas com a correta destacada; no modo leitura fica de fora (a pergunta já mostra a correta) |
+| `text`, `free` | Como são |
+
+No celular, o download parte da sala como a plateia a vê
+(`withRevealedAnswers`): só os gabaritos já revelados aparecem destacados.
+
+As dicas de participação ("Responda pelo celular" e afins) também ficam de
+fora (`hints: false`).

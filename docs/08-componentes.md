@@ -1,4 +1,4 @@
-# 08 — Componentes e estado
+# 08. Componentes e estado
 
 ## Estado da aplicação
 
@@ -6,16 +6,19 @@ Três lugares, com responsabilidades separadas:
 
 | Onde | O quê | Vive até |
 | --- | --- | --- |
-| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, imagens, fontes embutidas, seleção do slide e do elemento | Recarregar a página (o da edição de sala, até sair da tela) |
+| [`editorStore`](../src/store/editorStore.ts) (Zustand) | Apresentação em edição: título, slides, opções globais, imagens, fontes embutidas, seleção do slide e do elemento | O da criação é gravado como rascunho neste navegador ([`editorDraft`](../src/store/editorDraft.ts)) e volta depois de recarregar; o da edição de sala vive até sair da tela |
 | [`themeStore`](../src/store/themeStore.ts) (Zustand + localStorage) | Tema claro/escuro do usuário | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença | Até ser apagada |
 
-Mais dois usos de `localStorage`, em `lib/`:
+Outros usos de `localStorage`, em `lib/`:
 [`presenterSessions`](../src/lib/presenterSessions.ts) (salas apresentadas neste
 dispositivo, com o token) e
 [`participantName`](../src/lib/participantName.ts) (nome por sala).
 O [encurtador](../src/lib/shortUrl.ts) também guarda ali o link curto de cada
-URL, para não gerar um novo a cada abertura do QR.
+URL, para não gerar um novo a cada abertura do modal do código. O rascunho do
+editor usa o `localStorage` para o texto e o IndexedDB para as imagens e
+fontes ([`draftStorage`](../src/lib/draftStorage.ts)). As chaves estão em
+[04](04-modelo-de-dados.md#armazenamento-no-navegador).
 
 ### `editorStore` em detalhe
 
@@ -25,7 +28,7 @@ componentes de `components/editor/` usam o que estiver no
 
 | Tela | Editor |
 | --- | --- |
-| `CreatePage` | O padrão do contexto, criado uma vez e mantido enquanto a aba estiver aberta |
+| `CreatePage` | O padrão do contexto (`defaultEditorStore`), criado uma vez e mantido enquanto a aba estiver aberta, com o rascunho gravado no navegador |
 | `EditRoomPage` | Um editor próprio, criado ao abrir a tela e carregado com a sala |
 
 Assim, editar uma sala em andamento não sobrescreve o rascunho de quem estava
@@ -41,7 +44,7 @@ editor que criou.
   selectedElementId, editingElementId,      // slide livre: selecionado e em edição
   textSelection,                            // trecho selecionado no texto em edição
   setTitle, updateSettings, setOverride,
-  addSlide, updateSlide, removeSlide, moveSlide, select,
+  addSlide, updateSlide, removeSlide, moveSlide, reorderSlides, select,
   addAssets, selectElement, setEditingElement, setTextSelection,
   updateElement, setElements, appendSlides,
   loadPresentation, getPresentation, reset,
@@ -61,6 +64,9 @@ Detalhes do slide livre no estado:
   `fonts` nem aparecem.
 - **`appendSlides`** é o "Adicionar ao fim" da importação de PowerPoint: junta
   slides, imagens e fontes e seleciona o primeiro slide novo.
+- **`reorderSlides(ids)`** aplica a ordem que a lista arrastada entrega ao
+  soltar: reusa `applySlides` (o gabarito volta para logo depois da pergunta),
+  mantém a seleção pelo id e não gera estado novo quando nada mudou.
 - As **fontes** do editor são registradas no navegador pelo `EditorWorkspace`
   sempre que mudam (`registerFonts`), então o texto da prévia já sai com elas.
 
@@ -70,9 +76,9 @@ mudanças.
 
 Dois auxiliares internos sustentam o resto:
 
-- **`syncAnswerSlides(slides)`** — reposiciona/cria/remove os slides de gabarito
-  conforme o `revealAnswer` de cada `quiz` (ver [05](05-tipos-de-slide.md)).
-- **`applySlides(slides, keepId, fallbackIndex)`** — aplica o sync e recalcula a
+- **`syncAnswerSlides(slides)`**: reposiciona, cria ou remove os slides de
+  gabarito conforme o `revealAnswer` de cada `quiz` (ver [05](05-tipos-de-slide.md)).
+- **`applySlides(slides, keepId, fallbackIndex)`**: aplica o sync e recalcula a
   seleção **pelo id** do slide, para que inserções e remoções automáticas não
   desloquem o que estava selecionado.
 
@@ -81,43 +87,85 @@ remove a chave, e quando não sobra nenhuma o campo inteiro é apagado (a chave
 some do objeto, em vez de ficar `undefined`, que o Firestore recusa ao gravar a
 sala). O slide volta a herdar tudo.
 
+### Rascunho da criação (`editorDraft`)
+
+[`startDraftPersistence(store)`](../src/store/editorDraft.ts) é chamado uma
+vez pela `CreatePage`, antes de qualquer leitura do editor:
+
+1. **Restaura** o texto do rascunho na hora (sem piscar o editor vazio), só se
+   o editor estiver intocado (título "Minha apresentação" e nenhum slide),
+   validado com `presentationShapeSchema`; as imagens e as fontes chegam logo
+   depois, quando o IndexedDB responder, também validadas.
+2. **Grava** cada mudança 600 ms depois da última (e na hora, no `pagehide`).
+   As imagens e fontes só são regravadas quando muda o conjunto de ids usados:
+   digitar um texto não regrava megabytes.
+
+`useDraftStatus` expõe `'idle' | 'saving' | 'saved' | 'error'`, que a barra
+mostra como "Salvando…", "Rascunho salvo neste navegador" ou "Não foi possível
+salvar o rascunho". `discardDraft(store)` ("Começar do zero", com confirmação)
+esvazia o editor e apaga o rascunho.
+
 ## Páginas
 
 | Página | Responsabilidade |
 | --- | --- |
-| [`HomePage`](../src/pages/HomePage.tsx) | Dois caminhos (criar/entrar) e a lista de salas apresentadas neste dispositivo, com “Retomar” e “Exportar PDF” |
-| [`CreatePage`](../src/pages/CreatePage.tsx) | Editor de 3 colunas, barra de ações e criação da sala |
-| [`PresentPage`](../src/pages/PresentPage.tsx) | Controle de acesso, navegação, exibição do slide, QR, PDF, slide final e o botão **Editar** |
-| [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Editor da sala em andamento: carrega o que está no ar, detecta alterações, confirma e grava recomeçando do 1º slide |
+| [`HomePage`](../src/pages/HomePage.tsx) | Dois caminhos (criar/entrar), "Ler uma apresentação (.json)" e a lista de salas apresentadas neste dispositivo, com a situação de cada uma ("No ar", "Encerrada", "Não existe mais"), “Retomar” (só no ar) e “Exportar PDF” |
+| [`CreatePage`](../src/pages/CreatePage.tsx) | Rascunho no navegador, barra do editor (`EditorToolbar`, com "Começar do zero"), editor e criação da sala |
+| [`PresentPage`](../src/pages/PresentPage.tsx) | Controle de acesso, navegação, exibição do slide, código da sala, PDF, slide final, **Editar**, **Encerrar** e, com a sala encerrada, **Apresentar de novo** |
+| [`EditRoomPage`](../src/pages/EditRoomPage.tsx) | Editor da sala em andamento: carrega o que está no ar (com os gabaritos), detecta alterações, confirma e grava recomeçando do 1º slide; com a sala encerrada, não abre o editor |
 | [`JoinPage`](../src/pages/JoinPage.tsx) | Normaliza o código digitado e redireciona |
-| [`RoomPage`](../src/pages/RoomPage.tsx) | Pedido de nome, registro de presença e controles do slide atual |
+| [`RoomPage`](../src/pages/RoomPage.tsx) | Pedido de nome, registro de presença, controles do slide atual e tela final ("Rever os slides" e "Baixar slides") |
+| [`ViewPage`](../src/pages/ViewPage.tsx) | Modo leitura: `/view` lê um `.json` (seletor ou arrastar e soltar), `/view/:code` lê uma sala encerrada |
+
+### Cabeçalho do projetor (`PresentPage`)
+
+Uma linha só em qualquer largura. Da esquerda para a direita: **Sair** (só
+ícone no celular), o **código da sala** como botão que abre o modal "Código da
+sala" ("Código:" aparece a partir de `md`), a miniatura do QR (`ShareRoom`, a
+partir de `sm`), o contador de pessoas (sempre visível) e a navegação (botões
+de 36 px e contador compacto). A partir de `xl` vêm os botões **Copiar link**,
+**Editar** (só ao vivo), **Exportar PDF**, **Encerrar** (só ao vivo), tela cheia e
+tema; abaixo de `xl`, as mesmas ações ficam no menu **Mais ações** (Mostrar o
+código da sala, Copiar link de entrada, Editar, Exportar PDF, Tela cheia, Tema
+e Encerrar). Ocultar o cabeçalho aparece a partir de `sm`. O modal do código
+fica montado na página, então continua aberto (e a projeção também) quando o
+cabeçalho é ocultado.
 
 ### Layout do editor (`EditorWorkspace`)
 
-As três colunas ficam em
 [`EditorWorkspace`](../src/components/editor/EditorWorkspace.tsx), usado pela
-criação e pela edição de sala. Em telas `lg` ou maiores, a página ocupa
-**exatamente a altura da janela** (`lg:h-[100dvh] lg:overflow-hidden`) e o grid
-das três colunas recebe `lg:flex-1 lg:min-h-0`. Cada coluna tem uma
-`ScrollArea` interna, limitada com `lg:min-h-0 lg:flex-1`:
+criação e pela edição de sala, escolhe **uma** montagem pela largura, com
+`useMediaQuery('(min-width: 1024px)')` (nunca as duas escondidas por CSS):
+
+**A partir de 1024 px: três colunas.** A página ocupa **exatamente a altura da
+janela** (`lg:h-[100dvh] lg:overflow-hidden`), e cada coluna tem uma
+`ScrollArea` interna, limitada com `min-h-0 flex-1`:
 
 | Coluna | Fixo | Rolagem própria |
 | --- | --- | --- |
-| 1 | Card “Adicionar slide” | Lista de slides |
-| 2 | Título “Configuração” | Formulário do slide + opções do slide |
-| 3 | Título “Prévia”, formato (16:9 ou 4:3) e, no slide livre, "Ampliar" | Prévia do slide |
+| 1 | Menu “Adicionar slide” e “Slides (N)” | Lista de slides |
+| 2 | Título “Configuração” e o selo do tipo | Formulário do slide + opções do slide |
+| 3 | Título “Prévia” (ou “Prévia e edição”), formato (16:9 ou 4:3) e, no slide livre, "Ampliar" | Prévia do slide |
 
-As colunas são `260px`, `0.9fr` e `1.35fr`: a prévia fica com a maior parte da
-largura, e a página usa a tela inteira (`w-full`, sem largura máxima). A prévia
+As colunas são `grid-cols-[250px_minmax(0,1fr)_minmax(0,1.2fr)]` e, a partir
+de `xl`, `grid-cols-[290px_minmax(0,0.9fr)_minmax(0,1.35fr)]`: a prévia fica
+com a maior parte da largura, e a página usa a tela inteira (`w-full`, sem
+largura máxima).
+
+**Abaixo de 1024 px: pilha.** Um cartão com três seções recolhíveis
+(`StackSection`): "Slides (N)", "Prévia" (ou "Prévia e edição") e
+"Configuração", nessa ordem, todas abertas de início. Recolher **esconde** o
+corpo (`hidden`) em vez de desmontar, então o editor visual do slide livre
+não perde a seleção nem a rolagem. Nada rola na horizontal até 360 px. A prévia
 desenha o slide numa moldura do tamanho do formato e a escala para caber
 ([`ScaledFrame`](../src/components/slides/ScaledFrame.tsx)); num slide livre,
 a prévia é a área de trabalho editável
 ([`FreeSlideCanvas`](../src/components/free/FreeSlideCanvas.tsx)), e "Ampliar"
 abre a mesma área num painel da tela inteira (Esc fecha).
 
-Assim a página **não cresce** conforme slides são adicionados: cada área rola
-por conta própria. Abaixo de `lg` o layout volta ao empilhamento natural, que é
-o comportamento certo no celular.
+Nas colunas, a página **não cresce** conforme slides são adicionados: cada área
+rola por conta própria. Na pilha, a página rola inteira, que é o
+comportamento certo no celular.
 
 > A combinação `min-h-0` + `flex-1` é o que faz a rolagem funcionar dentro de
 > um flex/grid: sem `min-h-0`, o item usa `min-height: auto` e estica o pai em
@@ -125,9 +173,9 @@ o comportamento certo no celular.
 
 ## Componentes por pasta
 
-### `slides/` — tela do apresentador
+### `slides/`: tela do apresentador
 
-- **[`SlideDisplay`](../src/components/slides/SlideDisplay.tsx)** — moldura de
+- **[`SlideDisplay`](../src/components/slides/SlideDisplay.tsx)**: moldura de
   todo slide: título (com o tamanho configurado), corpo conforme o tipo, lista
   de respostas identificadas (quando ligada) e rodapé de contagem. Recebe
   `slides` para que um slide `answer` encontre seu `quiz`, e `assets` para as
@@ -137,16 +185,16 @@ o comportamento certo no celular.
   caber no espaço disponível, centralizado. Acompanha o tamanho com
   `ResizeObserver`; o filho pode ser uma função que recebe a escala (o editor
   do slide livre precisa dela para converter o mouse em px do slide).
-- **[`OptionsBoard`](../src/components/slides/OptionsBoard.tsx)** — alternativas
+- **[`OptionsBoard`](../src/components/slides/OptionsBoard.tsx)**: alternativas
   em cartões grandes com letras A, B, C…; em modo `reveal` pinta a correta de
   verde e mostra votos e porcentagem. Passa a duas colunas com mais de 4 opções.
-- **[`NamedResponsesList`](../src/components/slides/NamedResponsesList.tsx)** —
+- **[`NamedResponsesList`](../src/components/slides/NamedResponsesList.tsx)**:
   chips “Nome: resposta”, com rolagem própria e altura limitada.
-- **[`SlideCountdown`](../src/components/slides/SlideCountdown.tsx)** — card na
+- **[`SlideCountdown`](../src/components/slides/SlideCountdown.tsx)**: card na
   base do slide com o tempo restante: segundos grandes, milissegundos ao lado,
   vermelho nos últimos 5 segundos. Anima-se sozinho por `requestAnimationFrame`.
-  **Só no projetor** — ver [07](07-tempo-real-e-comunicacao.md#cronômetro).
-- **[`AnswerSuspense`](../src/components/slides/AnswerSuspense.tsx)** —
+  **Só no projetor**; ver [07](07-tempo-real-e-comunicacao.md#cronômetro).
+- **[`AnswerSuspense`](../src/components/slides/AnswerSuspense.tsx)**:
   “A resposta certa é…”, com um ponto a mais por segundo, no lugar do gabarito
   durante os 3 segundos de espera. Também usado pelo `ParticipateView`.
 
@@ -182,21 +230,22 @@ trocar imagem, duplicar, excluir, reordenar) ficam em
 [`useFreeSlideActions`](../src/hooks/useFreeSlideActions.ts), usadas tanto
 pela área de trabalho quanto pelo painel.
 
-### `participate/` — tela do participante
+### `participate/`: tela do participante
 
-- **[`ParticipateView`](../src/components/participate/ParticipateView.tsx)** —
+- **[`ParticipateView`](../src/components/participate/ParticipateView.tsx)**:
   escolhe o controle pelo tipo do slide e resolve o alvo da resposta (no
   gabarito, a resposta dada na pergunta). No slide livre, mostra o slide
-  inteiro numa caixa com a proporção dele.
-- **[`ChoiceInput`](../src/components/participate/ChoiceInput.tsx)** — voto em
+  inteiro numa caixa com a proporção dele. Recebe `revealPending`, que segura
+  o suspense do gabarito até as corretas serem publicadas na sala.
+- **[`ChoiceInput`](../src/components/participate/ChoiceInput.tsx)**: voto em
   `bar`/`pie`/`quiz`; “Limpar resposta” quando a troca é permitida, cadeado
-  quando não.
-- **[`WordCloudInput`](../src/components/participate/WordCloudInput.tsx)** —
+  quando não; desmarcar tudo numa múltipla escolha apaga a resposta.
+- **[`WordCloudInput`](../src/components/participate/WordCloudInput.tsx)**:
   envio de textos (até 80 caracteres), bloqueio de repetição, remoção
-  individual e “Limpar tudo”.
-- **[`AnswerReveal`](../src/components/participate/AnswerReveal.tsx)** —
+  individual e “Limpar tudo”; o modo sem limite para em 100 envios.
+- **[`AnswerReveal`](../src/components/participate/AnswerReveal.tsx)**:
   “Você acertou!” / “Não foi dessa vez”, gabarito e marcação da própria escolha.
-- **[`NamePrompt`](../src/components/participate/NamePrompt.tsx)** — pedido de
+- **[`NamePrompt`](../src/components/participate/NamePrompt.tsx)**: pedido de
   nome antes de entrar.
 
 ### `editor/`
@@ -206,9 +255,33 @@ Formulários por tipo (`WordCloudConfig`, `ChoiceConfig`, `QuizConfig`,
 menu de adição (`AddSlideMenu`), os dois painéis de opções
 (`PresentationSettingsButton` e `SlideSettingsSection`, ambos usando os
 controles de `SettingsControls`), o modal do prompt de IA (`AiPromptButton`), o
-editor em 3 colunas (`EditorWorkspace`) e os botões "Importar" e "Exportar"
-(`ImportExportButtons`), que abrem os modais de importar e de exportar
-(`ExportDialog`).
+editor (`EditorWorkspace`), a barra do editor (`EditorToolbar`) e os modais de
+importar (`ImportDialog`) e de exportar (`ExportDialog`).
+
+**[`EditorToolbar`](../src/components/editor/EditorToolbar.tsx)**: a barra das
+duas telas de editor. Props: `back` (o botão de voltar), `title` e
+`onTitleChange`, `primary` ("Iniciar apresentação" ou "Salvar alterações"),
+`status` (o estado do rascunho, por exemplo), `rareItems` (ações raras, como
+"Começar do zero") e `onImportError`. A partir de `xl`, Opções, Prompt de IA,
+Importar e Exportar são botões, mais o botão de tema e, se houver ações raras,
+um menu "Mais" só com elas; abaixo de `xl`, tudo fica no menu "Mais". Cada
+modal é montado **uma vez** e aberto de forma controlada pelo botão ou pelo
+item do menu (padrão `useDialogControl`, abaixo).
+
+**[`SlideList`](../src/components/editor/SlideList.tsx)**: lista reordenável
+com a framer-motion (`Reorder.Group` e `Reorder.Item`). Com o mouse, o cartão
+inteiro arrasta; no toque, só a alça (`GripVertical`, com `touch-none`), para
+o dedo que passa pela lista continuar rolando. A ordem muda na tela durante o
+arraste e só é gravada ao soltar (`reorderSlides`); um deslocamento de mais de
+4 px marca o gesto como arraste, para o clique que o termina não selecionar o
+slide. O gabarito não arrasta: aparece recuado, com o ícone `Link2`, e volta
+para logo depois da pergunta. Cada item tem um menu com "Mover para cima",
+"Mover para baixo" e "Remover slide" (no gabarito, só "Remover o slide de
+resposta").
+
+**[`AddSlideMenu`](../src/components/editor/AddSlideMenu.tsx)**: botão azul
+de largura total "Adicionar slide", que abre um `Menu` com o título "Escolha o
+tipo" e um item por tipo criável, cada um com uma dica.
 
 `FreeSlideConfig` é o painel do slide livre: nome, cor de fundo, botões de
 adicionar texto e imagem, lista de camadas e, para o elemento selecionado,
@@ -222,7 +295,7 @@ dinâmico), passa o tema atual da página (claro ou escuro) para os slides
 comuns, mostra "Gerando…" e, no fim, os avisos (perguntas viraram slides
 estáticos, fonte que não pôde ser embutida).
 
-`ImportExportButtons` abre o modal "Importar" com duas opções: "Apresentação
+`ImportDialog` é o modal "Importar", com duas opções: "Apresentação
 (.json)", que substitui tudo, e "PowerPoint (.pptx)", com a escolha entre
 "Adicionar ao fim" e "Substituir tudo". As duas aceitam o arquivo arrastado. O
 leitor de PowerPoint é carregado só nessa hora (`import()` dinâmico), e o modal
@@ -234,10 +307,26 @@ mostra o progresso, o resultado (slides, imagens, avisos) ou o erro.
 
 ### `present/`
 
-- **[`ShareRoom`](../src/components/present/ShareRoom.tsx)** — miniatura do QR
-  na barra; o modal traz o QR ampliado, o **link curto em texto grande**, o
-  código da sala e o link completo com botão de copiar.
-- **[`SummarySlide`](../src/components/present/SummarySlide.tsx)** — slide final
+- **[`RoomCodeDialog`](../src/components/present/RoomCodeDialog.tsx)**: modal
+  "Código da sala", aberto pelo código no cabeçalho, pela miniatura do QR ou
+  pelo menu. Mostra o código em fonte mono, o QR (168 px) e o link curto com
+  botão de copiar ("Encurtando o link..." enquanto encurta; se falhar, o
+  aviso e "Tentar de novo"), mais "Copiar código" e **Projetar em tela
+  cheia**. A projeção é uma camada em portal (`fixed inset-0 z-[100]`) com o
+  código grande, o QR e o link curto (ou o endereço do site), em tamanhos com
+  `clamp()`, tema claro ou escuro próprio (alternável ali mesmo) e tela cheia
+  pedida ao navegador. Clicar no QR o amplia (`min(92vw, 92vh)`). O teclado
+  é capturado enquanto a projeção está aberta, para não trocar de slide por
+  trás; Esc fecha primeiro o QR ampliado e depois a projeção. Exporta as
+  cores do QR (`QR_FG` e `QR_BG`).
+- **[`ShareRoom`](../src/components/present/ShareRoom.tsx)**: miniatura do QR
+  (32 px) no cabeçalho do projetor; só abre o modal. A classe de exibição vem
+  de fora (`hidden sm:inline-flex`), para não brigar com um `inline-flex`
+  próprio.
+- **[`DownloadSlides`](../src/components/present/DownloadSlides.tsx)**: bloco
+  "Baixar slides", com "PDF dos slides" e "PowerPoint (.pptx)", na tela final
+  do participante quando a apresentação permite (`useSlideDownload`).
+- **[`SummarySlide`](../src/components/present/SummarySlide.tsx)**: slide final
   com o botão central **Baixar resultados (PDF)** e a miniatura de cada slide
   (gráficos, nuvem, lista de alternativas com o gabarito ou o próprio slide
   livre reduzido).
@@ -268,11 +357,13 @@ de foco azul translúcido) nos temas claro e escuro.
 | [`Slider`](../src/components/ui/Slider.tsx) | Valores numéricos em faixa | Rótulo à esquerda e valor à direita; trecho percorrido preenchido |
 | [`Select`](../src/components/ui/Select.tsx) | Lista suspensa | Padrão "select-only combobox" do WAI-ARIA; lista em portal, que abre para cima quando falta espaço |
 | [`ScrollArea`](../src/components/ui/ScrollArea.tsx) | Áreas com rolagem própria | Barra fina nas cores neutras; eixo `y`, `x` ou `both` |
-| [`Modal`](../src/components/ui/Modal.tsx) | Janelas modais | Esc e clique fora fecham; Tab preso no painel; foco volta para quem abriu |
+| [`Modal`](../src/components/ui/Modal.tsx) | Janelas modais | Esc e clique fora fecham; Tab preso no painel; foco volta para quem abriu; altura máxima `90dvh` |
+| [`Menu`](../src/components/ui/Menu.tsx) | Ações agrupadas num botão ("Adicionar slide", "Mais", "Mais ações", ações do slide) | Padrão "menu button" do WAI-ARIA (`role="menu"` e `menuitem`); lista em portal com posição fixa, 288 px de largura, que abre para cima quando falta espaço; itens com ícone, dica, estado desativado, tom `danger` e separadores; título opcional |
+| [`StackSection`](../src/components/ui/StackSection.tsx) | Seção recolhível do editor empilhado | Cabeçalho com pelo menos 44 px de altura (`min-h-11`) e `aria-expanded`; selo opcional; corpo escondido, não desmontado |
 | [`ConfirmDialog`](../src/components/ui/ConfirmDialog.tsx) | Confirmar ações | Sobre o `Modal`; foco inicial no botão de confirmar; tom `danger` |
 | [`Banner`](../src/components/ui/Banner.tsx) | Avisos no topo da tela | Tons `info`, `warning` e `error`; fechar opcional |
 | [`ColorInput`](../src/components/ui/ColorInput.tsx) | Escolher cor | Amostra que abre o seletor do sistema, campo hexadecimal e cores rápidas; estado "misto" e opção "nenhuma" (`allowNone`) |
-| [`SegmentedControl`](../src/components/ui/SegmentedControl.tsx) | Escolha entre poucas opções lado a lado | `radiogroup` de botões com texto ou ícone; tamanhos `sm` e `md`; não tira o foco do texto em edição |
+| [`SegmentedControl`](../src/components/ui/SegmentedControl.tsx) | Escolha entre poucas opções lado a lado | `radiogroup` de botões com texto ou ícone; tamanhos `sm` e `md`; rótulos sem quebra de linha; não tira o foco do texto em edição |
 | [`ToggleButton`](../src/components/ui/ToggleButton.tsx) | Ligar e desligar (negrito, itálico...) | `aria-pressed`; estado "misto" quando a seleção tem as duas coisas |
 
 Como o `Select` se comporta no teclado:
@@ -284,6 +375,13 @@ Como o `Select` se comporta no teclado:
 | Letras | Abre na opção que começa com elas (sem diferenciar acentos) | Pula para a opção |
 | Esc | Segue para a tela (num modal, fecha o modal) | Fecha só a lista |
 | Tab | Segue o foco | Fecha a lista e segue o foco |
+
+O `Menu` segue a mesma ideia: setas para cima e para baixo percorrem os itens
+(pulando os desativados), Home e End vão ao primeiro e ao último, Esc fecha e
+devolve o foco ao botão, Tab fecha. As teclas não vazam para a página (o
+projetor não troca de slide com o menu aberto). Escolher um item fecha o menu,
+devolve o foco ao botão e só então chama `onSelect`, para um modal aberto pelo
+item receber o foco certo.
 
 Partes que classes utilitárias não alcançam (trilho e polegar do `Slider`,
 barra do `ScrollArea`, animação da lista do `Select`) ficam no
@@ -298,8 +396,9 @@ barra do `ScrollArea`, animação da lista do `Select`) ficam no
 
 ### `layout/`
 
-`PageShell` (contêiner de página), `ThemeToggle` (claro/escuro) e
-`FullScreenMessage` (mensagem centralizada: carregando, erro, sem acesso).
+`PageShell` (contêiner de página), `ThemeToggle` (claro/escuro; o rótulo some
+abaixo de `sm`, fica só o ícone) e `FullScreenMessage` (mensagem centralizada:
+carregando, erro, sem acesso).
 
 ## Hooks
 
@@ -309,7 +408,11 @@ barra do `ScrollArea`, animação da lista do `Select`) ficam no
 | `useParticipant` | Sessão anônima e uid |
 | `usePresenterAccess` | Se este navegador controla a sala: dono atual ou token na URL (reivindica o controle); lembra a sala para "Retomar" |
 | `useSlideTimer` | Cronômetro do slide: contagem local para exibir e `closed` (estado da sala) para travar as respostas |
-| `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito — pulados num gabarito já revelado |
+| `useRevealCountdown` | Os 3 segundos de suspense antes de revelar o gabarito, pulados num gabarito já revelado |
+| `useRoomAnswers` | Assina os gabaritos da sala (`secret/answers`), só para o dono ([07](07-tempo-real-e-comunicacao.md#gabarito-protegido)) |
+| `useMediaQuery` | Acompanha uma media query com `useSyncExternalStore` e `matchMedia` (escolhe colunas ou pilha no editor) |
+| `useDialogControl` | Modal aberto por fora (item de menu) ou pelo próprio botão: `DialogControlProps { open?, onOpenChange?, trigger? }`; `trigger={false}` esconde o botão do modal |
+| `useSlideDownload` | `download('pdf' \| 'pptx')`, `working` e `error`: baixa os slides com os geradores carregados no clique ([10](10-exportacoes.md#baixar-os-slides-no-fim)) |
 | `useApplyTheme` | Alterna a classe `.dark` no `<html>` |
 | `useFullscreen` | Fullscreen API, acompanhando a saída por Esc |
 | `useRoomAssets` | Imagens de uma sala para os ids pedidos, lidas uma vez e guardadas ([07](07-tempo-real-e-comunicacao.md#imagens-dos-slides-livres)) |
@@ -319,7 +422,7 @@ barra do `ScrollArea`, animação da lista do `Select`) ficam no
 ## Estilo e tema
 
 Tailwind v4 com `@custom-variant dark (&:where(.dark, .dark *))`: o tema é
-controlado pela classe no `<html>`, não pelo `prefers-color-scheme` — assim a
+controlado pela classe no `<html>`, não pelo `prefers-color-scheme`; assim a
 escolha do usuário vence a do sistema. O `color-scheme` do `<html>` acompanha a
 classe, para os controles que continuam nativos (setas do campo numérico, barra
 de rolagem da página) também seguirem o tema escolhido. O
@@ -327,3 +430,9 @@ de rolagem da página) também seguirem o tema escolhido. O
 os ajustes de cor dos textos e tooltips do Recharts nos dois temas, as partes
 dos componentes genéricos descritas acima e as regras do texto do slide livre
 (`.ft-text`: quebras preservadas e marcadores desenhados por `::before`).
+
+As páginas usam `min-h-[100dvh]` (e não `min-h-screen`), para a altura
+acompanhar a barra de endereço do celular. Os princípios de layout seguidos em
+todas as telas: cabeçalho em uma linha em qualquer largura, nada de rolagem
+horizontal em 360 px, alvos de toque de pelo menos 44 px, rótulos que somem
+antes de quebrar a linha e ações raras dentro de menus.

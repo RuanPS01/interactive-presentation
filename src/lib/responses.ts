@@ -23,7 +23,17 @@ function responseId(slideId: string, participantUid: string): string {
   return `${slideId}__${participantUid}`
 }
 
-/** Salva (ou sobrescreve) a resposta do participante para o slide atual. */
+/**
+ * Teto de itens numa resposta (textos da nuvem ou opções marcadas). As regras
+ * do Firestore recusam listas maiores.
+ */
+export const MAX_RESPONSE_ITEMS = 100
+
+/**
+ * Salva (ou sobrescreve) a resposta do participante para o slide atual. Uma
+ * lista vazia (a múltipla escolha toda desmarcada, a nuvem sem textos) APAGA
+ * a resposta: um documento vazio contaria como "respondeu" no rodapé.
+ */
 export async function saveResponse(
   code: string,
   slideId: string,
@@ -32,6 +42,10 @@ export async function saveResponse(
   value: string[],
   participantName?: string | null,
 ): Promise<void> {
+  if (value.length === 0) {
+    await clearResponse(code, slideId, participantUid)
+    return
+  }
   const payload: ResponseDoc = {
     slideId,
     participantUid,
