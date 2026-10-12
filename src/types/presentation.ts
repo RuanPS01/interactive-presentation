@@ -396,7 +396,8 @@ export interface ResponseDoc {
 export interface ParticipantDoc {
   uid: string
   name?: string
+  /** Primeira entrada na sala (reentrar não muda). */
   joinedAt: number
-  /** Atualizado periodicamente enquanto a aba fica aberta. */
+  /** Última entrada na sala (não há atualização periódica). */
   lastSeenAt: number
 }

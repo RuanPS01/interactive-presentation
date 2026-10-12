@@ -17,9 +17,10 @@ o repositório original.
 | Reproduzir os tipos, as coleções e o formato JSON | Seção 5 e Apêndices A e B |
 | Saber como cada opção e cada tipo de slide se comporta, com exemplos de execução | Seções 6 e 7 |
 | Entender como o sincronismo em tempo real permite que a plateia interaja com a apresentação | Seção 8.0 |
-| Implementar o tempo real (sala, respostas, presença, cronômetro, gabarito) | Seção 8 e Apêndice C |
+| Implementar o tempo real (sala, respostas, presença, cronômetro, gabarito, encerramento) | Seção 8 e Apêndice C |
+| Proteger o gabarito até a revelação | Seção 8.16 |
 | Recriar o estado, as telas e os componentes | Seções 9 e 10 |
-| Implementar importação e exportação (JSON, PowerPoint, PDF, prompt de IA, link curto) | Seção 11 |
+| Implementar importação e exportação (JSON, PowerPoint, PDF, download dos slides, modo leitura, prompt de IA, link curto) | Seção 11 |
 | Ver uma sessão completa acontecendo, passo a passo | Seção 12 |
 | Copiar os algoritmos centrais | Seção 13 |
 | Configurar Firebase, build e deploy | Seção 14 |
@@ -47,9 +48,14 @@ Convenções:
 7. [Tipos de slide, com exemplos de execução](#7-tipos-de-slide-com-exemplos-de-execução)
 8. [Tempo real e comunicação](#8-tempo-real-e-comunicação)
    - [8.0 Como o sincronismo em tempo real funciona](#80-como-o-sincronismo-em-tempo-real-funciona)
+   - [8.15 Encerramento da sala](#815-encerramento-da-sala)
+   - [8.16 Gabarito protegido](#816-gabarito-protegido-libanswersts-hooksuseroomanswersts)
 9. [Estado, páginas, componentes e hooks](#9-estado-páginas-componentes-e-hooks)
 10. [Slide livre em profundidade](#10-slide-livre-em-profundidade)
 11. [Importação, exportação e integrações](#11-importação-exportação-e-integrações)
+   - [11.8 Código da sala e link curto](#118-código-da-sala-e-link-curto-roomcodedialog-libshorturlts)
+   - [11.9 Baixar os slides no fim](#119-baixar-os-slides-no-fim-useslidedownload-exportslidespdf-tostaticslides)
+   - [11.10 Modo leitura](#1110-modo-leitura-pagesviewpagetsx)
 12. [Exemplos de execução de ponta a ponta](#12-exemplos-de-execução-de-ponta-a-ponta)
 13. [Algoritmos centrais](#13-algoritmos-centrais)
 14. [Desenvolvimento, configuração e deploy](#14-desenvolvimento-configuração-e-deploy)
@@ -92,16 +98,24 @@ Duas características definem o projeto:
 
 | Papel | Como entra | O que pode fazer |
 | --- | --- | --- |
-| **Apresentador** | Cria a sala em `/create` e vai para `/present/<código>/<token>` | Monta slides, controla a navegação, edita a sala em andamento, vê os resultados, exporta PDF, JSON e PowerPoint |
-| **Participante** | Abre `/room/<código>` (link, QR ou digitando o código em `/join`) | Responde ao slide atual; a tela acompanha o apresentador |
+| **Apresentador** | Cria a sala em `/create` e vai para `/present/<código>/<token>` | Monta slides, controla a navegação, mostra e projeta o código da sala, edita a sala em andamento, encerra a apresentação, vê os resultados, exporta PDF, JSON e PowerPoint |
+| **Participante** | Abre `/room/<código>` (link, QR ou digitando o código em `/join`) | Responde ao slide atual; a tela acompanha o apresentador; no fim, revê os slides e, se permitido, baixa os slides |
+| **Leitor** | Abre `/view` (um `.json`) ou `/view/<código>` (sala encerrada) | Lê os slides sem interação |
 
 Não há administrador, moderador nem limite de participantes por sala.
 
 ### 1.3 O que a aplicação faz
 
-- **Editor de slides** em três colunas independentes (adicionar/listar,
-  configurar, pré-visualizar), ocupando a tela inteira, com prévia na
-  proporção escolhida (16:9 ou 4:3).
+- **Editor de slides** ocupando a tela inteira, com prévia na proporção
+  escolhida (16:9 ou 4:3): três colunas independentes (listar, configurar,
+  pré-visualizar) a partir de 1024 px e seções recolhíveis empilhadas abaixo
+  disso, sem rolagem horizontal até 360 px.
+- **Montagem dos slides**: "Adicionar slide" abre um menu com os tipos e uma
+  dica de cada; a ordem muda arrastando (framer-motion; no toque, pela alça)
+  ou pelo menu de cada slide. A barra do editor mostra as ações como botões a
+  partir de 1280 px e num menu "Mais" abaixo disso.
+- **Rascunho no navegador**: a apresentação em montagem (com imagens e
+  fontes) sobrevive a um recarregamento; "Começar do zero" descarta.
 - **Sete tipos de slide**: nuvem de palavras, gráfico de barras, gráfico de
   pizza, alternativas sem gráfico (pergunta e resposta), gabarito automático,
   texto simples e slide livre.
@@ -117,25 +131,36 @@ Não há administrador, moderador nem limite de participantes por sala.
 - **Exportar PowerPoint (.pptx)** com textos e imagens editáveis e fontes
   embutidas; perguntas viram slides estáticos no tema da página.
 - **Opções globais e por slide**: troca de resposta, pedido de nome,
-  identificação das respostas, tamanhos de fonte (título, rótulos, corpo) e
-  tempo do cronômetro. O formato dos slides é só global.
+  identificação das respostas, tamanhos de fonte (título, rótulos, corpo),
+  tempo do cronômetro e download dos slides no fim. O formato dos slides, o
+  pedido de nome e o download são só globais.
 - **Cronômetro nas perguntas**: contagem grande no projetor; ao zerar, as
   respostas são encerradas e o gabarito entra sozinho depois de três segundos
-  de "A resposta certa é…".
+  de "A resposta certa é…". O gabarito fica fora do documento público da
+  sala até a revelação.
 - **Tempo real**: cada mudança de slide e cada resposta aparecem
   instantaneamente para todos, via assinaturas do Firestore.
 - **Contagem separada** de participantes conectados e de quem já respondeu.
-- **Compartilhamento**: código grande, QR Code ampliado e link curto.
+- **Compartilhamento**: o código no cabeçalho do projetor abre o modal
+  "Código da sala" (código, QR Code e link curto do da.gd), com projeção em
+  tela cheia e QR ampliável.
+- **Encerramento**: passar do último slide (ou "Encerrar") encerra a sala;
+  "Apresentar de novo" abre uma sala nova com o mesmo conteúdo.
 - **Edição da sala em andamento**, com confirmação e reinício do primeiro slide
   para todos.
 - **Componentes de formulário próprios** com a mesma identidade visual nos
   temas claro e escuro.
 - **Importar e exportar** em JSON (com imagens e fontes) ou PowerPoint;
   **exportar PDF** dos resultados.
+- **Baixar os slides no fim** (PDF e PowerPoint, sem a resposta de ninguém),
+  quando o apresentador permite.
+- **Modo leitura**: `/view` para um `.json` e `/view/<código>` para uma sala
+  encerrada, rolando ou um slide por vez.
 - **Prompt de IA** pronto para gerar o JSON de uma apresentação inteira.
 - **Tema claro/escuro** por usuário, salvo no navegador.
-- **Retomada da sala**: o dispositivo lembra as salas apresentadas e oferece
-  "Retomar" ou "Exportar PDF" na tela inicial.
+- **Retomada da sala**: o dispositivo lembra as salas apresentadas; a tela
+  inicial mostra a situação de cada uma ("No ar", "Encerrada", "Não existe
+  mais"), com "Retomar" para as que estão no ar e "Exportar PDF".
 
 ### 1.4 O que a aplicação não faz
 
@@ -145,8 +170,8 @@ Não há administrador, moderador nem limite de participantes por sala.
   acesso da plateia).
 - Não sincroniza o tema entre apresentador e plateia (é preferência de cada
   um).
-- Não encerra salas automaticamente nem expira dados (a limpeza é manual, pelo
-  console do Firebase).
+- Não reabre uma sala encerrada (apresentar de novo cria outra) nem expira
+  dados (a limpeza é manual, pelo console do Firebase).
 - Não reproduz vídeo ou áudio, nem animações e transições do PowerPoint.
 
 ---
@@ -157,23 +182,23 @@ Não há administrador, moderador nem limite de participantes por sala.
 
 | Id | Requisito |
 | --- | --- |
-| RF01 | Editor de slides em três colunas (adicionar e listar; configurar; prévia) com prévia ao vivo na proporção escolhida. |
-| RF02 | Sete tipos de slide: `wordcloud`, `bar`, `pie`, `quiz`, `answer` (gerado automaticamente), `text` e `free`. Seis são criáveis pelo menu. |
+| RF01 | Editor de slides em três colunas (listar; configurar; prévia) a partir de 1024 px, e em seções recolhíveis empilhadas abaixo disso, com prévia ao vivo na proporção escolhida. |
+| RF02 | Sete tipos de slide: `wordcloud`, `bar`, `pie`, `quiz`, `answer` (gerado automaticamente), `text` e `free`. Seis são criáveis pelo menu "Adicionar slide", que mostra uma dica de cada tipo. |
 | RF03 | Opções globais da apresentação e sobrescritas por slide, com resolução determinística do valor efetivo. |
 | RF04 | "Iniciar apresentação" cria uma sala com código único de 6 caracteres (sem `O`, `0`, `I`, `1`) e um token secreto de apresentador de 24 caracteres. |
 | RF05 | O participante entra sem conta, por QR Code, link completo, link curto ou digitando o código. |
 | RF06 | Pedido de nome opcional antes de entrar, lembrado por sala no dispositivo (até 40 caracteres). |
 | RF07 | Presença: abrir a sala já registra o participante, mesmo sem responder. |
-| RF08 | Respostas em tempo real, no máximo um documento por participante por slide; reenvio sobrescreve; limpar e trocar conforme a opção. |
+| RF08 | Respostas em tempo real, no máximo um documento por participante por slide (até 100 itens); reenvio sobrescreve; limpar e trocar conforme a opção; uma resposta esvaziada é apagada. |
 | RF09 | Navegação do apresentador por teclado (seta para a direita, PageDown, Espaço avançam; seta para a esquerda e PageUp voltam), passador de slides ou botões; os participantes seguem automaticamente. |
 | RF10 | Cronômetro em perguntas `quiz` (padrão 20 s, 0 desliga, até 300 s), por slide, que pausa ao sair, retoma ao voltar, fica congelado depois de zerar; o encerramento é comandado pelo projetor; avanço automático para o gabarito. |
-| RF11 | Slide de gabarito automático, com suspense de 3 s ("A resposta certa é…") só na primeira revelação. |
+| RF11 | Slide de gabarito automático, com suspense de 3 s ("A resposta certa é…") só na primeira revelação. O gabarito só chega aos celulares quando a revelação termina. |
 | RF12 | Rodapé com "N participante(s) · M responderam" e, quando pode diferir, o total de envios. |
 | RF13 | Identificação opcional "Nome: resposta" no projetor e no PDF (exige pedir o nome). |
-| RF14 | Slide final automático de agradecimento com miniaturas de todos os slides e botão "Baixar resultados (PDF)". |
+| RF14 | Slide final automático de agradecimento com miniaturas de todos os slides e botão "Baixar resultados (PDF)". Chegar a ele (ou "Encerrar") encerra a sala: sem mudanças e sem respostas depois disso; "Apresentar de novo" abre uma sala nova. |
 | RF15 | Relatório PDF gerado no navegador: capa, uma página por slide, tabela de respostas por slide interativo. |
-| RF16 | Compartilhamento: código grande, QR Code ampliado, link curto (TinyURL) e botão de copiar o link. |
-| RF17 | Retomar a sala no mesmo dispositivo e reivindicar o controle em outro navegador com o token. |
+| RF16 | Compartilhamento: modal "Código da sala" com o código, o QR Code, o link curto (da.gd) e botões de copiar; projeção do código em tela cheia, com QR ampliável. |
+| RF17 | Retomar a sala no mesmo dispositivo (só as salas no ar, com a situação de cada uma na tela inicial) e reivindicar o controle em outro navegador com o token. |
 | RF18 | Editar a sala em andamento; ao salvar (com confirmação), todos voltam ao primeiro slide, cronômetros e gabaritos recomeçam, respostas ficam. |
 | RF19 | Importar e exportar a apresentação em JSON validado, com compatibilidade para arquivos antigos. |
 | RF20 | Importar PowerPoint (.pptx) como slides livres, "Adicionar ao fim" ou "Substituir tudo", com aproveitamento das fontes embutidas. |
@@ -182,7 +207,11 @@ Não há administrador, moderador nem limite de participantes por sala.
 | RF23 | Tema claro/escuro por usuário, persistido no navegador e inicializado pelo `prefers-color-scheme`. |
 | RF24 | Slide livre com texto rico e imagens: selecionar, mover com guias, redimensionar com 8 alças respeitando a rotação, girar, opacidade, camadas, duplicar, excluir, colar e soltar imagens, editor ampliado. |
 | RF25 | Formato dos slides 16:9 (padrão) ou 4:3, com reenquadramento automático dos slides livres. |
-| RF26 | Tela cheia e cabeçalho ocultável na tela do apresentador. |
+| RF26 | Tela cheia e cabeçalho ocultável na tela do apresentador; cabeçalho em uma linha em qualquer largura, com as ações secundárias no menu "Mais ações" abaixo de 1280 px. |
+| RF27 | Reordenar slides arrastando (no toque, pela alça) ou pelo menu de cada slide; o gabarito acompanha a pergunta. |
+| RF28 | Rascunho da tela de criação guardado no navegador (texto no `localStorage`, imagens e fontes no IndexedDB), com "Começar do zero". |
+| RF29 | Opção global para os participantes baixarem os slides (PDF e PowerPoint) no fim, sem respostas. |
+| RF30 | Modo leitura em `/view` (arquivo `.json`) e `/view/<código>` (sala encerrada), rolando ou um por vez, com "Mostrar respostas certas". |
 
 ### 2.2 Requisitos não funcionais
 
@@ -191,17 +220,18 @@ Não há administrador, moderador nem limite de participantes por sala.
 | RNF01 | Frontend estático, sem servidor de aplicação. Publicação no GitHub Pages (subcaminho) e no Firebase Hosting (raiz). |
 | RNF02 | Tempo real nativo no navegador via `onSnapshot` do Firestore. |
 | RNF03 | Caber no plano gratuito do Firebase: sem Cloud Storage (exige plano Blaze), sem heartbeat de presença, sem escrita por segundo de cronômetro. |
-| RNF04 | Segurança garantida pelas regras do Firestore; as chaves `VITE_FIREBASE_*` são públicas. |
+| RNF04 | Segurança garantida pelas regras do Firestore (campos e tamanhos validados, gabarito legível só pelo dono, sala encerrada imutável); as chaves `VITE_FIREBASE_*` são públicas. |
 | RNF05 | Documento da sala sempre abaixo de 1 MiB (limite prático de 1.000.000 bytes do JSON); imagens e fontes ficam em subcoleções. |
 | RNF06 | Sem limite de participantes por sala. |
-| RNF07 | Código pesado carregado sob demanda: jsPDF, leitor de PowerPoint, gerador de PowerPoint e conversores de fonte. |
-| RNF08 | Interface e comentários em português do Brasil; acessibilidade (WAI-ARIA no `Select`, foco preso no `Modal`, `aria-pressed`, `role="timer"`). |
+| RNF07 | Código pesado carregado sob demanda: jsPDF, leitor de PowerPoint, gerador de PowerPoint, PDF dos slides e conversores de fonte. |
+| RNF08 | Interface e comentários em português do Brasil; acessibilidade (WAI-ARIA no `Select` e no `Menu`, foco preso no `Modal`, `aria-pressed`, `aria-expanded`, `role="timer"`). |
 | RNF09 | Funciona sem `.env`: a interface carrega com uma configuração de reserva e só as operações de rede falham. |
 | RNF10 | JSON exportado por versões antigas continua importando. |
-| RNF11 | Responsivo: o participante usa celular; o editor ocupa a altura da janela em telas `lg` e empilha abaixo disso. |
+| RNF11 | Responsivo: nada rola na horizontal em 360 px; cabeçalhos em uma linha; alvos de toque de 44 px; `100dvh`; o editor ocupa a altura da janela a partir de 1024 px e empilha em seções abaixo disso. |
 | RNF12 | Respeita `prefers-reduced-motion`. |
 | RNF13 | TypeScript estrito e ESLint (regras de hooks e de fast refresh). |
 | RNF14 | Slide livre idêntico no projetor, na prévia, no celular, na miniatura e no PDF (moldura lógica escalada por inteiro). |
+| RNF15 | Desenvolvimento e teste das regras possíveis com os emuladores do Firebase, sem tocar no projeto real. |
 
 ### 2.3 Fora do escopo
 
@@ -216,7 +246,8 @@ texto vertical e edição colaborativa simultânea do editor.
 | Termo | Significado |
 | --- | --- |
 | **Apresentação** (`Presentation`) | Título + lista de slides + opções globais (+ imagens e fontes usadas). É o que se exporta e importa em JSON. |
-| **Sala** (`Room`) | Uma apresentação publicada no Firestore, com código, dono, slide atual, status, cronômetros, gabaritos revelados e revisão. |
+| **Sala** (`Room`) | Uma apresentação publicada no Firestore, com código, dono, slide atual, status, cronômetros, gabaritos revelados e publicados e revisão. Os quizzes vão sem gabarito. |
+| **Sala encerrada** | Sala com `status: 'ended'` (o apresentador passou do último slide ou clicou em "Encerrar"). Não muda mais e não aceita respostas. |
 | **Código da sala** | 6 caracteres do alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (sem `O/0` e `I/1`). É também o id do documento. |
 | **Token do apresentador** | Segredo de 24 caracteres (`A-Z`, `a-z`, `0-9`) na URL de apresentação. Quem o tem controla a sala. |
 | **Slide** | Uma tela da apresentação. Sete tipos. |
@@ -226,10 +257,14 @@ texto vertical e edição colaborativa simultânea do editor.
 | **Fonte embutida** (`PresentationFont`) | Fonte que veio dentro de um PowerPoint, guardada em WOFF com a apresentação. |
 | **Resposta** (`ResponseDoc`) | O que um participante enviou num slide. Um documento por participante **por slide**. |
 | **Participante** (`ParticipantDoc`) | Registro de presença: existe assim que a pessoa abre a sala. |
-| **Gabarito** | Slide `answer`, gerado automaticamente, que revela a alternativa correta de um `quiz`. |
+| **Gabarito** | Slide `answer`, gerado automaticamente, que revela a alternativa correta de um `quiz`. As corretas ficam em `rooms/{code}/secret/answers`, que só o dono lê. |
+| **Gabarito publicado** | Corretas de uma pergunta copiadas para `room.revealedAnswers` no fim do suspense; só a partir daí os celulares as conhecem. |
+| **Rascunho** | A apresentação em montagem na tela de criação, guardada no navegador. |
+| **Modo leitura** | Leitura dos slides sem interação (`/view`, `/view/<código>`). |
+| **Slides estáticos** | Todos os slides convertidos em slides livres sem interação (`toStaticSlides`), para o download e o modo leitura. |
 | **Sobrescrita** (`overrides`) | Ajuste de uma opção global que vale só para um slide. |
 | **Revisão** (`revision`) | Contador de edições feitas numa sala já iniciada. |
-| **Slide final** | Índice reservado `currentSlideIndex === slides.length`: tela automática de agradecimento. |
+| **Slide final** | Índice reservado `currentSlideIndex === slides.length`: tela automática de agradecimento. Chegar a ele encerra a sala. |
 
 ---
 
@@ -249,7 +284,9 @@ texto vertical e edição colaborativa simultânea do editor.
 | Nuvem de palavras | Layout próprio em SVG | | `components/charts/WordCloudView.tsx` |
 | Ícones | lucide-react | 1.25.0 | todos os componentes |
 | Classes condicionais | clsx | 2.1.1 | todos os componentes |
-| QR Code | react-qr-code | 2.2.0 | `components/present/ShareRoom.tsx` |
+| QR Code | react-qr-code | 2.2.0 | `components/present/RoomCodeDialog.tsx`, `ShareRoom.tsx` |
+| Arraste da lista de slides | framer-motion (`Reorder`, `useDragControls`) | 14.0.0 | `components/editor/SlideList.tsx` |
+| Link curto | Serviço público da.gd, chamado do navegador | | `lib/shortUrl.ts` |
 | PDF | jsPDF (import dinâmico) | 4.2.1 | `utils/exportPdf.ts` |
 | ZIP e zlib | fflate | 0.8.3 | `utils/pptx/`, `utils/pptxExport/`, `utils/fonts/woff.ts` |
 | Formas do PowerPoint | modern-openxml (só `presetShapeDefinitions`) | 1.13.4 | `utils/pptx/geometry.ts` |
@@ -279,6 +316,7 @@ texto vertical e edição colaborativa simultânea do editor.
     "d3-cloud": "^1.2.7",
     "fflate": "^0.8.3",
     "firebase": "^11.3.0",
+    "framer-motion": "^14.0.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.25.0",
     "modern-openxml": "^1.13.4",
@@ -320,22 +358,25 @@ texto vertical e edição colaborativa simultânea do editor.
 | React 18 | `createRoot`, `StrictMode`, `createPortal`, `forwardRef`, `useState`, `useEffect`, `useLayoutEffect`, `useMemo`, `useRef`, `useCallback`, `useId`, `createContext`, `useContext` | Portais para modais, lista do `Select` e editor ampliado. `StrictMode` executa efeitos duas vezes em desenvolvimento: os efeitos são idempotentes. |
 | React Router 7 | `HashRouter`, `Routes`, `Route`, `Navigate`, `useParams`, `useNavigate` | `HashRouter` evita 404 em deep-links no GitHub Pages. |
 | Zustand 5 | `create` (tema), `createStore` + `useStore` + Context (editor) | O editor é uma fábrica: cada tela pode ter o seu. |
-| Firebase 11 (modular) | `initializeApp`; `getAuth`, `onAuthStateChanged`, `signInAnonymously`; `getFirestore`, `doc`, `collection`, `getDoc`, `getDocs`, `setDoc` (com `merge`), `updateDoc`, `deleteDoc`, `onSnapshot`, `query`, `where`, `writeBatch`, `arrayUnion`, `increment` | Nenhum índice composto é necessário (só `where('slideId','==',...)`). |
+| Firebase 11 (modular) | `initializeApp`; `getAuth`, `onAuthStateChanged`, `signInAnonymously`, `connectAuthEmulator`; `getFirestore`, `connectFirestoreEmulator`, `doc`, `collection`, `getDoc`, `getDocs`, `setDoc` (com `merge`), `updateDoc` (inclusive na forma com `FieldPath`), `deleteDoc`, `onSnapshot`, `query`, `where`, `writeBatch`, `arrayUnion`, `increment`, `FieldPath` | Nenhum índice composto é necessário (só `where('slideId','==',...)`). Os emuladores só são conectados com `VITE_FIREBASE_EMULATORS=true`. |
 | Zod 3 | `object`, `discriminatedUnion`, `partial`, `omit`, `default`, `regex`, `refine`, `superRefine`, `record`, `tuple`, `safeParse` | Erros exibidos como `caminho: mensagem`. |
 | Recharts 2 | `ResponsiveContainer`, `BarChart`, `Bar`, `Cell`, `LabelList`, `XAxis`, `YAxis`, `Tooltip`, `PieChart`, `Pie`, `Legend` | Animações desligadas (`isAnimationActive={false}`); rótulos com componentes próprios. |
 | jsPDF 4 | `new jsPDF({ unit: 'pt', format: 'a4' })`, `setFillColor`, `rect`, `text`, `splitTextToSize`, `setFont`, `setFontSize`, `setTextColor`, `setDrawColor`, `getTextWidth`, `addPage`, `addImage`, `save` | Importada com `await import('jspdf')`. |
 | fflate | `unzipSync` (abrir .pptx), `zipSync` + `strToU8` (gerar .pptx), `zlibSync` e `unzlibSync` (tabelas WOFF) | Síncrono e leve. |
 | modern-openxml | `import presetShapeDefinitions from 'modern-openxml/presetShapeDefinitions'` | Definições oficiais (`presetShapeDefinitions.xml`) das formas pré-definidas do DrawingML, avaliadas para cada tamanho e ajuste. |
-| react-qr-code | `<QRCode value size bgColor fgColor />` | Sempre preto `#111827` sobre branco `#ffffff`, independente do tema. |
+| react-qr-code | `<QRCode value size bgColor fgColor />` | Sempre `#111111` sobre branco `#ffffff` (`QR_FG` e `QR_BG`, exportados por `RoomCodeDialog`), independente do tema. |
+| framer-motion 14 | `Reorder.Group`, `Reorder.Item` (com `dragListener={false}` e `dragControls`), `useDragControls` | Só na lista de slides do editor; a ordem é gravada no editor ao soltar. Entra no bundle principal. |
 | lucide-react | Ícones como componentes | Cada tipo de slide tem um ícone (seção 9.5). |
 
 APIs do navegador usadas diretamente: `crypto.randomUUID`,
 `crypto.getRandomValues`, `crypto.subtle.digest('SHA-1')`, `FontFace` e
 `document.fonts`, Canvas 2D e `Path2D`, `ResizeObserver`,
 `requestAnimationFrame`, Fullscreen API, Clipboard API, `localStorage`,
-`FileReader`, `Blob` e `URL.createObjectURL`, `DOMParser` (XML do PowerPoint),
-`contentEditable` com `Selection` e `Range`, `fetch` com `AbortController`,
-`TextEncoder`, `atob` e `btoa`, `structuredClone`, `matchMedia`.
+IndexedDB (rascunho do editor), `FileReader`, `Blob` e `URL.createObjectURL`,
+`DOMParser` (XML do PowerPoint), `contentEditable` com `Selection` e `Range`,
+`fetch` com `AbortController`, `TextEncoder`, `atob` e `btoa`,
+`structuredClone`, `matchMedia` (com `useSyncExternalStore`), eventos de
+ponteiro e `pagehide`.
 
 ### 4.3 Por que Firebase e não um banco próprio
 
@@ -349,24 +390,23 @@ documentos do Firestore.
 
 ### 4.4 Camadas
 
-```
-pages/          Telas e orquestração (uma por rota)
-   |
-components/     Apresentação: editor, slides, participação, gráficos, ui
-   |
-hooks/          Ponte React e Firestore (assinaturas em tempo real)
-   |
-lib/            Acesso ao Firebase e ao localStorage
-   |
-Firebase        Firestore + Auth anônima
-```
+Cada camada usa só a de baixo:
+
+| Camada | Papel |
+| --- | --- |
+| `pages/` | Telas e orquestração (uma por rota) |
+| `components/` | Apresentação: editor, slides, participação, gráficos, ui |
+| `hooks/` | Ponte entre o React e o Firestore (assinaturas em tempo real) e utilidades de tela (largura, modais controlados, download) |
+| `lib/` | Acesso ao Firebase, ao `localStorage` e ao IndexedDB |
+| Firebase | Firestore + Auth anônima |
 
 - **`types/`** define o domínio e é importado por todas as camadas.
 - **`utils/`** é lógica pura, sem React e sem Firebase: agregação, validação,
   resolução de configurações, cronômetro, import/export, PDF, PowerPoint,
   fontes, texto rico, imagens.
 - **`store/`** guarda o estado que existe **antes** de haver sala (a
-  apresentação sendo montada) e a preferência de tema.
+  apresentação sendo montada, com o rascunho persistido por `editorDraft.ts`)
+  e a preferência de tema.
 
 Regra prática: **componentes não falam com o Firestore diretamente**. Recebem
 dados por props (das páginas, que usam os hooks) ou disparam funções de `lib/`
@@ -390,7 +430,9 @@ sem fallback para `index.html`.
 | `/edit/:code/:token` | `EditRoomPage` | Quem tem o token secreto |
 | `/join` | `JoinPage` | Público |
 | `/room/:code` | `RoomPage` | Quem tem o código |
-| `*` | Redireciona para `/` | |
+| `/view` | `ViewPage` | Público (lê um `.json` local, sem Firebase) |
+| `/view/:code` | `ViewPage` | Quem tem o código, só com a sala encerrada |
+| `*` | Redireciona para `/` | Público |
 
 `main.tsx`:
 
@@ -423,7 +465,9 @@ mecanismo leva todos de volta ao início quando uma edição é salva (a gravaç
 zera `currentSlideIndex`).
 
 O índice `currentSlideIndex === slides.length` é reservado ao slide final
-automático de agradecimento.
+automático de agradecimento. Chegar a ele **encerra a sala**: a mesma escrita
+grava o índice e `status: 'ended'`, e daí em diante as regras recusam
+qualquer mudança na sala e qualquer resposta (seção 8.15).
 
 As telas `/present` e `/edit` usam a mesma verificação de acesso
 (`usePresenterAccess`): dono atual (uid igual a `creatorUid`) ou token secreto
@@ -470,9 +514,13 @@ Carregamento sob demanda (`import()` dinâmico), fora do bundle inicial:
 
 | Módulo | Quando é baixado |
 | --- | --- |
-| `jspdf` | Ao gerar um PDF (`exportResultsPdf`) |
+| `jspdf` | Ao gerar um PDF (`exportResultsPdf` ou `exportSlidesPdf`) |
+| `utils/exportSlidesPdf` | Ao baixar os slides em PDF (`useSlideDownload`) |
 | `utils/pptx` (com `modern-openxml`, descompressor de fontes) | Ao importar um `.pptx` |
-| `utils/pptxExport` (com conversores de fonte) | Ao exportar um `.pptx` |
+| `utils/pptxExport` (com conversores de fonte) | Ao exportar um `.pptx` ou baixar os slides em PowerPoint |
+
+A framer-motion não entra em chunk próprio: fica no bundle principal, junto
+do editor.
 
 Por isso as conversões de fonte (`utils/fonts/convert.ts`) ficam separadas do
 registro (`utils/fonts/faces.ts`), que o editor e as salas usam sempre.
@@ -505,8 +553,8 @@ Raiz:
 | `index.html` | Casca da SPA |
 | `vite.config.ts` | `base`, pasta de saída (Pages e Firebase), plugins, chunks manuais |
 | `firestore.rules` | Regras de segurança (publicadas pela pipeline quando mudam) |
-| `firebase.json` | Onde estão as regras e o que publicar no Hosting (`dist-firebase/`, com cabeçalhos de cache) |
-| `.env.example` | Modelo das variáveis `VITE_FIREBASE_*` |
+| `firebase.json` | Onde estão as regras, o que publicar no Hosting (`dist-firebase/`, com cabeçalhos de cache) e as portas dos emuladores locais |
+| `.env.example` | Modelo das variáveis `VITE_FIREBASE_*` (e, comentada, `VITE_FIREBASE_EMULATORS`) |
 | `eslint.config.js`, `tsconfig*.json` | Lint e type-check |
 | `.github/workflows/deploy.yml` | Build, regras do Firestore e deploy no Pages e no Firebase Hosting |
 | `docs/` | Documentação |
@@ -524,16 +572,17 @@ src/
     presentation.ts   Todo o domínio: slides, configurações, sala, resposta, presença
 
   pages/
-    HomePage.tsx      Entrada; salas apresentadas neste dispositivo (retomar, reexportar PDF)
-    CreatePage.tsx    Editor em 3 colunas e criação da sala
-    PresentPage.tsx   Tela do apresentador: slide, navegação, QR, PDF, cronômetro, gabarito
-    EditRoomPage.tsx  Edição de uma sala iniciada; salvar recomeça do 1º slide
+    HomePage.tsx      Entrada; salas apresentadas neste dispositivo (situação, retomar, reexportar PDF); abrir um .json para leitura
+    CreatePage.tsx    Editor com rascunho no navegador e criação da sala
+    PresentPage.tsx   Tela do apresentador: slide, navegação, código da sala, PDF, cronômetro, gabarito, encerrar, apresentar de novo
+    EditRoomPage.tsx  Edição de uma sala no ar; salvar recomeça do 1º slide
     JoinPage.tsx      Formulário do código da sala
-    RoomPage.tsx      Tela do participante: nome, presença, controles, aviso de reinício
+    RoomPage.tsx      Tela do participante: nome, presença, controles, aviso de reinício, tela final
+    ViewPage.tsx      Modo leitura: um .json (/view) ou uma sala encerrada (/view/:code)
 
   components/
     layout/   PageShell, FullScreenMessage, ThemeToggle
-    editor/   EditorWorkspace, ImportExportButtons, ExportDialog, AddSlideMenu, SlideList,
+    editor/   EditorWorkspace, EditorToolbar, ImportDialog, ExportDialog, AddSlideMenu, SlideList,
               SlideEditor, WordCloudConfig, ChoiceConfig, QuizConfig, AnswerConfig, TextConfig,
               FreeSlideConfig, SlideSettingsSection, PresentationSettingsButton,
               SettingsControls, AiPromptButton, slideTypeIcons.ts
@@ -541,31 +590,35 @@ src/
               AnswerSuspense
     free/     layout.ts, FreeElementContent, FreeSlideView, FreeTextEditable, FreeSlideCanvas
     participate/ ParticipateView, ChoiceInput, WordCloudInput, AnswerReveal, NamePrompt
-    present/  ShareRoom, SummarySlide, PresenterAccessDenied
+    present/  RoomCodeDialog, ShareRoom, SummarySlide, DownloadSlides, PresenterAccessDenied
     charts/   BarChartView, PieChartView, WordCloudView, palette.ts
     ui/       Button, Card, Input (Input, Textarea, Field), fieldStyles.ts, Checkbox (Checkbox,
-              Radio, ChoiceMark), Slider, Select, ScrollArea, Modal, ConfirmDialog, Banner,
-              ColorInput, SegmentedControl, ToggleButton
+              Radio, ChoiceMark), Slider, Select, ScrollArea, Modal, Menu, StackSection,
+              ConfirmDialog, Banner, ColorInput, SegmentedControl, ToggleButton
 
   hooks/
     useRoom, useResponses, useMyResponse, useParticipants, useParticipant,
     usePresenterAccess, useSlideTimer, useRevealCountdown, useApplyTheme,
-    useFullscreen, useRoomAssets, useRoomFonts, useFreeSlideActions
+    useFullscreen, useRoomAnswers, useRoomAssets, useRoomFonts, useFreeSlideActions,
+    useMediaQuery, useDialogControl, useSlideDownload
 
   lib/
     firebase.ts           Inicialização (com config de reserva sem .env)
-    rooms.ts              Criar, assinar, atualizar e reiniciar sala; reivindicar controle
+    rooms.ts              Criar, assinar, atualizar, encerrar e reiniciar sala; reivindicar controle
+    answers.ts            Gabaritos protegidos (secret/answers) e a visão da plateia
     responses.ts          Salvar, limpar e assinar respostas
     participants.ts       Presença
     roomCode.ts           Código da sala e token do apresentador
     presenterSessions.ts  Salas apresentadas neste dispositivo (localStorage)
     participantName.ts    Nome do participante por sala (localStorage)
-    shortUrl.ts           Encurtador do link de entrada (TinyURL)
+    shortUrl.ts           Encurtador do link de entrada (da.gd, com cache)
+    draftStorage.ts       Rascunho do editor: texto no localStorage, imagens e fontes no IndexedDB
     assets.ts             Imagens da sala (subcoleção assets)
     fonts.ts              Fontes da sala (subcoleção fonts, em partes)
 
   store/
     editorStore.ts   Apresentação em edição (Zustand), um editor por contexto
+    editorDraft.ts   Restaura e grava o rascunho da tela de criação; estado do rascunho
     themeStore.ts    Tema claro/escuro (Zustand + localStorage)
 
   utils/
@@ -577,6 +630,8 @@ src/
     validation.ts    Schemas Zod do JSON
     importExport.ts  Download e leitura do JSON; nome de arquivo
     exportPdf.ts     Relatório em PDF
+    exportSlidesPdf.ts PDF dos slides (uma página por slide)
+    staticSlides.ts  Todos os slides como slides livres estáticos (download e leitura)
     aiPrompt.ts      Texto do prompt de IA
     freeSlide.ts     Criar, duplicar, reordenar, reenquadrar elementos; pilha de fontes
     richText.ts      Modelo do texto rico (estilos por trecho e por parágrafo, marcadores)
@@ -608,6 +663,13 @@ src/
 - **TypeScript estrito**; `any` só onde o Recharts obriga, com
   `eslint-disable-next-line` e justificativa.
 - **Interface em português do Brasil.**
+- **Layout que cabe em 360 px**: cabeçalhos em uma linha em qualquer largura,
+  nada de rolagem horizontal, alvos de toque de pelo menos 44 px
+  (`min-h-11`), `100dvh` no lugar de `100vh`, rótulos que somem antes de
+  quebrar a linha e ações raras dentro de menus (`Menu`).
+- **Um modal, uma montagem**: quando o mesmo modal abre por um botão e por um
+  item de menu, ele é montado uma vez e controlado de fora
+  (`useDialogControl`, seção 9.7).
 
 ---
 
@@ -630,12 +692,14 @@ interface Presentation {
 interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
   creatorUid: string        // dono atual (quem criou ou reivindicou com o token)
   currentSlideIndex: number // slide no ar; igual a slides.length = slide final
-  status: 'live' | 'ended'
+  status: 'live' | 'ended'  // 'ended' ao chegar ao slide final ou em "Encerrar"
   createdAt: number         // epoch ms
   updatedAt: number
   timers?: Record<string, SlideTimer>  // cronômetro de cada slide, pelo id do slide
   revealedSlideIds?: string[]          // gabaritos cujo suspense já terminou
   revision?: number                    // edições feitas depois de iniciada (ausente = 0)
+  answersHidden?: boolean              // quizzes gravados sem gabarito (ver secret/answers)
+  revealedAnswers?: Record<string, string[]>  // gabaritos já publicados, pelo id do quiz
 }
 
 interface SlideTimer {
@@ -653,6 +717,15 @@ interface SlideTimer {
   parou.
 - `revision` soma 1 a cada edição salva numa sala iniciada; é como o celular
   percebe o reinício e mostra o aviso.
+- `status` nasce `'live'` e vira `'ended'` na mesma escrita que leva o índice
+  ao slide final (ou no "Encerrar"). Sala encerrada não muda mais e não aceita
+  respostas (seção 8.15).
+- `answersHidden` e `revealedAnswers` protegem o gabarito: com
+  `answersHidden: true`, cada `quiz` vai para a sala com `correctOptionIds: []`
+  e as corretas ficam em `rooms/{code}/secret/answers`; no fim do suspense, o
+  projetor copia as corretas da pergunta para `revealedAnswers[idDoQuiz]`.
+  Salas criadas antes da proteção não têm `answersHidden` e usam o gabarito do
+  próprio slide (seção 8.16).
 
 ### 5.2 Slides
 
@@ -781,7 +854,7 @@ interface ResponseDoc {
   slideId: string
   participantUid: string
   type: 'word' | 'choice'
-  value: string[]            // textos enviados, ou ids das opções escolhidas
+  value: string[]            // textos enviados, ou ids das opções escolhidas (1 a 100 itens)
   participantName?: string   // só quando a sala pede o nome
   createdAt: number
 }
@@ -789,16 +862,20 @@ interface ResponseDoc {
 interface ParticipantDoc {
   uid: string
   name?: string
-  joinedAt: number
-  lastSeenAt: number
+  joinedAt: number    // só na primeira entrada
+  lastSeenAt: number  // a cada entrada
 }
 ```
+
+Uma resposta sem itens não existe: desmarcar todas as opções de uma múltipla
+escolha apaga o documento (seção 8.8).
 
 ### 5.6 Coleções do Firestore
 
 ```
 rooms/{code}                          documento da sala (Room)
   private/presenter                   { token, ownerUid, createdAt }  (ilegível para clientes)
+  secret/answers                      { [idDoQuiz]: idsDasCorretas }  (só o dono lê)
   participants/{uid}                  ParticipantDoc (presença)
   responses/{slideId}__{uid}          ResponseDoc
   assets/{assetId}                    { dataUrl, width, height, createdAt }
@@ -807,10 +884,11 @@ rooms/{code}                          documento da sala (Room)
 
 | Caminho | Detalhes |
 | --- | --- |
-| `rooms/{code}` | O id do documento é o próprio código. Criar sorteia códigos até achar um livre (até 6 tentativas) e grava a sala e o documento privado numa escrita em lote atômica. |
+| `rooms/{code}` | O id do documento é o próprio código. Criar sorteia códigos até achar um livre (até 6 tentativas) e grava a sala, o documento privado e os gabaritos numa escrita em lote atômica. |
 | `rooms/{code}/private/presenter` | Guarda o token. Ninguém lê. Quem tem o token prova a posse reenviando-o num `update`, o que autoriza definir `ownerUid` como o próprio uid. |
-| `rooms/{code}/participants/{uid}` | Id é o uid: reentradas atualizam o mesmo documento. Gravado com `setDoc(..., { merge: true })`. Sem heartbeat: escreve ao abrir a sala e quando o nome muda. |
-| `rooms/{code}/responses/{slideId}__{uid}` | Id determinístico: no máximo uma resposta por pessoa por slide; reenviar sobrescreve; limpar é um `deleteDoc` direto; o participante assina só o próprio documento, o apresentador assina a coleção filtrada por `slideId`. |
+| `rooms/{code}/secret/answers` | Gabaritos das perguntas, pelo id do `quiz`. Só o dono atual lê; gravado no lote que cria a sala e no lote que salva uma edição; nunca apagado pelos clientes. |
+| `rooms/{code}/participants/{uid}` | Id é o uid: reentradas atualizam o mesmo documento. `joinRoom` lê antes: `joinedAt` só na criação, `lastSeenAt` a cada entrada; gravado com `setDoc(..., { merge: true })`. Só as chaves `uid`, `name`, `joinedAt`, `lastSeenAt`. Sem heartbeat: escreve ao abrir a sala e quando o nome muda. |
+| `rooms/{code}/responses/{slideId}__{uid}` | Id determinístico (conferido pelas regras): no máximo uma resposta por pessoa por slide; reenviar sobrescreve; limpar é um `deleteDoc` direto; o participante assina só o próprio documento, o apresentador assina a coleção filtrada por `slideId`. Só aceito com a sala no ar. |
 | `rooms/{code}/assets/{assetId}` | Uma imagem por documento. Fora da sala pelo limite de 1 MiB e porque a sala é relida por todos a cada troca de slide. Lida uma vez por aparelho e guardada em memória. Só o dono grava e apaga. |
 | `rooms/{code}/fonts/{fontId}` | Fontes divididas em partes de 700.000 caracteres: `{fontId}`, `{fontId}~1`, `{fontId}~2`... Cada documento repete família, estilo e total de partes; a leitura junta tudo numa consulta só. Só o dono grava e apaga. |
 
@@ -823,7 +901,7 @@ Exemplo de documento `rooms/K7MP2Q` logo depois de criado:
   "settings": {
     "allowChangeAnswer": true, "askName": false, "identifyResponses": false,
     "titleFontSize": 36, "labelFontSize": 16, "bodyFontSize": 24,
-    "quizTimerSeconds": 20, "slideAspect": "16:9"
+    "quizTimerSeconds": 20, "slideAspect": "16:9", "allowDownload": false
   },
   "creatorUid": "Xb3...anon",
   "currentSlideIndex": 0,
@@ -831,9 +909,14 @@ Exemplo de documento `rooms/K7MP2Q` logo depois de criado:
   "createdAt": 1767225600000,
   "updatedAt": 1767225600000,
   "timers": {},
-  "revealedSlideIds": []
+  "revealedSlideIds": [],
+  "answersHidden": true,
+  "revealedAnswers": {}
 }
 ```
+
+O `quiz` acima vai com `"correctOptionIds": []`; as corretas ficam em
+`rooms/K7MP2Q/secret/answers`, por exemplo `{ "8f1c...": ["8f1c...o2"] }`.
 
 ### 5.7 Formato JSON (importar e exportar)
 
@@ -852,7 +935,8 @@ uso**, então o arquivo é autossuficiente.
     "labelFontSize": 16,
     "bodyFontSize": 24,
     "quizTimerSeconds": 20,
-    "slideAspect": "16:9"
+    "slideAspect": "16:9",
+    "allowDownload": false
   },
   "slides": [
     { "id": "s1", "type": "text", "title": "Abertura",
@@ -873,8 +957,8 @@ Validação (Zod, união discriminada por `type`; schema integral no
 
 | Campo | Regra |
 | --- | --- |
-| `settings` | Opcional e parcial. Tamanhos de fonte inteiros de 10 a 200; `quizTimerSeconds` inteiro de 0 a 300; `slideAspect` `16:9` ou `4:3`. |
-| `overrides` | Opcional; mesmas chaves de `settings` menos `askName` e `slideAspect`. |
+| `settings` | Opcional e parcial. Tamanhos de fonte inteiros de 10 a 200; `quizTimerSeconds` inteiro de 0 a 300; `slideAspect` `16:9` ou `4:3`; `allowDownload` booleano. |
+| `overrides` | Opcional; mesmas chaves de `settings` menos `askName`, `slideAspect` e `allowDownload`. |
 | `wordcloud` | `wordLimitMode` em `one`, `range`, `unlimited`; `maxWords` inteiro de 1 a 50 (sempre obrigatório). |
 | `bar`, `pie` | `options` com no mínimo 1 item (`id` não vazio, `label` texto); `allowMultiple` booleano. |
 | `quiz` | Como `bar`, mais `correctOptionIds` (padrão `[]`), `revealAnswer` (padrão `false`), `showResponses` (padrão `false`). |
@@ -889,15 +973,21 @@ Validação (Zod, união discriminada por `type`; schema integral no
 
 Compatibilidade garantida: `settings` opcional e parcial; `overrides`
 opcional; `correctOptionIds`, `revealAnswer` e `showResponses` com `.default()`;
-`assets`, `fonts` e `settings.slideAspect` opcionais (sem formato, vale 16:9).
-Um JSON antigo (só `title` + `slides` com os quatro tipos originais) importa
-sem erro.
+`assets`, `fonts`, `settings.slideAspect` e `settings.allowDownload` opcionais
+(sem formato, vale 16:9; sem `allowDownload`, desligado). Um JSON antigo (só
+`title` + `slides` com os quatro tipos originais) importa sem erro.
+
+`validation.ts` exporta também `presentationShapeSchema`, a forma da
+apresentação **sem** a conferência de integridade das imagens;
+`presentationSchema` é `presentationShapeSchema.superRefine(...)`. O rascunho
+do editor usa a forma sem a conferência, porque o texto volta antes das
+imagens (que ficam à parte, no IndexedDB).
 
 ### 5.8 Constantes e limites
 
 | Constante | Valor | Onde |
 | --- | --- | --- |
-| `DEFAULT_SETTINGS` | `allowChangeAnswer: true`, `askName: false`, `identifyResponses: false`, `titleFontSize: 36`, `labelFontSize: 16`, `bodyFontSize: 24`, `quizTimerSeconds: 20`, `slideAspect: '16:9'` | `utils/settings.ts` |
+| `DEFAULT_SETTINGS` | `allowChangeAnswer: true`, `askName: false`, `identifyResponses: false`, `titleFontSize: 36`, `labelFontSize: 16`, `bodyFontSize: 24`, `quizTimerSeconds: 20`, `slideAspect: '16:9'`, `allowDownload: false` | `utils/settings.ts` |
 | `SLIDE_FRAMES` | 16:9 = 1920 x 1080; 4:3 = 1440 x 1080 | `utils/settings.ts` |
 | `FONT_SIZE_RANGE` | 10 a 200 px | `utils/settings.ts` |
 | `QUIZ_TIMER_RANGE` | 0 a 300 s | `utils/settings.ts` |
@@ -912,14 +1002,23 @@ sem erro.
 | Parte de fonte (`CHUNK_CHARS`) | 700.000 caracteres | `lib/fonts.ts` |
 | Lote de exclusão | 400 documentos | `lib/assets.ts`, `lib/fonts.ts` |
 | Sessões de apresentador lembradas | 8 | `lib/presenterSessions.ts` |
-| Nome do participante | até 40 caracteres | `lib/participantName.ts` |
+| Nome do participante | até 40 caracteres (também nas regras) | `lib/participantName.ts`, `firestore.rules` |
 | Texto da nuvem | até 80 caracteres por envio | `WordCloudInput.tsx` |
+| `MAX_RESPONSE_ITEMS` | 100 itens por resposta (também nas regras; teto do modo "sem limite" da nuvem) | `lib/responses.ts`, `firestore.rules` |
+| `slideId` de uma resposta | até 200 caracteres | `firestore.rules` |
 | `maxWords` | 1 a 50 (padrão 3) | validação e `WordCloudConfig` |
 | Tamanho do slide de texto | padrão 40; controle de 16 a 120 (passo 2); validação de 8 a 200 | `slideFactory.ts`, `TextConfig.tsx` |
 | Aviso de reinício no celular | 10.000 ms | `RoomPage.tsx` |
 | Tique lógico do cronômetro | 250 ms | `useSlideTimer.ts` |
 | Cronômetro em vermelho | últimos 5.000 ms | `SlideCountdown.tsx` |
-| Tempo limite do encurtador | 8.000 ms | `lib/shortUrl.ts` |
+| Tempo limite do encurtador | 8.000 ms por provedor | `lib/shortUrl.ts` |
+| Espera do rascunho | 600 ms depois da última mudança | `store/editorDraft.ts` |
+| Layout do editor | colunas a partir de 1024 px; ações da barra como botões a partir de 1280 px | `EditorWorkspace.tsx`, `EditorToolbar.tsx` |
+| Limite de arraste na lista | 4 px antes de virar arraste | `SlideList.tsx` |
+| `Menu` | 288 px de largura | `components/ui/Menu.tsx` |
+| QR no modal do código | 168 px; ampliado: `min(92vw, 92vh)` | `RoomCodeDialog.tsx` |
+| PDF dos slides | uma página por slide, 960 pt de largura, JPEG 0,9 | `utils/exportSlidesPdf.ts` |
+| Deslize no modo leitura | 50 px na horizontal | `pages/ViewPage.tsx` |
 | Limites no celular | título até 30 px; corpo até 28 px; botões de voto até 22 px; gabarito até 20 px; suspense até 24 px | `ParticipateView` e filhos |
 | Quadro de alternativas | duas colunas com mais de 4 opções | `OptionsBoard.tsx` |
 | Rótulo de barra | quebra a cada 15 caracteres, até 4 linhas, com reticências | `BarChartView.tsx` |
@@ -927,7 +1026,8 @@ sem erro.
 | Unidade do PowerPoint | 6350 EMU por px (1920 px = 12.192.000 EMU) | `utils/pptxExport/xml.ts` |
 | Mínimos na exportação PPTX | título 60 px, corpo 40 px, dica 28 px (metade em pontos) | `utils/pptxExport/standard.ts` |
 | PDF | A4, unidade pt, margem 48 pt | `utils/exportPdf.ts` |
-| Chaves do `localStorage` | `ip-theme`, `ip-presenter-sessions`, `ip-participant-names`, `ip-short-urls` | `store/themeStore.ts`, `lib/` |
+| Chaves do `localStorage` | `ip-theme`, `ip-presenter-sessions`, `ip-participant-names`, `ip-short-urls`, `ip-editor-draft` | `store/themeStore.ts`, `lib/` |
+| IndexedDB | banco `ip-editor`, store `draft`, chave `files` (imagens e fontes do rascunho) | `lib/draftStorage.ts` |
 
 ### 5.9 Números derivados (`utils/aggregate.ts`)
 
@@ -968,9 +1068,10 @@ interface PresentationSettings {
   bodyFontSize: number         // padrão: 24 px
   quizTimerSeconds: number     // padrão: 20 s (0 = sem cronômetro)
   slideAspect: '16:9' | '4:3'  // padrão: '16:9'
+  allowDownload: boolean       // padrão: false
 }
 
-type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect'>>
+type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect' | 'allowDownload'>>
 ```
 
 | Opção (rótulo na interface) | Efeito |
@@ -983,6 +1084,7 @@ type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspec
 | **Tamanho do corpo** | Alternativas do `quiz` e do gabarito e controles do participante. Nos slides de texto vale o `fontSize` do próprio slide. |
 | **Tempo do cronômetro (questionário)** | Segundos que um `quiz` fica aberto. Ao zerar, as respostas são encerradas e a apresentação passa para o gabarito. `0` desliga. |
 | **Formato dos slides** | 16:9 (1920 x 1080) ou 4:3 (1440 x 1080): proporção da prévia e moldura dos slides livres. Só global. |
+| **Permitir que os participantes baixem os slides no fim** | Quando a apresentação termina, a tela final do celular mostra "Baixar slides" ("PDF dos slides" e "PowerPoint (.pptx)"), e o modo leitura da sala encerrada oferece o menu "Baixar". Os arquivos levam só os slides, sem a resposta de ninguém. Só global. |
 
 Faixas: tamanhos de 10 a 200 px; cronômetro de 0 a 300 s. Os controles já
 limitam (`clampFontSize`, `clampTimerSeconds`) para nunca gerar um JSON que a
@@ -990,10 +1092,12 @@ própria importação recusaria.
 
 ### 6.2 Onde se configura
 
-- **Globais**: botão **Opções** na barra do editor
-  (`PresentationSettingsButton`, um `Modal` "Opções da apresentação"), na
-  ordem: Formato dos slides (`SegmentedControl` "16:9 (widescreen)" e
-  "4:3 (padrão antigo)"), Permitir limpar e trocar, Solicitar o nome,
+- **Globais**: **Opções** na barra do editor (botão a partir de 1280 px, item
+  do menu "Mais" abaixo disso), que abre `PresentationSettingsButton`, um
+  `Modal` "Opções da apresentação", na ordem: Formato dos slides
+  (`SegmentedControl` "16:9 (widescreen)" e "4:3 (padrão antigo)"), Permitir
+  limpar e trocar, Permitir que os participantes baixem os slides no fim,
+  Solicitar o nome,
   Identificar as respostas (desativado sem o nome; desligar o nome também
   desliga a identificação), Tempo do cronômetro (campo numérico) e os três
   tamanhos de fonte (`Slider`). O formato também aparece acima da prévia.
@@ -1015,6 +1119,7 @@ própria importação recusaria.
 Por que `askName` não tem versão por slide: o nome é pedido **uma vez, antes
 de entrar na sala**, antes de existir "slide atual". O formato também é só
 global: é a moldura de todos os slides livres, que precisam combinar entre si.
+E o download vale para a apresentação inteira, que é o que se baixa.
 
 ### 6.3 Resolução do valor efetivo
 
@@ -1045,8 +1150,10 @@ inteiro é apagado (o Firestore recusa `undefined`).
 
 ### 6.4 Persistência das opções
 
-- **No editor**: na memória (`editorStore`). Some ao recarregar: exporte o
-  JSON para não perder.
+- **No editor**: no `editorStore`. Na tela de criação, o rascunho (opções
+  incluídas) é gravado no navegador e volta depois de recarregar (seção 9.2);
+  para outro aparelho, exporte o JSON. A edição de uma sala parte sempre do
+  que está no ar.
 - **Na sala**: `room.settings` gravado completo na criação (`withDefaults`).
   Numa sala iniciada, muda-se pelo botão **Editar**, e
   `saveAndRestartRoom` grava tudo e recomeça do primeiro slide.
@@ -1084,6 +1191,13 @@ Valores padrão de criação (`utils/slideFactory.ts`, ids por `crypto.randomUUI
 | `pie` | título "Gráfico de pizza", igual às barras |
 | `quiz` | título "Pergunta", `allowMultiple: false`, `correctOptionIds: []`, `revealAnswer: false`, `showResponses: false`, "Alternativa 1" e "Alternativa 2" |
 | `answer` | `createAnswerSlide(quizId, 'Resposta correta')` (nunca pelo menu) |
+
+O menu "Adicionar slide" (`AddSlideMenu`) mostra, abaixo do nome de cada tipo
+criável, uma linha do que ele faz: "Respostas curtas viram uma nuvem ao vivo"
+(`wordcloud`), "Votação com o resultado em barras" (`bar`), "Votação com o
+resultado em pizza" (`pie`), "Pergunta com alternativas e gabarito" (`quiz`),
+"Um texto grande, sem respostas" (`text`) e "Caixas de texto e imagens
+livres" (`free`).
 | `text` | título "Slide de texto", `content: 'Escreva seu texto aqui'`, `align: 'center'`, `fontSize: 40` |
 | `free` | `createFreeSlide(SLIDE_FRAMES[aspect])`: título "Slide livre", fundo `#ffffff`, uma caixa de texto "Clique duas vezes para editar" em negrito, em x = 8%, y = 10%, largura 84%, altura 16% da moldura, fonte Arial com 7,5% da altura |
 
@@ -1133,7 +1247,9 @@ os controles.
   (`type: 'word'`, `value: [...anteriores, novo]`). O foco volta ao campo.
 - Com "Permitir limpar e trocar": cada item tem um botão de remover e existe
   "Limpar tudo" (`deleteDoc`). Sem a opção, os itens ficam fixos.
-- Ao atingir o limite, o campo é desativado com o texto "Limite atingido".
+- Ao atingir o limite, o campo é desativado com o texto "Limite atingido". No
+  modo "Quantas quiser", o limite é `MAX_RESPONSE_ITEMS` (100), o mesmo que
+  as regras do Firestore aplicam a qualquer resposta.
 - Instrução exibida: "Você pode enviar 1 resposta (palavra ou frase).",
   "Você pode enviar até N resposta(s), palavra ou frase." ou "Você pode enviar
   quantas respostas quiser (palavra ou frase).".
@@ -1194,7 +1310,9 @@ permitida, sala sem pedido de nome.
 - **O toque é o envio**: não há botão "enviar" nem estado otimista; o botão
   marcado vem sempre do Firestore (`useMyResponse`).
 - Escolha única: tocar noutra opção substitui (`value: [novoId]`). Múltipla:
-  tocar alterna a opção na lista.
+  tocar alterna a opção na lista; desmarcar a última **apaga** a resposta
+  (`saveResponse` com lista vazia chama `clearResponse`), e a pessoa deixa de
+  contar em "responderam".
 - Depois de votar: "Voto registrado" e, com troca permitida, "Limpar
   resposta" (`deleteDoc`); sem troca, um cadeado com "Não é possível trocar"
   (única) ou "Não é possível desmarcar" (múltipla).
@@ -1269,7 +1387,11 @@ mostra "votos · porcentagem%" ao vivo e, se a sala identificar as respostas, a
 lista de nomes aparece; desligado, a lista de nomes é suprimida mesmo com a
 identificação ativa (mostrar "Ana: Lista" revelaria a resposta).
 
-**Celular**: os mesmos botões de voto de `bar` e `pie`.
+**Celular**: os mesmos botões de voto de `bar` e `pie`. O celular **não
+conhece o gabarito** enquanto a pergunta está no ar: a sala guarda o `quiz`
+com `correctOptionIds: []`, e as corretas ficam em `secret/answers`, que só o
+dono lê (seção 8.16). O projetor junta os dois (`withAnswers`) para desenhar o
+gabarito.
 
 **Editor** (`QuizConfig`): "Pergunta" (o título), alternativas com marcador
 de "correta" ao lado (caixa de seleção verde com `allowMultiple`, botão de
@@ -1350,14 +1472,20 @@ a conexão mais rápida veria a resposta antes. A contagem é local
 (`useRevealCountdown`).
 
 **Só na primeira vez.** Quando o suspense termina, o projetor grava o slide em
-`room.revealedSlideIds` (`arrayUnion`, idempotente):
+`room.revealedSlideIds` (`arrayUnion`, idempotente) e, **na mesma escrita**,
+publica as corretas da pergunta em `room.revealedAnswers[idDoQuiz]`
+(`markAnswerRevealed`). Só aí os celulares conhecem o gabarito: o celular
+mostra o veredito quando o suspense local terminou **e** as corretas chegaram
+(`revealPending = reveal.pending || !answerPublished`); se a contagem dele
+acabar antes da escrita do projetor, o suspense continua por mais um
+instante.
 
 | Situação | O que aparece |
 | --- | --- |
 | Primeira vez no gabarito | 3 s de "A resposta certa é…" e então a resposta |
 | Voltar depois de revelado | A resposta na hora |
 | Sair antes dos 3 s e voltar | O suspense recomeça (a revelação não aconteceu) |
-| Participante que chega atrasado | A resposta na hora |
+| Participante que chega atrasado | A resposta na hora (as corretas já estão em `revealedAnswers`) |
 
 **Ciclo de vida no editor** (`syncAnswerSlides`, reaplicado depois de toda
 alteração na lista):
@@ -1366,19 +1494,21 @@ alteração na lista):
 | --- | --- |
 | Ligar "Adicionar um slide de resposta" | Insere o `answer` logo depois do `quiz` |
 | Desligar a opção | Remove o `answer` |
-| Mover o `quiz` | O `answer` acompanha, sempre logo atrás |
+| Mover o `quiz` (arrastando ou pelo menu do slide) | O `answer` acompanha, sempre logo atrás |
 | Apagar o `answer` pela lista | Equivale a desligar a opção no `quiz` |
 | Apagar o `quiz` | O `answer` órfão é removido junto |
 
 O slide reaproveitado preserva id, título e sobrescritas. Na lista, o gabarito
-aparece recuado, com ícone de vínculo (`Link2`) e sem botões de mover. O
+aparece recuado, com ícone de vínculo (`Link2`) no lugar da alça de arraste;
+não arrasta, e o menu dele só tem "Remover o slide de resposta". O
 painel do gabarito (`AnswerConfig`) só permite renomear ("Nome na lista de
 slides") e explica de onde vêm as alternativas.
 
 O gabarito **é** um slide de verdade: ocupa um índice, aparece para os
 participantes e vai no JSON. No PDF não vira página (a página da pergunta já
-traz o gabarito). Na exportação PPTX vira título + alternativas com a correta
-em verde.
+traz o gabarito). Na exportação PPTX e no download dos slides vira título +
+alternativas com a correta em verde; no modo leitura fica de fora (a pergunta
+mostra a correta quando "Mostrar respostas certas" está ligado).
 
 Gabarito cuja pergunta foi removida: "A pergunta deste gabarito não existe
 mais." (o editor remove órfãos sozinho).
@@ -1524,7 +1654,9 @@ embutidas usadas vão junto.
 ### 7.8 Slide final automático
 
 Quando o apresentador avança além do último slide, `currentSlideIndex` vira
-`slides.length`:
+`slides.length` e, **na mesma escrita**, a sala recebe `status: 'ended'`
+(seção 8.15). O botão "Encerrar" faz a mesma coisa a partir de qualquer
+slide:
 
 - **Projetor** (`SummarySlide`): "Obrigado por participar!", "Resumo de
   "<título>"", o botão central **Baixar resultados (PDF)** e uma grade (2
@@ -1533,9 +1665,14 @@ Quando o apresentador avança além do último slide, `currentSlideIndex` vira
   gabarito, texto ou o próprio slide livre reduzido. As respostas de todos os
   slides são lidas uma vez (`getAllResponses`) ao chegar ali, e todas as
   imagens são buscadas. **Nada baixa sozinho**.
-- **Celular**: "Obrigado por participar!" e "A apresentação foi encerrada.".
-- Navegação: o contador do cabeçalho mostra "Fim"; voltar com a seta para a
-  esquerda retorna ao último slide.
+- **Celular**: ícone de comemoração (`PartyPopper`), "Obrigado por
+  participar!" e "A apresentação foi encerrada.", com **Rever os slides**
+  (abre `/view/<código>`) e, se `settings.allowDownload`, o bloco **Baixar
+  slides** ("PDF dos slides" e "PowerPoint (.pptx)").
+- Navegação: o contador do cabeçalho mostra "Fim" e os botões de navegação
+  ficam desativados (a sala encerrada não muda mais). Uma faixa avisa "A
+  apresentação foi encerrada." com **Apresentar de novo**, que abre uma sala
+  nova com o mesmo conteúdo.
 
 ---
 
@@ -1586,9 +1723,9 @@ canal de comunicação.
 | Cloud Firestore (nuvem) | Guarda o estado (sala, respostas, presença) e envia cada mudança para quem tem ouvinte aberto naquele documento ou consulta |
 | SDK do Firestore no navegador (`firebase/firestore`) | Mantém uma conexão persistente de streaming com o Firestore (em redes que bloqueiam streaming, o SDK pode recorrer a long polling), um cache em memória, a compensação de latência (seção 8.0.6) e a reconexão automática |
 | Autenticação Anônima (`firebase/auth`) | Dá a cada aparelho um `uid` estável, sem cadastro. É a identidade usada pelas regras para saber quem pode escrever o quê |
-| Regras do Firestore (`firestore.rules`) | Validam cada escrita no servidor: só o dono muda a sala; cada aluno só grava a própria resposta e a própria presença |
+| Regras do Firestore (`firestore.rules`) | Validam cada escrita no servidor: só o dono muda a sala, e só enquanto ela está no ar; só o dono lê os gabaritos; cada aluno só grava a própria resposta e a própria presença, com os campos e tamanhos esperados |
 | Hooks React (`hooks/`) | Abrem um ouvinte quando a tela precisa de um dado e fecham quando não precisa mais (cleanup do `useEffect`) |
-| Documento da sala `rooms/{code}` | O canal de controle: slide atual, cronômetros, gabaritos revelados, opções e revisão. Só o apresentador escreve; todos ouvem |
+| Documento da sala `rooms/{code}` | O canal de controle: slide atual, status, cronômetros, gabaritos revelados e publicados, opções e revisão. Só o apresentador escreve; todos ouvem |
 
 O padrão de todos os hooks de assinatura é o mesmo:
 
@@ -1625,7 +1762,8 @@ export function useRoom(code: string | undefined) {
 
 | Dado | Caminho | Quem escreve | Quando escreve | Quem ouve | Como ouve |
 | --- | --- | --- | --- | --- | --- |
-| Slide atual, cronômetros, gabaritos revelados, título, slides, opções, revisão | `rooms/{code}` | Só o apresentador (dono) | Trocar de slide; abrir um slide com tempo; o tempo zerar; terminar o suspense do gabarito; salvar uma edição | Projetor, todos os celulares e a tela de edição | `useRoom` (ouvinte do documento) |
+| Slide atual, status, cronômetros, gabaritos revelados e publicados, título, slides (sem gabarito), opções, revisão | `rooms/{code}` | Só o apresentador (dono) | Trocar de slide; abrir um slide com tempo; o tempo zerar; terminar o suspense do gabarito (publicando as corretas); encerrar; salvar uma edição | Projetor, todos os celulares e a tela de edição | `useRoom` (ouvinte do documento) |
+| Gabaritos das perguntas | `rooms/{code}/secret/answers` | Só o apresentador | No lote que cria a sala e no lote que salva uma edição | Só o projetor; a edição e o PDF da tela inicial leem uma vez | `useRoomAnswers` (ouvinte do documento) e `fetchAnswers` |
 | Resposta de um aluno num slide | `rooms/{code}/responses/{slideId}__{uid}` | Só o próprio aluno | Tocar numa opção; enviar ou remover um texto; limpar a resposta | O projetor (todas as respostas do slide no ar) e o próprio aluno (só o documento dele) | `useResponses` (consulta `where('slideId', '==', id)`) e `useMyResponse` (ouvinte do documento) |
 | Presença | `rooms/{code}/participants/{uid}` | Só o próprio aluno | Ao abrir a sala e quando o nome muda | Projetor e tela de edição | `useParticipants` (ouvinte da coleção) |
 | Token do apresentador | `rooms/{code}/private/presenter` | Criação e reivindicação | Criar a sala; abrir a URL com o token em outro navegador | Ninguém (leitura proibida) | |
@@ -1646,7 +1784,7 @@ Quem abre ouvinte em cada tela:
 
 | Tela | Ouvintes abertos |
 | --- | --- |
-| Projetor (`PresentPage`) | Sala; respostas do slide no ar (no gabarito, as da pergunta de origem); participantes |
+| Projetor (`PresentPage`) | Sala; gabaritos (`secret/answers`); respostas do slide no ar (no gabarito, as da pergunta de origem); participantes |
 | Celular do aluno (`RoomPage` + `ParticipateView`) | Sala; a própria resposta no slide no ar (no gabarito, a resposta dada na pergunta) |
 | Edição da sala (`EditRoomPage`) | Sala (só para o acesso e a primeira carga); participantes (para a mensagem de confirmação) |
 
@@ -1658,11 +1796,12 @@ Quem abre ouvinte em cada tela:
    (o valor `slides.length` é o slide final) e calcula os cronômetros com
    `advanceTimers` (pausa o slide que sai, inicia ou retoma o que entra).
 3. **Uma única escrita**: `updateDoc(rooms/{code}, { currentSlideIndex,
-   timers, updatedAt })`.
+   timers, updatedAt })`. Se o novo índice for o slide final, a mesma escrita
+   leva também `status: 'ended'` (seção 8.15).
 4. A tela do apresentador muda **na hora**, porque o SDK entrega ao ouvinte
    local a versão com a escrita pendente (compensação de latência).
-5. O Firestore valida a escrita pelas regras (o `uid` precisa ser o dono) e a
-   confirma.
+5. O Firestore valida a escrita pelas regras (o `uid` precisa ser o dono e a
+   sala precisa estar `live`) e a confirma.
 6. O Firestore envia a nova versão do documento a **todos os ouvintes** da
    sala. Em condições normais, isso leva de dezenas a poucas centenas de
    milissegundos.
@@ -1695,8 +1834,10 @@ instante em que os celulares veriam o slide novo com o cronômetro do anterior
    botões ficam ocupados (`busy`) para evitar toques duplos.
 3. O ouvinte `useMyResponse` do próprio celular recebe a versão local na hora:
    o botão aparece marcado e surge "Voto registrado".
-4. O Firestore valida (o `participantUid` precisa ser o `uid` de quem grava) e
-   confirma; a promessa do `setDoc` resolve e os botões voltam a ficar livres.
+4. O Firestore valida (o `participantUid` precisa ser o `uid` de quem grava, o
+   id precisa ser `{slideId}__{uid}`, só os campos esperados, até 100 itens e
+   a sala no ar) e confirma; a promessa do `setDoc` resolve e os botões voltam
+   a ficar livres.
 5. O ouvinte `useResponses` do projetor (consulta das respostas do slide)
    recebe a mudança.
 6. O projetor recalcula com funções puras: `aggregateChoices` (barras, pizza,
@@ -1709,7 +1850,8 @@ instante em que os celulares veriam o slide novo com o cronômetro do anterior
 
 Não existe botão "enviar" nos slides de escolha: **o toque é o envio**.
 Trocar de opção regrava o mesmo documento; "Limpar resposta" o apaga
-(`deleteDoc`), e o projetor recebe a remoção da mesma forma. Na nuvem de
+(`deleteDoc`), e o projetor recebe a remoção da mesma forma. Desmarcar a
+última opção de uma múltipla escolha também apaga o documento. Na nuvem de
 palavras, cada envio regrava o documento com a lista inteira de textos da
 pessoa.
 
@@ -1736,17 +1878,19 @@ divergência entre o que o aluno vê e o que o projetor contou.
    o código em `/join`).
 2. `useParticipant` garante a sessão anônima e devolve o `uid`.
 3. `useRoom` abre o ouvinte da sala; o primeiro snapshot já traz o slide no
-   ar, as opções, os cronômetros e os gabaritos revelados. **Quem chega
+   ar, as opções, os cronômetros e os gabaritos revelados e publicados. **Quem chega
    atrasado não precisa de nenhum "replay"**: o estado atual completo está no
    documento.
 4. Se a sala pede o nome e ele ainda não foi informado, o `NamePrompt`
    aparece antes de qualquer slide.
-5. `joinRoom` grava `participants/{uid}` (com `merge: true`). O ouvinte
+5. `joinRoom` lê `participants/{uid}` e grava o documento (com
+   `merge: true`; `joinedAt` só se ele ainda não existia). O ouvinte
    `useParticipants` do projetor recebe o documento novo e o contador de
    pessoas e o rodapé ("N participante(s)") sobem, mesmo sem nenhuma resposta.
 6. O efeito de presença depende de `Boolean(room)` e não do objeto `room`;
    assim as trocas de slide (que geram snapshots novos da sala) não reescrevem
    a presença.
+7. Se a sala já estiver encerrada, o celular vai direto para a tela final.
 
 #### 8.0.8 Fluxo D: tempo, encerramento e revelação sincronizados
 
@@ -1768,15 +1912,22 @@ O tempo é sincronizado **sem nenhuma escrita por segundo**:
    momento em que recebeu a troca de slide ("A resposta certa é." "..."
    "..."). Como cada celular recebe a troca com alguns milissegundos de
    diferença, esse atraso faz todo mundo ver a resposta praticamente junto.
-6. Terminado o suspense, o projetor grava `revealedSlideIds:
-   arrayUnion(id)`. Quem chega depois, ou volta ao gabarito, recebe esse campo
-   no snapshot e vê a resposta na hora.
+6. Terminado o suspense, o projetor grava, numa escrita só,
+   `revealedSlideIds: arrayUnion(id)` e as corretas da pergunta em
+   `revealedAnswers.<idDoQuiz>`. Até aqui o celular não conhecia o gabarito
+   (a sala guarda o `quiz` sem ele). O celular mostra o veredito quando o
+   suspense local terminou **e** as corretas chegaram. Quem chega depois, ou
+   volta ao gabarito, recebe os dois campos no snapshot e vê a resposta na
+   hora.
 
 #### 8.0.9 Fluxo E: edição salva e reinício para todos
 
 1. O apresentador salva uma edição da sala (`saveAndRestartRoom`).
-2. Uma única escrita grava os slides e as opções novas, `currentSlideIndex: 0`,
-   `timers: {}`, `revealedSlideIds: []` e `revision: increment(1)`.
+2. Um lote (`writeBatch`) grava, no documento da sala, os slides (sem
+   gabarito) e as opções novas, `currentSlideIndex: 0`, `timers: {}`,
+   `revealedSlideIds: []`, `answersHidden: true`, `revealedAnswers: {}`,
+   `status: 'live'` e `revision: increment(1)`, e, em `secret/answers`, os
+   gabaritos novos.
 3. Todos os celulares recebem o snapshot: como seguem `currentSlideIndex`,
    voltam ao primeiro slide sem nenhuma mensagem direta.
 4. Cada celular compara `revision` com o valor que viu ao abrir; se aumentou,
@@ -1789,23 +1940,24 @@ O tempo é sincronizado **sem nenhuma escrita por segundo**:
 
 | Passo | Quem | Ação | Efeito nos outros |
 | --- | --- | --- | --- |
-| 1 | Apresentador | Cria a sala (`writeBatch` com sala e token) | Nenhum (ninguém conectado ainda) |
+| 1 | Apresentador | Cria a sala (`writeBatch` com sala, token e gabaritos) | Nenhum (ninguém conectado ainda) |
 | 2 | Aluno | Abre a sala: ouvinte da sala + `joinRoom` | Projetor: contador de participantes sobe |
 | 3 | Apresentador | Avança para a nuvem de palavras (`updateDoc` da sala) | Celulares: trocam para o campo de texto |
 | 4 | Aluno | Envia "Feliz" (`setDoc` da resposta) | Projetor: "Feliz" aparece na nuvem; rodapé atualiza |
 | 5 | Apresentador | Avança para a pergunta com 20 s (índice + `endsAt` numa escrita) | Celulares: mostram as alternativas |
 | 6 | Aluno | Toca em "B" (`setDoc` da resposta) | Projetor: "N responderam" sobe (sem revelar a distribuição) |
 | 7 | Projetor | Contagem zera: grava o encerramento e avança para o gabarito numa escrita | Celulares: mudam para o gabarito; suspense local de 3 s |
-| 8 | Projetor | Fim do suspense: `arrayUnion` em `revealedSlideIds` | Quem chegar depois vê a resposta na hora |
-| 9 | Apresentador | Passa do último slide (`currentSlideIndex = slides.length`) | Celulares: "Obrigado por participar!" |
+| 8 | Projetor | Fim do suspense: `arrayUnion` em `revealedSlideIds` e as corretas em `revealedAnswers`, numa escrita | Celulares: "Você acertou!" ou "Não foi dessa vez."; quem chegar depois vê a resposta na hora |
+| 9 | Apresentador | Passa do último slide (`currentSlideIndex = slides.length` e `status: 'ended'` numa escrita) | Celulares: "Obrigado por participar!", "Rever os slides" e, se permitido, "Baixar slides"; respostas novas passam a ser recusadas |
 
 #### 8.0.11 Garantias e decisões de consistência
 
 - **Fonte única da verdade**: o Firestore. O React só deriva a tela do último
   snapshot; não há estado compartilhado duplicado em memória.
 - **Estados que precisam chegar juntos vão na mesma escrita** (índice e
-  cronômetros; encerramento e avanço para o gabarito; o reinício completo da
-  edição).
+  cronômetros; encerramento da pergunta e avanço para o gabarito; registro da
+  revelação e gabarito publicado; índice final e `status: 'ended'`; o
+  reinício completo da edição, com sala e gabaritos num lote).
 - **Ids determinísticos** (`{slideId}__{uid}`, `participants/{uid}`): reenviar
   é idempotente, nunca duplica, e apagar não precisa de consulta.
 - **Escrita idempotente** para marcas de evento (`arrayUnion` em
@@ -1825,7 +1977,14 @@ O tempo é sincronizado **sem nenhuma escrita por segundo**:
   valores derivados (ids, booleanos), nunca do objeto da sala, para não
   reescrever a cada snapshot.
 - **O bloqueio por tempo é da interface**, não das regras: uma resposta já em
-  trânsito no momento do encerramento ainda pode ser gravada.
+  trânsito no momento do encerramento da pergunta ainda pode ser gravada. As
+  regras só barram respostas depois do **fim da apresentação** (sala
+  `ended`).
+- **O desvio do relógio não é medido.** Só o projetor mostra a contagem, e ele
+  compara o `endsAt` que ele mesmo gravou com o próprio relógio; o bloqueio do
+  voto vem do estado da sala (`closed`). Medir o desvio de cada aparelho (com
+  um `serverTimestamp()` gravado e lido de volta) não mudaria nada do que a
+  plateia vê. `createdAt` e `updatedAt` continuam vindo de `Date.now()`.
 
 #### 8.0.12 Conexão instável, recarregar e trocar de aparelho
 
@@ -1837,6 +1996,7 @@ O tempo é sincronizado **sem nenhuma escrita por segundo**:
 | O aluno troca de aparelho ou de navegador | Recebe um `uid` novo: conta como outro participante e começa sem respostas; as anteriores ficam com o `uid` antigo |
 | O apresentador recarrega | O token na URL reivindica o controle; slide, cronômetros e revelações estão no documento, então a apresentação continua do mesmo ponto. Se o tempo acabou enquanto a página estava fechada, ao abrir ele encerra a pergunta e avança para o gabarito |
 | O apresentador fecha o projetor no meio de uma pergunta | Nada encerra a pergunta (só o projetor encerra); os alunos continuam podendo responder até o projetor ser reaberto |
+| Uma resposta chega depois do fim da apresentação | As regras recusam (a sala não está mais `live`); a tela do aluno já mostra o fim |
 
 #### 8.0.13 Desempenho e custo do sincronismo
 
@@ -1861,7 +2021,8 @@ resposta por aluno em cada slide interativo:
 | --- | --- | --- |
 | Escritas de presença | 100 | 100 |
 | Escritas de respostas | 100 x 6 | cerca de 600 |
-| Escritas na sala (trocas de slide, cronômetros, revelações) | cerca de 15 | cerca de 15 |
+| Escritas na sala (trocas de slide, cronômetros, revelações, encerramento) | cerca de 15 | cerca de 15 |
+| Leituras da sala nas regras (conferência de que ela está no ar, uma por escrita de resposta) | 600 | 600 |
 | Leituras de cada mudança da sala | 15 x 101 ouvintes | cerca de 1.500 |
 | Leituras das respostas (projetor + o próprio aluno) | 600 x 2 | cerca de 1.200 |
 | Leituras de presença no projetor | 100 | 100 |
@@ -1885,7 +2046,8 @@ servidor ofereça estas garantias:
 | Ouvinte de consulta (respostas de um slide) | Canal só do apresentador recebendo inclusão, alteração e exclusão de respostas do slide no ar |
 | Escrita atômica de vários campos | Uma única mensagem que atualiza índice e cronômetros juntos |
 | Upsert por chave `slideId + uid` | Tabela de respostas com chave única (`slide_id`, `participant_uid`) e "insert or update" |
-| Regras por usuário | Validação no servidor: só o dono muda a sala; cada aluno só grava o que é dele |
+| Regras por usuário | Validação no servidor: só o dono muda a sala (e só com ela no ar); cada aluno só grava o que é dele, com campos e tamanhos validados; respostas recusadas depois do fim |
+| Documento legível só pelo dono | Os gabaritos ficam numa tabela ou num canal só do apresentador; a plateia recebe cada gabarito no estado da sala, quando ele é revelado |
 | Compensação de latência | Opcional: atualizar a interface do aluno ao enviar e corrigir se o servidor recusar |
 | Reconexão automática | Reconectar e pedir o estado completo de novo |
 
@@ -1923,10 +2085,18 @@ const FALLBACK_CONFIG = {
 export const app = initializeApp(isFirebaseConfigured ? envConfig : FALLBACK_CONFIG)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+// Desenvolvimento: com VITE_FIREBASE_EMULATORS=true o app usa os emuladores
+// locais (`npx firebase-tools emulators:start --only auth,firestore`), com as
+// regras do firestore.rules e sem tocar no projeto real.
+if (import.meta.env.VITE_FIREBASE_EMULATORS === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+  connectFirestoreEmulator(db, '127.0.0.1', 8080)
+}
 ```
 
 Sem configuração, a tela de criação mostra o aviso "Firebase não configurado"
-e só as operações de sala falham.
+e só as operações de sala falham. O uso dos emuladores está na seção 14.1.
 
 ### 8.2 Autenticação anônima (`hooks/useParticipant.ts`)
 
@@ -1957,6 +2127,7 @@ export function useParticipant() {
 | `useResponses(code, slideId)` | `responses` com `where('slideId', '==', slideId)` | Apresentador |
 | `useMyResponse(code, slideId, uid)` | `responses/{slideId}__{uid}` | Participante |
 | `useParticipants(code)` | `participants` (coleção inteira) | Apresentador e edição |
+| `useRoomAnswers(code, enabled)` | `secret/answers` (só o dono lê; `enabled` quando o acesso foi concedido) | Apresentador |
 | `useRoomAssets(code, ids)` | `assets/{id}` (leitura única com cache, não é assinatura) | Apresentador e participante |
 | `useRoomFonts(code, revision, enabled)` | `fonts` (uma consulta por versão da sala) | Apresentador e participante |
 
@@ -1975,19 +2146,31 @@ O apresentador escreve `currentSlideIndex`; os participantes só observam.
 ```ts
 const goTo = useCallback((next: number) => {
   const current = roomRef.current            // referência sempre atual da sala
-  if (!code || !current) return
+  if (!code || !current || current.status === 'ended') return   // sala encerrada não anda
   const count = current.slides.length
   const clamped = Math.max(0, Math.min(next, count > 0 ? count : 0))   // count = slide final
   if (clamped === current.currentSlideIndex) return
   const timers = advanceTimers(current.timers, current.slides[current.currentSlideIndex],
                                current.slides[clamped], current.settings)
-  void setCurrentSlide(code, clamped, timers)   // índice e cronômetros na MESMA escrita
+  // Índice e cronômetros na MESMA escrita; chegar ao slide final encerra a sala.
+  void setCurrentSlide(code, clamped, timers,
+    count > 0 && clamped === count ? { status: 'ended' } : undefined)
 }, [code])
+
+// lib/rooms.ts
+export async function setCurrentSlide(code, index, timers, extra?: { status?: RoomStatus }) {
+  await updateDoc(roomRef(code), {
+    currentSlideIndex: index, timers, updatedAt: Date.now(),
+    ...(extra?.status ? { status: extra.status } : {}),
+  })
+}
 ```
 
 - Teclado: seta para a direita, `PageDown` e Espaço avançam; seta para a
   esquerda e `PageUp` voltam (funciona com passador de slides). Ignorado
-  quando o foco está num `INPUT` ou `TEXTAREA`.
+  dentro de campos (`INPUT`, `TEXTAREA`, `contentEditable`), de modais
+  (`[role="dialog"]`) e de menus (`[role="menu"]`), para as teclas ficarem
+  com eles (a projeção do código, por exemplo, não troca o slide por trás).
 - A sala é lida por `useRef` para o ouvinte de teclado não ser recadastrado a
   cada snapshot.
 - Separar índice e cronômetros em duas escritas abriria um intervalo em que a
@@ -2114,12 +2297,16 @@ quadro de alternativas e os gráficos.
 
 Consequências assumidas:
 
-- **A comparação usa o relógio de cada dispositivo.** O tempo restante é
-  limitado à duração do slide. A troca para o gabarito quem decide é o
-  apresentador.
-- **O bloqueio é da interface, não das regras.** As regras do Firestore não
-  conhecem o cronômetro: uma resposta em trânsito ainda pode ser gravada. É o
-  mesmo nível de confiança do resto da sala.
+- **O desvio do relógio não é medido.** Só o projetor desenha a contagem, e o
+  `endsAt` foi gravado por ele mesmo: a comparação é com o próprio relógio. O
+  bloqueio do voto vem do estado da sala (`closed`), não do relógio do
+  celular, então medir o desvio de cada aparelho não mudaria nada do que a
+  plateia vê. O tempo restante é limitado à duração do slide, e a troca para o
+  gabarito quem decide é o apresentador.
+- **O bloqueio do cronômetro é da interface, não das regras.** As regras do
+  Firestore não conhecem o cronômetro: uma resposta em trânsito ainda pode ser
+  gravada. As regras só barram respostas depois do fim da apresentação (sala
+  `ended`). É o mesmo nível de confiança do resto da sala.
 
 Por que pausar em vez de deixar correr: pular para uma referência no meio da
 pergunta queimaria o tempo da plateia. E um cronômetro esgotado **não**
@@ -2153,19 +2340,47 @@ export function useRevealCountdown(key: string | null, { revealed = false, secon
 - `key` é o id do slide `answer` no ar (ou `null`).
 - `revealed` vem de `room.revealedSlideIds.includes(answerSlideId)`.
 - No projetor, quando `pending` vira falso e o slide ainda não estava
-  revelado, `markAnswerRevealed(code, answerSlideId)` grava
-  `revealedSlideIds: arrayUnion(id)`. Falhar só faz o suspense se repetir.
+  revelado (e a sala está no ar), `markAnswerRevealed` grava numa escrita só
+  o registro da revelação e o gabarito publicado. Falhar só faz o suspense se
+  repetir.
+
+```ts
+export async function markAnswerRevealed(code, answerSlideId, quizSlideId, correctOptionIds) {
+  await updateDoc(
+    roomRef(code),
+    new FieldPath('revealedAnswers', quizSlideId),   // o id pode ter caracteres que um caminho com pontos não aceita
+    correctOptionIds,
+    'revealedSlideIds', arrayUnion(answerSlideId),
+    'updatedAt', Date.now(),
+  )
+}
+```
+
+O efeito do projetor depende do id do slide e de uma chave em texto com o id
+da pergunta e as corretas (`JSON.stringify([quizId, correctOptionIds])`), não
+do array, que muda de identidade a cada snapshot.
+
+No celular, o veredito espera as duas coisas:
+
+```ts
+const answerPublished = quizSlide ? isAnswerPublished(room, quizSlide.id) : true
+const revealPending = reveal.pending || !answerPublished
+```
 
 ### 8.7 Presença (`lib/participants.ts`)
 
 ```ts
 export async function joinRoom(code: string, uid: string, name?: string) {
+  const ref = doc(participantsCol(code), uid)
   const now = Date.now()
-  const payload: ParticipantDoc = {
-    uid, joinedAt: now, lastSeenAt: now,
+  const existing = await getDoc(ref)
+  const payload = {
+    uid,
+    lastSeenAt: now,
+    ...(existing.exists() ? {} : { joinedAt: now }),   // só na criação
     ...(name?.trim() ? { name: name.trim() } : {}),
   }
-  await setDoc(doc(participantsCol(code), uid), payload, { merge: true })
+  await setDoc(ref, payload, { merge: true })   // merge preserva joinedAt e o nome
 }
 ```
 
@@ -2197,7 +2412,13 @@ useEffect(() => {
 ```ts
 const responseId = (slideId: string, uid: string) => `${slideId}__${uid}`
 
+/** Itens por resposta: o mesmo limite das regras do Firestore. */
+export const MAX_RESPONSE_ITEMS = 100
+
 export async function saveResponse(code, slideId, participantUid, type, value, participantName?) {
+  // Lista vazia (múltipla escolha toda desmarcada) APAGA: um documento vazio
+  // contaria como "respondeu" no rodapé.
+  if (value.length === 0) return clearResponse(code, slideId, participantUid)
   const payload: ResponseDoc = {
     slideId, participantUid, type, value, createdAt: Date.now(),
     ...(participantName?.trim() ? { participantName: participantName.trim() } : {}),
@@ -2250,16 +2471,20 @@ for (let attempt = 0; attempt < 6; attempt++) {
   const now = Date.now()
   const token = generatePresenterToken()
   const { assets = {}, fonts = {}, ...content } = presentation   // imagens e fontes fora da sala
+  const { slides, answers } = splitAnswers(content.slides)          // gabaritos fora da sala
   const room: Room = {
     ...content,
+    slides,
     settings: withDefaults(presentation.settings),   // nunca undefined
     creatorUid, currentSlideIndex: 0, status: 'live',
     createdAt: now, updatedAt: now, timers: {}, revealedSlideIds: [],
+    answersHidden: true, revealedAnswers: {},
   }
   assertRoomFits(room)   // JSON acima de 1.000.000 bytes: erro pedindo para dividir
-  const batch = writeBatch(db)
+  const batch = writeBatch(db)                     // sala, token e gabaritos numa escrita atômica
   batch.set(ref, room)
   batch.set(presenterRef(code), { token, ownerUid: creatorUid, createdAt: now })
+  batch.set(answersRef(code), answers)
   await batch.commit()
   // depois da sala, porque as regras só deixam o dono gravar imagens e fontes
   try {
@@ -2295,7 +2520,9 @@ export async function claimPresenter(code, uid, token) {
    `denied`.
 5. Com acesso concedido e token, grava a sessão no `localStorage`
    (`savePresenterSession({ code, token, title })`) para "Retomar" e
-   "Exportar PDF" na tela inicial.
+   "Exportar PDF" na tela inicial. A tela inicial lê cada sala lembrada uma
+   vez (`getRoom`) e mostra a situação ("No ar", "Encerrada" ou "Não existe
+   mais"); "Retomar" só aparece nas salas no ar, que vêm primeiro.
 
 `presenterSessions` (chave `ip-presenter-sessions`): lista de
 `{ code, token, title, updatedAt }`, no máximo 8, mais recentes primeiro,
@@ -2309,10 +2536,13 @@ verificação de acesso. A tela (`EditRoomPage`):
 1. Cria o **próprio** editor (`createEditorStore()` dentro de
    `EditorStoreContext.Provider`), sem tocar no rascunho da tela de criação.
 2. Carrega a sala **uma única vez**: busca as imagens (`fetchAssets` de todos
-   os ids usados) e as fontes (`fetchRoomFonts(code, revision)`, com falha
-   tolerada), chama `loadPresentation` e guarda o que a sala já tem
+   os ids usados), as fontes (`fetchRoomFonts(code, revision)`, com falha
+   tolerada) e os gabaritos (`fetchAnswers`, devolvidos aos slides com
+   `withAnswers`), chama `loadPresentation` e guarda o que a sala já tem
    (`stored = { assetIds, fontDocIds }`). Snapshots seguintes (troca de slide,
-   cronômetro) não atropelam a edição.
+   cronômetro) não atropelam a edição. Com a sala encerrada, o editor não
+   abre: a tela mostra "Esta apresentação foi encerrada e não pode mais ser
+   editada." e "Voltar à apresentação".
 3. Guarda uma linha de base `JSON.stringify({ title, settings, slides })` e
    habilita **Salvar alterações** só quando algo muda.
 4. Mostra a faixa "Editando a sala XXXXXX, que já está em andamento. Ao
@@ -2325,6 +2555,9 @@ verificação de acesso. A tela (`EditRoomPage`):
 6. Lista vazia é recusada: "A apresentação precisa de ao menos um slide.".
 7. "Voltar à apresentação" com alterações pede para descartar ("Descartar e
    voltar" ou "Continuar editando").
+8. Usa a mesma barra da criação (`EditorToolbar`): botão "Voltar" (só ícone
+   no celular), título, ações (ou o menu "Mais") e o primário "Salvar
+   alterações".
 
 Enquanto o apresentador edita, nada é gravado e a plateia continua no slide em
 que estava. Uma pergunta com cronômetro no ar não é encerrada durante a
@@ -2335,9 +2568,11 @@ acontece quando essa tela reabre; salvando, os cronômetros recomeçam.
 
 ```ts
 const { assets = {}, fonts = {}, ...content } = presentation
+const { slides, answers } = splitAnswers(content.slides)
 const data = {
-  title: content.title, slides: content.slides, settings: withDefaults(content.settings),
-  currentSlideIndex: 0, status: 'live', timers: {}, revealedSlideIds: [], updatedAt: Date.now(),
+  title: content.title, slides, settings: withDefaults(content.settings),
+  currentSlideIndex: 0, status: 'live', timers: {}, revealedSlideIds: [],
+  answersHidden: true, revealedAnswers: {}, updatedAt: Date.now(),
 }
 assertRoomFits(data)
 // 1) envia só as imagens e fontes que a sala ainda não tem (antes do documento)
@@ -2345,8 +2580,11 @@ await Promise.all([
   uploadAssets(code, Object.values(assets).filter((a) => !stored.assetIds.includes(a.id))),
   uploadFonts(code, Object.values(fonts).filter((f) => !stored.fontDocIds[f.id])),
 ])
-// 2) uma única escrita no documento da sala
-await updateDoc(roomRef(code), { ...data, revision: increment(1) })
+// 2) sala e gabaritos num lote: ninguém vê perguntas novas com o gabarito antigo
+const batch = writeBatch(db)
+batch.update(roomRef(code), { ...data, revision: increment(1) })
+batch.set(answersRef(code), answers)
+await batch.commit()
 // 3) limpeza das que nenhum slide usa mais (falha tolerada)
 await deleteAssets(code, stored.assetIds.filter((id) => !assets[id])).catch(() => {})
 await deleteFontDocs(code, /* todas as partes das fontes sem uso */).catch(() => {})
@@ -2358,8 +2596,10 @@ await deleteFontDocs(code, /* todas as partes das fontes sem uso */).catch(() =>
 | `currentSlideIndex` | `0`: todos voltam ao primeiro slide |
 | `timers` | `{}` |
 | `revealedSlideIds` | `[]` |
+| `answersHidden`, `revealedAnswers` | `true` e `{}` |
 | `status` | `live` |
 | `revision` | `increment(1)` |
+| `secret/answers` (no mesmo lote) | Os gabaritos da versão editada |
 
 Depois de salvar, a tela navega para `/present/...`, que abre no slide 1.
 
@@ -2385,8 +2625,9 @@ Decisões:
 - **As respostas ficam.** Pertencem a um slide pelo id (preservado pelo
   editor), e as regras só deixam o autor apagá-las. Respostas de um slide
   removido ficam órfãs; votos em opção removida deixam de contar.
-- **As regras da sala não mudam**: gravar a edição é um `update` comum, já
-  permitido ao dono.
+- **Nenhuma regra especial**: gravar a edição é um `update` comum, permitido
+  ao dono com a sala no ar; os gabaritos seguem a regra de `secret`. Uma
+  sala encerrada não pode ser editada.
 
 ### 8.11 Imagens dos slides livres (`lib/assets.ts`, `hooks/useRoomAssets.ts`)
 
@@ -2408,6 +2649,7 @@ Decisões:
 | Celular | As do slide no ar e do seguinte |
 | Edição da sala | Todas, antes de abrir o editor |
 | PDF (projetor e tela inicial) | Todas, na hora de gerar |
+| Download dos slides, "Apresentar de novo" e modo leitura da sala | Todas, na hora de gerar, de criar a sala nova ou de abrir |
 
 `collectAssetIds(slides)` junta os `assetId` dos elementos de imagem dos
 slides livres, sem repetição.
@@ -2442,27 +2684,42 @@ Arquivo integral no [Apêndice C](#apêndice-c-regras-de-segurança-do-firestore
 
 | Caminho | Leitura | Escrita |
 | --- | --- | --- |
-| `rooms/{code}` | pública (o código é a chave) | criar: autenticado e `creatorUid == uid`; alterar e excluir: dono atual **ou** quem reivindicou pelo documento privado |
+| `rooms/{code}` | pública (o código é a chave) | criar: autenticado, `creatorUid == uid` e `status == 'live'`; alterar: dono atual **ou** quem reivindicou pelo documento privado, **só com a sala `live`**; excluir: o dono |
 | `rooms/{code}/private/{doc}` | **negada a todos** | criar: autenticado e `ownerUid == uid`; atualizar: autenticado, reenviando o **mesmo token** e com `ownerUid == uid`; excluir: negado |
-| `rooms/{code}/participants/{uid}` | pública | criar e atualizar: só o próprio uid (id do documento e `data.uid`); excluir: o próprio |
-| `rooms/{code}/responses/{id}` | pública | criar e atualizar: `participantUid == uid`; excluir: só o autor |
+| `rooms/{code}/secret/{doc}` | só o dono atual (`isRoomOwner`) | criar e atualizar: o dono, conferido na sala **depois** da escrita (`getAfter`), porque na criação a sala nasce no mesmo lote; excluir: negado |
+| `rooms/{code}/participants/{uid}` | pública | criar e atualizar: só o próprio uid (id do documento e `data.uid`), só as chaves `uid`, `name`, `joinedAt`, `lastSeenAt`, nome texto de até 40 caracteres; excluir: o próprio |
+| `rooms/{code}/responses/{id}` | pública | criar e atualizar: `participantUid == uid`; só as chaves `slideId`, `participantUid`, `type`, `value`, `participantName`, `createdAt`; `slideId` texto de até 200 caracteres; id igual a `slideId + '__' + uid`; `type` em `word` ou `choice`; `value` lista de até 100 itens; `createdAt` número; nome texto de até 40 caracteres; sala `live` (`isRoomLive`, uma leitura da sala por escrita). Excluir: só o autor, sempre |
 | `rooms/{code}/assets/{id}` | pública | autenticado e dono da sala (`isRoomOwner`) |
 | `rooms/{code}/fonts/{id}` | pública | autenticado e dono da sala (`isRoomOwner`) |
+
+Funções auxiliares das regras: `roomPath(code)`, `presenterOwner(code)` (o
+`ownerUid` do documento privado), `isRoomOwner(code)` (`creatorUid` da sala ou
+`presenterOwner`) e `isRoomLive(code)` (`status == 'live'`).
 
 Consequências:
 
 - Quem tem o código **lê** a sala e os resultados, mas não apresenta.
 - Ninguém lê o token de outra pessoa, nem o dono depois de gravado.
-- Ninguém edita ou apaga a resposta alheia, nem forja presença com outro uid.
+- Ninguém além do dono lê o gabarito antes da revelação.
+- Uma sala encerrada não muda mais (nem índice, nem cronômetro, nem dono) e
+  não recebe respostas.
+- Ninguém edita ou apaga a resposta alheia, nem forja presença com outro uid;
+  campos extras, listas enormes e nomes longos são recusados.
 - Como a leitura das respostas é pública, **não se deve coletar dados
   sensíveis** por esses campos.
 
+As regras não validam cada texto da lista (a linguagem de regras não percorre
+listas); o limite de 80 caracteres por texto da nuvem fica no
+`WordCloudInput`. Para testá-las sem o projeto real, use os emuladores (seção
+14.1).
+
 ### 8.14 Limites e custos
 
-- Escrita típica por participante: 1 documento de presença + 1 por slide
-  respondido (sobrescrito, não acumulado).
-- Leitura típica do apresentador: 1 assinatura da sala + 1 das respostas do
-  slide atual + 1 dos participantes.
+- Escrita típica por participante: 1 documento de presença (com uma leitura
+  antes) + 1 por slide respondido (sobrescrito, não acumulado). Cada escrita
+  de resposta custa também uma leitura da sala nas regras.
+- Leitura típica do apresentador: 1 assinatura da sala + 1 dos gabaritos + 1
+  das respostas do slide atual + 1 dos participantes.
 - PDF e slide final: uma leitura única de **todas** as respostas
   (`getAllResponses`).
 - Fontes: uma consulta por aparelho e por versão da sala, só com slides
@@ -2473,6 +2730,105 @@ Consequências:
 - Sem expiração automática: salas, respostas, imagens e fontes ficam até serem
   apagadas manualmente.
 
+### 8.15 Encerramento da sala
+
+| Gatilho | Escrita |
+| --- | --- |
+| Avançar do último slide para o slide final | `setCurrentSlide(code, slides.length, timers, { status: 'ended' })` |
+| Botão "Encerrar" (confirmação "Encerrar a apresentação?") | `endRoom(code, slides.length, timers)`, com o cronômetro do slide no ar pausado (`advanceTimers(timers, slideAtual, undefined, settings)`) |
+
+```ts
+// lib/rooms.ts
+export async function endRoom(code: string, slideCount: number, timers: SlideTimers) {
+  await setCurrentSlide(code, slideCount, timers, { status: 'ended' })
+}
+```
+
+Índice final e status vão na mesma escrita: nenhum aparelho vê o slide final
+com a sala ainda aberta. Depois disso:
+
+| Onde | Comportamento |
+| --- | --- |
+| Projetor | `goTo` não faz nada; botões de navegação desativados; efeitos de cronômetro e de revelação parados; "Editar" e "Encerrar" somem; faixa "A apresentação foi encerrada." com **Apresentar de novo** |
+| Celular | Tela final ("Obrigado por participar!"), com **Rever os slides** e, se `allowDownload`, **Baixar slides** |
+| Edição (`/edit/...`) | Não abre o editor: "Esta apresentação foi encerrada e não pode mais ser editada." |
+| Modo leitura (`/view/<código>`) | Liberado (antes do fim: "A leitura fica disponível quando a apresentação terminar.") |
+| Regras | `update` da sala recusado; respostas novas recusadas |
+| Tela inicial | A sala aparece como "Encerrada", sem "Retomar" (o "Exportar PDF" continua) |
+
+**Apresentar de novo** abre uma sala **nova** com o mesmo conteúdo, sem tocar
+na antiga (que continua servindo ao PDF dos resultados e ao modo leitura):
+
+```ts
+const key = await fetchAnswers(code)                                   // gabaritos (o dono lê)
+const presentation = await loadRoomPresentation(code, room, withAnswers(room.slides, key))
+const created = await createRoom(uid, presentation)                    // código e token novos
+savePresenterSession({ code: created.code, token: created.token, title: presentation.title })
+navigate(`/present/${created.code}/${created.token}`)
+```
+
+`loadRoomPresentation(code, room, slides)` monta a `Presentation` completa de
+uma sala (título, slides, opções com os padrões, imagens com `fetchAssets` e
+fontes com `fetchRoomFonts`); é usada também pelo download dos slides.
+
+### 8.16 Gabarito protegido (`lib/answers.ts`, `hooks/useRoomAnswers.ts`)
+
+O documento da sala tem leitura pública. Se o gabarito ficasse nele, qualquer
+participante poderia lê-lo pelas ferramentas do navegador antes da revelação.
+Por isso ele é separado:
+
+| Onde | O que fica | Quem lê |
+| --- | --- | --- |
+| `rooms/{code}` | Cada `quiz` com `correctOptionIds: []`, `answersHidden: true` e `revealedAnswers` (as corretas já publicadas, pelo id do quiz) | Todos |
+| `rooms/{code}/secret/answers` | `{ [idDoQuiz]: idsDasCorretas }` | Só o dono atual |
+
+```ts
+export type AnswerKey = Record<string, string[]>
+
+export const answersRef = (code: string) => doc(db, 'rooms', code, 'secret', 'answers')
+
+/** Separa os gabaritos: a versão pública vai sem `correctOptionIds`. */
+export function splitAnswers(slides: Slide[]): { slides: Slide[]; answers: AnswerKey } {
+  const answers: AnswerKey = {}
+  const publicSlides = slides.map((slide) => {
+    if (slide.type !== 'quiz') return slide
+    answers[slide.id] = slide.correctOptionIds
+    return { ...slide, correctOptionIds: [] }
+  })
+  return { slides: publicSlides, answers }
+}
+
+/** Visão do dono. Sala antiga (sem registro no documento secreto): vale o do slide. */
+export function withAnswers(slides: Slide[], answers: AnswerKey | null | undefined): Slide[] {
+  if (!answers) return slides
+  return slides.map((s) => (s.type === 'quiz' && answers[s.id] ? { ...s, correctOptionIds: answers[s.id] } : s))
+}
+
+/** Visão da plateia: cada pergunta só com o gabarito já publicado. */
+export function withRevealedAnswers(room: Room): Slide[] {
+  if (!room.answersHidden) return room.slides            // sala antiga: gabarito no próprio slide
+  const revealed = room.revealedAnswers ?? {}
+  return room.slides.map((s) => (s.type === 'quiz' ? { ...s, correctOptionIds: revealed[s.id] ?? [] } : s))
+}
+
+export function isAnswerPublished(room: Room, quizSlideId: string): boolean {
+  return !room.answersHidden || Boolean(room.revealedAnswers && quizSlideId in room.revealedAnswers)
+}
+
+// subscribeAnswers(code, onData, onError): onSnapshot de answersRef
+// fetchAnswers(code): getDoc de answersRef; sem permissão ou sem documento, null
+```
+
+| Quem | Como obtém o gabarito |
+| --- | --- |
+| Projetor | `useRoomAnswers(code, access === 'granted')` e `withAnswers(room.slides, answers)` |
+| Edição da sala, PDF da tela inicial, "Apresentar de novo" | `fetchAnswers(code)` uma vez, com `withAnswers` |
+| Celular, download dos slides, modo leitura da sala | `withRevealedAnswers(room)`: só as corretas já publicadas |
+
+A publicação acontece no fim do suspense, por `markAnswerRevealed` (seção
+8.6), numa escrita com o registro da revelação. Uma edição salva regrava os
+gabaritos no mesmo lote da sala e zera `revealedAnswers`.
+
 ---
 
 ## 9. Estado, páginas, componentes e hooks
@@ -2481,7 +2837,10 @@ Consequências:
 
 | Onde | O quê | Vive até |
 | --- | --- | --- |
-| `editorStore` (Zustand) | Apresentação em edição: título, slides, opções, imagens, fontes, seleção do slide e do elemento | Recarregar a página (o da edição de sala, até sair da tela) |
+| `editorStore` (Zustand) | Apresentação em edição: título, slides, opções, imagens, fontes, seleção do slide e do elemento | O da criação volta depois de recarregar (rascunho, abaixo); o da edição de sala vive até sair da tela |
+| `useDraftStatus` (Zustand) | Estado do rascunho: `'idle'`, `'saving'`, `'saved'` ou `'error'` | Enquanto a aba estiver aberta |
+| `localStorage` `ip-editor-draft` | Rascunho da criação: `{ version: 1, title, slides, settings, selectedIndex, savedAt }` | Até "Começar do zero" |
+| IndexedDB `ip-editor` (store `draft`, chave `files`) | Imagens e fontes usadas pelo rascunho (`{ assets, fonts }`) | Até "Começar do zero" |
 | `themeStore` (Zustand + `localStorage`) | Tema claro/escuro | Sempre (por dispositivo) |
 | Firestore | Sala publicada, respostas, presença, imagens, fontes | Até ser apagada |
 | `localStorage` `ip-presenter-sessions` | Salas apresentadas neste dispositivo (com token) | Sempre |
@@ -2500,11 +2859,12 @@ Zustand). Os componentes de `components/editor/` usam o que estiver no
 
 | Tela | Editor |
 | --- | --- |
-| `CreatePage` | O padrão do contexto, criado uma vez no módulo e mantido enquanto a aba estiver aberta |
+| `CreatePage` | O padrão do contexto (`defaultEditorStore`), criado uma vez no módulo e mantido enquanto a aba estiver aberta, com o rascunho persistido |
 | `EditRoomPage` | Um editor próprio, criado ao abrir a tela e carregado com a sala |
 
 ```ts
-export const EditorStoreContext = createContext<EditorStore>(createEditorStore())
+export const defaultEditorStore = createEditorStore()
+export const EditorStoreContext = createContext<EditorStore>(defaultEditorStore)
 export function useEditorStore<T>(selector: (state: EditorState) => T): T {
   return useStore(useContext(EditorStoreContext), selector)
 }
@@ -2532,6 +2892,7 @@ interface EditorState {
   updateSlide(id, patch): void
   removeSlide(id): void               // remover um 'answer' desliga revealAnswer no quiz de origem
   moveSlide(from, to): void
+  reorderSlides(ids): void            // ordem entregue pela lista arrastada; reusa applySlides; sem mudança, não gera estado
   select(index): void                 // trocar de slide limpa seleção de elemento e de texto
   addAssets(assets): void
   selectElement(id): void
@@ -2577,6 +2938,41 @@ novaMoldura)`; slides com tamanho próprio ficam como estão.
 As fontes do editor são registradas no navegador pelo `EditorWorkspace`
 sempre que mudam (`registerFonts(Object.values(fonts))`).
 
+```ts
+reorderSlides: (ids) => set((s) => {
+  const byId = new Map(s.slides.map((slide) => [slide.id, slide]))
+  const ordered = ids.map((id) => byId.get(id)).filter(Boolean)
+  const seen = new Set(ordered.map((slide) => slide.id))
+  const slides = [...ordered, ...s.slides.filter((slide) => !seen.has(slide.id))]   // nada se perde
+  if (slides.every((slide, i) => slide.id === s.slides[i]?.id)) return {}           // nada mudou
+  return applySlides(slides, s.slides[s.selectedIndex]?.id, s.selectedIndex)        // o gabarito volta para trás da pergunta
+}),
+```
+
+#### Rascunho da criação (`store/editorDraft.ts`, `lib/draftStorage.ts`)
+
+A `CreatePage` chama `startDraftPersistence(defaultEditorStore)` uma vez (num
+`useState` com inicializador, antes de qualquer leitura do editor). A função é
+idempotente:
+
+1. **Restaura** o texto do `localStorage` na hora (sem piscar o editor vazio),
+   só se o editor estiver intocado (título "Minha apresentação" e nenhum
+   slide), validado com `presentationShapeSchema`; aplica com
+   `loadPresentation` e `select(selectedIndex)`. As imagens e as fontes vêm
+   depois, do IndexedDB, também validadas, e entram com `store.setState`.
+2. **Grava** depois de restaurar: assina o editor e, a cada mudança de título,
+   slides, opções, imagens, fontes ou slide selecionado, marca `'saving'` e
+   agenda a gravação para 600 ms depois da última mudança. No `pagehide`, uma
+   gravação pendente sai na hora.
+3. A gravação escreve o texto sempre e as imagens e fontes só quando muda o
+   conjunto de ids usados (`pickAssets` e `pickFonts`): digitar um texto não
+   regrava megabytes. Imagens e fontes vão para o IndexedDB porque passariam
+   do limite do `localStorage` (cerca de 5 MB).
+
+`discardDraft(store)` ("Começar do zero", com confirmação) chama `reset()`,
+cancela a gravação pendente e apaga o rascunho (`clearDraftStorage`). A
+edição de uma sala não usa rascunho: parte sempre do que está no ar.
+
 ### 9.3 `themeStore`
 
 ```ts
@@ -2594,20 +2990,34 @@ export const useThemeStore = create<ThemeState>((set) => ({
 
 | Página | Responsabilidade | Detalhes |
 | --- | --- | --- |
-| `HomePage` | Entrada | Ícone `BarChart3`, título "Apresentação Interativa", texto "Crie enquetes, nuvens de palavras e gráficos ao vivo. A plateia participa pelo celular, sem instalar nada e sem criar conta."; cartões "Criar apresentação" (botão "Criar sala") e "Entrar em uma sala" (botão "Entrar na sala"); lista "Continuar como apresentador (neste dispositivo)" com "Retomar", "Exportar PDF" (busca sala, respostas, imagens e fontes) e X para remover |
-| `CreatePage` | Editor e criação | Barra: Início, campo do título, tema, **Opções**, **Prompt de IA**, **Importar**, **Exportar**, **Iniciar apresentação**. Avisos: Firebase não configurado; falha da autenticação anônima; erros. Iniciar exige uid e ao menos um slide; chama `createRoom`, salva a sessão e navega para `/present/<código>/<token>` |
-| `PresentPage` | Projetor | Acesso, navegação, slide, cronômetro, gabarito, QR, PDF, slide final, Editar, tela cheia, cabeçalho ocultável |
+| `HomePage` | Entrada | Ícone `BarChart3`, título "Apresentação Interativa", texto "Crie enquetes, nuvens de palavras e gráficos ao vivo. A plateia participa pelo celular, sem instalar nada e sem criar conta."; cartões "Criar apresentação" (botão "Criar sala") e "Entrar em uma sala" (botão "Entrar na sala"); botão "Ler uma apresentação (.json)" (abre `/view`); lista "Continuar como apresentador (neste dispositivo)", com a situação de cada sala lida por `getRoom` (`StatusBadge`: "No ar" com o ícone `Radio`, "Encerrada" ou "Não existe mais"), as salas no ar primeiro e com borda azul, "Retomar" só nas salas no ar, "Exportar PDF" (busca sala, gabaritos, respostas, imagens e fontes) e X para remover |
+| `CreatePage` | Editor e criação | `EditorToolbar` com voltar "Início" (só ícone no celular), campo do título, estado do rascunho ("Salvando…", "Rascunho salvo neste navegador" ou "Não foi possível salvar o rascunho"), ações (Opções, Prompt de IA, Importar, Exportar, tema; menu "Mais" abaixo de 1280 px), item raro "Começar do zero" e o primário **Iniciar apresentação**. Avisos: Firebase não configurado; falha da autenticação anônima; erros. Iniciar exige uid e ao menos um slide; chama `createRoom`, salva a sessão e navega para `/present/<código>/<token>` |
+| `PresentPage` | Projetor | Acesso, navegação, slide, cronômetro, gabarito (com `useRoomAnswers`), código da sala (`RoomCodeDialog`, montado na página), PDF, slide final, Editar, Encerrar, Apresentar de novo, tela cheia, cabeçalho ocultável |
 | `EditRoomPage` | Edição da sala iniciada | Seção 8.10 |
 | `JoinPage` | Código | Campo grande (até 10 caracteres, maiúsculas), `normalizeRoomCode` (maiúsculas, sem espaços) e navega para `/room/<código>` |
-| `RoomPage` | Participante | Cabeçalho "Trocar sala", nome, "Sala XXXXXX", tema; aviso de reinício; estados (entrando, erro, sala não encontrada, conectando, pedido de nome, aguardando, encerrada); `ParticipateView`; rodapé "A tela acompanha o apresentador automaticamente." |
+| `RoomPage` | Participante | Cabeçalho compacto: "Trocar sala" (rótulo a partir de `sm`), nome, "Sala XXXXXX", tema; aviso de reinício; estados (entrando, erro, sala não encontrada, conectando, pedido de nome, aguardando, encerrada); `ParticipateView` com os slides de `withRevealedAnswers(room)` e `revealPending`; tela final com "Rever os slides" e `DownloadSlides`; rodapé "A tela acompanha o apresentador automaticamente." |
+| `ViewPage` | Modo leitura | Seção 11.10 |
 
-Cabeçalho do projetor (da esquerda para a direita): Sair; "Código:" com o
-código grande espaçado; "Copiar link de entrada" (vira "Link copiado" por 2
-s); miniatura do QR (abre o modal); contador de pessoas conectadas (ícone
-`Users`); à direita: **Editar**, **Exportar PDF** ("Gerando…"), tela cheia,
-tema, navegação (anterior, "N / total" ou "Fim", próximo) e ocultar cabeçalho.
-Com o cabeçalho oculto, uma faixa de 12 px no topo o reexibe ao passar o mouse
-e um botão flutuante "Cabeçalho" também.
+Cabeçalho do projetor, **sempre numa linha** (da esquerda para a direita):
+
+| Item | Celular | `sm` (640 px) | `md` (768 px) | `xl` (1280 px) |
+| --- | --- | --- | --- | --- |
+| Sair | Só o ícone | Ícone e "Sair" | | |
+| Código da sala (botão que abre o modal) | Código em `text-base` | Código maior | "Código:" antes | |
+| Miniatura do QR (`ShareRoom`, abre o modal) | Oculta | Visível | | |
+| Pessoas conectadas (ícone `Users`) | Visível | | | |
+| Copiar link, Editar (ao vivo), Exportar PDF ("Gerando…"), Encerrar (ao vivo, tom de perigo), tela cheia, tema | No menu "Mais ações" | | | Como botões |
+| Navegação (anterior, "N / total" ou "Fim", próximo) | Botões de 36 px, contador compacto | | | |
+| Ocultar cabeçalho | Oculto | Visível | | |
+
+O menu **Mais ações** (`Menu`, oculto a partir de `xl`) tem: Mostrar o código
+da sala, Copiar link de entrada, Editar (só ao vivo), Exportar PDF, Tela
+cheia (ou Sair da tela cheia), Tema claro ou escuro e, separado, Encerrar
+("Leva todos à tela final e fecha a sala", só ao vivo). Com o cabeçalho
+oculto, uma faixa de 12 px no topo o reexibe ao passar o mouse e um botão
+flutuante "Cabeçalho" também. Com a sala encerrada, uma faixa (`Banner`)
+abaixo do cabeçalho diz "A apresentação foi encerrada." e oferece
+**Apresentar de novo** ("Abrindo a sala nova…").
 
 Estados do projetor: "Carregando sala…", "Erro ao carregar a sala: ...",
 "Sala não encontrada." (com "Voltar ao início"), "Verificando acesso de
@@ -2616,17 +3026,30 @@ slides.".
 
 ### 9.5 Layout do editor (`EditorWorkspace`)
 
-Grid de três colunas em telas `lg`:
-`lg:grid-cols-[260px_minmax(0,0.9fr)_minmax(0,1.35fr)]`. A página ocupa a
+O `EditorWorkspace` escolhe **uma** montagem pela largura, com
+`useMediaQuery('(min-width: 1024px)')`: nunca as duas montadas e uma escondida
+por CSS (o editor visual do slide livre e os modais existiriam em dobro).
+
+**A partir de 1024 px: três colunas.** Grid
+`grid-cols-[250px_minmax(0,1fr)_minmax(0,1.2fr)]` e, a partir de `xl`,
+`xl:grid-cols-[290px_minmax(0,0.9fr)_minmax(0,1.35fr)]`. A página ocupa a
 altura da janela (`lg:h-[100dvh] lg:overflow-hidden`), o grid recebe
-`lg:flex-1 lg:min-h-0` e cada coluna tem uma `ScrollArea` interna com
-`lg:min-h-0 lg:flex-1`.
+`min-h-0 flex-1` e cada coluna (um `Card`) tem uma `ScrollArea` interna com
+`min-h-0 flex-1`.
 
 | Coluna | Fixo | Rolagem própria |
 | --- | --- | --- |
-| 1 | Card "Adicionar slide" (`AddSlideMenu`, grade 2 colunas com ícone e rótulo) | "Slides (N)" com a `SlideList` |
-| 2 | Título "Configuração" | Formulário do slide (`SlideEditor`) + "Opções deste slide" |
+| 1 | `AddSlideMenu` (botão "Adicionar slide" de largura total) e "Slides (N)" | `SlideList` |
+| 2 | Título "Configuração" e o selo do tipo (`TypeBadge`) | Formulário do slide (`SlideEditor`) + "Opções deste slide" |
 | 3 | "Prévia" (ou "Prévia e edição"), formato 16:9/4:3 e, no slide livre, "Ampliar" | Prévia |
+
+**Abaixo de 1024 px: pilha.** Um cartão com três `StackSection` recolhíveis,
+todas abertas de início, nesta ordem: "Slides (N)" (com o `AddSlideMenu` e a
+`SlideList`), "Prévia" (ou "Prévia e edição", com o selo do tipo e os
+controles da prévia; a prévia ganha a proporção do formato) e
+"Configuração" (com o selo do tipo). Recolher **esconde** o corpo (`hidden`)
+em vez de desmontar, para o editor visual não perder a seleção nem a rolagem.
+Nada rola na horizontal até 360 px.
 
 A prévia desenha o slide numa moldura do formato com `ScaledFrame` (fundo do
 tema, sombra e anel), com o mesmo respiro do projetor (`px-6 py-6`), sem
@@ -2635,16 +3058,23 @@ prévia é o `FreeSlideCanvas`; "Ampliar" abre um portal em tela inteira com o
 canvas e o `FreeSlideConfig` lado a lado (400 px), fechado com Esc (exceto
 quando o Esc foi usado pelo próprio slide).
 
-Abaixo de `lg`, as colunas empilham (a prévia ganha `aspect-video` e altura
-mínima de 240 px).
-
 > A combinação `min-h-0` + `flex-1` é o que faz a rolagem funcionar dentro de
 > flex e grid: sem `min-h-0`, o item usa `min-height: auto` e estica o pai.
 
-`SlideList`: cada item com ícone, título (ou o rótulo do tipo), "N. Tipo",
-botões de subir e descer (desativados nas pontas e no gabarito) e remover;
-selecionado com borda azul; gabarito recuado com `Link2`. Vazia: "Nenhum
-slide ainda. Adicione um acima.".
+`SlideList` (framer-motion `Reorder.Group` como `<ol aria-label="Ordem dos
+slides">`): cada item com a alça de arraste (`GripVertical`), o número, o
+título (ou o rótulo do tipo), o ícone e o tipo, e um `Menu` "Ações do slide N"
+com "Mover para cima", "Mover para baixo" (desativados nas pontas) e "Remover
+slide"; selecionado com borda azul. Com o mouse, o cartão inteiro arrasta
+(`dragListener={false}` e `controls.start` no `pointerdown`); no toque, só a
+alça, com `touch-none`, para a rolagem da lista continuar funcionando. A
+ordem muda na tela durante o arraste (estado local) e só é gravada no editor
+ao soltar (`reorderSlides`); gravar a cada troca reposicionaria o gabarito no
+meio do gesto. Um deslocamento acima de 4 px marca o gesto como arraste, para
+o clique que o encerra não selecionar o slide. O gabarito aparece recuado,
+com `Link2` no lugar da alça, não arrasta, e o menu dele só tem "Remover o
+slide de resposta" ("Desliga a revelação na pergunta"). Vazia: "Nenhum slide
+ainda. Use "Adicionar slide".".
 
 ### 9.6 Componentes por pasta
 
@@ -2668,9 +3098,9 @@ os elementos), `FreeElementContent` (`FreeTextContent` e
 
 | Componente | Função |
 | --- | --- |
-| `ParticipateView` | Escolhe o controle pelo tipo; resolve o alvo da resposta (no gabarito, a resposta dada na pergunta); slide livre numa caixa com a proporção dele; texto num quadro. |
-| `ChoiceInput` | Voto em `bar`, `pie`, `quiz`; marcação redonda ou quadrada (`ChoiceMark`); "Voto registrado"; "Limpar resposta" ou cadeado; trava tudo com `timeUp`. |
-| `WordCloudInput` | Envio de textos (até 80), bloqueio de repetição, remoção individual e "Limpar tudo". |
+| `ParticipateView` | Escolhe o controle pelo tipo; resolve o alvo da resposta (no gabarito, a resposta dada na pergunta); slide livre numa caixa com a proporção dele; texto num quadro. Recebe `revealPending`, que segura o suspense até o gabarito ser publicado. |
+| `ChoiceInput` | Voto em `bar`, `pie`, `quiz`; marcação redonda ou quadrada (`ChoiceMark`); "Voto registrado"; "Limpar resposta" ou cadeado; trava tudo com `timeUp` ("Tempo esgotado: as respostas foram encerradas."); desmarcar a última opção apaga a resposta. |
+| `WordCloudInput` | Envio de textos (até 80), bloqueio de repetição, remoção individual e "Limpar tudo"; no modo sem limite, para em `MAX_RESPONSE_ITEMS` (100). |
 | `AnswerReveal` | "Você acertou!" ou "Não foi dessa vez.", gabarito e "sua resposta". |
 | `NamePrompt` | Ícone `UserRound`, título da sala, "Informe seu nome para entrar na sala.", campo (até 40, `autoComplete="name"`) e "Entrar". |
 
@@ -2678,7 +3108,9 @@ os elementos), `FreeElementContent` (`FreeTextContent` e
 
 | Componente | Função |
 | --- | --- |
-| `ShareRoom` | Miniatura do QR (40 px) na barra; modal com QR ampliado, código, link curto em letra grande (ou "Link completo"), botão para alternar entre curto e completo, copiar, "Tentar de novo" em caso de falha; Esc e clique fora fecham. |
+| `RoomCodeDialog` | Modal "Código da sala" e a projeção em tela cheia (seção 11.8). Props `{ code, joinUrl, open, onOpenChange }`; montado uma vez na página do projetor, aberto pelo código no cabeçalho, pela miniatura do QR e pelo menu. Exporta `QR_FG = '#111111'` e `QR_BG = '#ffffff'`. |
+| `ShareRoom` | Só a miniatura do QR (32 px) no cabeçalho, com o ícone `Maximize2`; abre o modal. Props `{ joinUrl, onOpen, className }`; a classe de exibição vem toda de fora (`className ?? 'inline-flex'`), para um `hidden sm:inline-flex` não brigar com um `inline-flex` próprio. |
+| `DownloadSlides` | Bloco "Baixar slides" com "PDF dos slides" e "PowerPoint (.pptx)" (seção 11.9). Props `{ loadPresentation, className }`. |
 | `SummarySlide` | Slide final (seção 7.8). |
 | `PresenterAccessDenied` | Tela de quem abre `/present` ou `/edit` sem token, com atalho para entrar como participante. |
 
@@ -2699,11 +3131,38 @@ A mesma paleta é usada no PDF.
 `SlideSettingsSection`, exceto no livre), `PresentationSettingsButton`,
 `SlideSettingsSection`, `SettingsControls` (`FontSizeRow`, `TimerRow`,
 `OverrideToggleRow`, `OverrideTimerRow`, `OverrideFontRow`),
-`AiPromptButton`, `EditorWorkspace`, `ImportExportButtons`, `ExportDialog` e
-`slideTypeIcons.ts`.
+`AiPromptButton`, `EditorWorkspace`, `EditorToolbar`, `ImportDialog`,
+`ExportDialog` e `slideTypeIcons.ts`.
+
+`EditorToolbar` é a barra das duas telas de editor:
+
+```ts
+interface EditorToolbarProps {
+  back: ReactNode                 // "Início" (criação) ou "Voltar" (edição da sala)
+  title: string
+  onTitleChange: (title: string) => void
+  primary: ReactNode              // "Iniciar apresentação" ou "Salvar alterações"
+  status?: ReactNode              // estado do rascunho, por exemplo
+  rareItems?: MenuEntry[]         // ações raras, como "Começar do zero"
+  onImportError: (message: string) => void
+}
+```
+
+A partir de `xl` (1280 px), **Opções**, **Prompt de IA**, **Importar** e
+**Exportar** são botões, mais o botão de tema e, se houver `rareItems`, um
+menu "Mais" só com eles; abaixo de `xl`, um menu "Mais" (classe `xl:hidden`)
+reúne tudo. Cada modal é montado **uma vez** e aberto de forma controlada
+pelo botão ou pelo item do menu: `PresentationSettingsButton`,
+`AiPromptButton` e `ImportDialog` recebem `open`, `onOpenChange` e
+`trigger={false}` (seção 9.7); o `ExportDialog` já era controlado.
+
+`AddSlideMenu` é o botão azul de largura total "Adicionar slide", que abre um
+`Menu` com o título "Escolha o tipo" e um item por tipo criável (ícone, nome e
+dica, seção 7).
 
 **`layout/`**: `PageShell` (contêiner com largura máxima), `ThemeToggle`
-(botão claro/escuro) e `FullScreenMessage` (mensagem centralizada).
+(botão claro/escuro; o rótulo some abaixo de `sm`) e `FullScreenMessage`
+(mensagem centralizada, com `min-h-[100dvh]`).
 
 ### 9.7 Hooks
 
@@ -2719,6 +3178,10 @@ A mesma paleta é usada no PDF.
 | `useRoomAssets` | Imagens de uma sala para os ids pedidos, lidas uma vez e guardadas |
 | `useRoomFonts` | Fontes da sala registradas, relidas a cada `revision` |
 | `useFreeSlideActions` | Ações do slide livre: `addText`, `addImages`, `replaceImage`, `remove`, `duplicate`, `reorder`, com `busy` e `error` |
+| `useRoomAnswers(code, enabled)` | Assina `secret/answers` (só o dono lê); devolve o `AnswerKey` ou `null` |
+| `useMediaQuery(query)` | `useSyncExternalStore` sobre `matchMedia(query)`: o valor certo já na primeira renderização e atualizado ao redimensionar |
+| `useDialogControl(props)` | Estado de abertura de um modal: controlado por fora (`open` e `onOpenChange`) ou interno; `DialogControlProps { open?, onOpenChange?, trigger? }`, com `trigger={false}` escondendo o botão próprio do modal |
+| `useSlideDownload(loadPresentation)` | `{ download('pdf' \| 'pptx'), working, error }`: baixa os slides com os geradores importados no clique (seção 11.9) |
 
 ### 9.8 Componentes genéricos (`components/ui/`)
 
@@ -2736,11 +3199,13 @@ nos temas claro e escuro.
 | `Slider` | Faixa numérica | Rótulo à esquerda, valor à direita, trecho percorrido preenchido via `--slider-fill` |
 | `Select` | Lista suspensa | Padrão "select-only combobox" do WAI-ARIA; lista em portal, abre para cima quando falta espaço |
 | `ScrollArea` | Rolagem própria | Barra fina; eixo `y`, `x` ou `both` |
-| `Modal` | Janelas | Tamanhos `sm` a `xl`; Esc e clique fora fecham (se `dismissible`); Tab preso; foco volta para quem abriu; `initialFocusRef`; trava a rolagem do corpo |
+| `Modal` | Janelas | Tamanhos `sm` a `xl`; altura máxima `90dvh`; Esc e clique fora fecham (se `dismissible`); Tab preso; foco volta para quem abriu; `initialFocusRef`; trava a rolagem do corpo |
+| `Menu` | Ações agrupadas num botão ("Adicionar slide", "Mais", "Mais ações", ações de cada slide, "Baixar") | Padrão "menu button" do WAI-ARIA (`aria-haspopup`, `role="menu"`, `role="menuitem"`); lista em portal com posição fixa (`ui-popover ui-scroll fixed z-[70]`), 288 px de largura, que abre para cima quando falta espaço; título opcional (`heading`); itens `{ key, label, hint?, icon?, onSelect, disabled?, danger? }` ou `'separator'` |
+| `StackSection` | Seção recolhível do editor empilhado | `{ title, icon, open, onToggle, badge?, children }`; cabeçalho com pelo menos 44 px (`min-h-11`) e `aria-expanded`/`aria-controls`; corpo com `hidden` (não desmonta) |
 | `ConfirmDialog` | Confirmar | Sobre o `Modal`; foco inicial no botão de confirmar; tom `primary` ou `danger`; `busy` |
 | `Banner` | Avisos | Tons `info`, `warning`, `error`; ícone e fechar opcionais |
 | `ColorInput` | Cor | Amostra que abre o seletor do sistema, campo hexadecimal e cores rápidas; estado misto; opção "nenhuma" (`allowNone`) |
-| `SegmentedControl` | Poucas opções lado a lado | `radiogroup` de botões com texto ou ícone; tamanhos `sm` e `md`; não tira o foco do texto em edição |
+| `SegmentedControl` | Poucas opções lado a lado | `radiogroup` de botões com texto ou ícone; tamanhos `sm` e `md`; rótulos com `whitespace-nowrap`; não tira o foco do texto em edição |
 | `ToggleButton` | Liga e desliga | `aria-pressed`; estado misto |
 
 Teclado do `Select`:
@@ -2752,6 +3217,13 @@ Teclado do `Select`:
 | Letras | Abre na opção que começa com elas (sem diferenciar acentos) | Pula para a opção |
 | Esc | Segue para a tela (num modal, fecha o modal) | Fecha só a lista |
 | Tab | Segue o foco | Fecha a lista e segue o foco |
+
+Teclado do `Menu`: Enter, Espaço ou seta para baixo abrem no primeiro item
+ativo; setas percorrem os itens ativos; Home e End vão ao primeiro e ao
+último; Esc fecha e devolve o foco ao botão; Tab fecha e segue. As teclas
+param no menu (`stopPropagation`), então o projetor não troca de slide com um
+menu aberto. Escolher um item fecha o menu, devolve o foco ao botão e só
+então chama `onSelect`, para um modal aberto pelo item receber o foco certo.
 
 ### 9.9 Estilo e tema (`index.css`)
 
@@ -2785,6 +3257,9 @@ Classes próprias:
 
 Todas as animações e transições são desligadas com
 `@media (prefers-reduced-motion: reduce)`.
+
+As páginas usam `min-h-[100dvh]` (e não `min-h-screen`), para a altura
+acompanhar a barra de endereço do celular.
 
 ---
 
@@ -2978,7 +3453,10 @@ Um GIF pequeno é guardado como veio (continua animado).
   recuos, espaçamentos, alinhamento, decorações, realce) e desenha.
 - `utils/freeSlideRaster.ts`: `renderFreeSlide(slide, assets, escala)` desenha
   o fundo, as imagens (com encaixe, cantos arredondados, rotação e opacidade) e
-  os textos num canvas; o PDF usa a imagem JPEG (qualidade 0,9).
+  os textos num canvas; o relatório PDF usa a imagem JPEG (qualidade 0,9).
+- O PDF dos slides (`utils/exportSlidesPdf.ts`, seção 11.9) desenha **todos**
+  os slides por esse mesmo caminho, depois de convertê-los em slides livres
+  estáticos (`toStaticSlides`).
 
 ---
 
@@ -2986,15 +3464,17 @@ Um GIF pequeno é guardado como veio (continua animado).
 
 ### 11.1 Botões e modais
 
-- **Importar** (`ImportExportButtons`) abre um modal com duas opções, e as
-  duas aceitam o arquivo escolhido ou arrastado:
+- **Importar** (`ImportDialog`, botão na barra a partir de 1280 px ou item do
+  menu "Mais") abre um modal com duas opções, e as duas aceitam o arquivo
+  escolhido ou arrastado:
 
 | Opção | O que faz |
 | --- | --- |
 | **Apresentação (.json)** | Lê um JSON exportado daqui ou gerado pelo prompt de IA, valida e **substitui** todo o conteúdo do editor (`loadPresentation`). Um `.pptx` escolhido aqui é lido como PowerPoint. |
 | **PowerPoint (.pptx)** | Converte cada slide visível num slide livre. Antes, escolhe-se **Adicionar ao fim** (padrão) ou **Substituir tudo** (`SegmentedControl`). Qualquer outro arquivo (inclusive `.ppt` antigo) é recusado: "Escolha um arquivo .pptx (PowerPoint 2007 ou mais novo). Arquivos .ppt antigos precisam ser salvos como .pptx antes." |
 
-- **Exportar** (`ExportDialog`) abre um modal com:
+- **Exportar** (`ExportDialog`, botão ou item do menu "Mais") abre um modal
+  com:
 
 | Opção | O que faz |
 | --- | --- |
@@ -3003,8 +3483,8 @@ Um GIF pequeno é guardado como veio (continua animado).
 
 Nome dos arquivos: `presentationFileName(título, extensão)`, com o título em
 minúsculas, sem acentos (`normalize('NFD')` e remoção de U+0300 a U+036F) e com
-tudo que não for `a-z0-9` virando `-` (vazio: `apresentacao`). O PDF usa
-`<slug>-resultados.pdf`.
+tudo que não for `a-z0-9` virando `-` (vazio: `apresentacao`). O relatório
+PDF usa `<slug>-resultados.pdf`; o PDF dos slides, `<slug>.pdf`.
 
 Download: `downloadBlob(blob, nome)` cria um `<a download>` temporário com
 `URL.createObjectURL`.
@@ -3180,7 +3660,7 @@ aparecem em algum `fontFamily` de caixa, parágrafo ou trecho de slide livre.
 
 ### 11.5 Exportar PowerPoint (`utils/pptxExport/`)
 
-Carregado sob demanda. `exportPptx(presentation, { theme })` devolve
+Carregado sob demanda. `exportPptx(presentation, { theme, hints })` devolve
 `{ blob, warnings }` (MIME
 `application/vnd.openxmlformats-officedocument.presentationml.presentation`).
 
@@ -3219,7 +3699,13 @@ ppt/fonts/fontN.fntdata                       fontes em EOT sem compressão
   `fitFreeSlideToFrame` para o formato da apresentação.
 - **Slides comuns** viram slides livres estáticos (`standard.ts`), sem
   resultados, com tamanhos mínimos (título 60 px, corpo 40 px, dica 28 px) e as
-  cores do tema da página:
+  cores do tema da página. `standardSlideToFree(slide, slides, settings,
+  frame, theme, options)` aceita `StaticSlideOptions { hints?, revealQuiz? }`:
+  `hints: false` tira as instruções de participação ("Responda pelo
+  celular." e afins) e `revealQuiz: true` destaca a correta na própria
+  pergunta. A exportação do editor usa os padrões (`hints: true`,
+  `revealQuiz: false`); o download dos slides passa `hints: false` por
+  `PptxExportOptions`; o modo leitura usa `toStaticSlides` (seção 11.10).
 
 | Cor | Claro | Escuro |
 | --- | --- | --- |
@@ -3247,7 +3733,10 @@ ppt/fonts/fontN.fntdata                       fontes em EOT sem compressão
 
 `exportResultsPdf(room, responses, assets)`; jsPDF importada sob demanda; A4
 em pontos; margem 48. Os slides livres são desenhados antes em canvas
-(`renderFreeSlide`) e entram como JPEG.
+(`renderFreeSlide`) e entram como JPEG. Como a sala guarda as perguntas sem
+gabarito, quem chama passa a sala com os gabaritos de volta: o projetor usa
+os que assina (`useRoomAnswers`), e a tela inicial os lê com `fetchAnswers`
+(`{ ...room, slides: withAnswers(room.slides, answers) }`).
 
 1. **Capa**: faixa azul (`rgb(37, 99, 235)`, 130 pt de altura), "Relatório
    de resultados", o título (24 pt, negrito, quebrado na largura), "Gerado
@@ -3273,7 +3762,7 @@ em pontos; margem 48. Os slides livres são desenhados antes em canvas
    - "Resultado" só em `quiz` com gabarito (acerto = conjunto exato).
    - Com nomes, ordem alfabética `pt-BR`; sem nomes, "Participante N" pela
      ordem de chegada (`createdAt`).
-   - Resposta vazia vira um traço simples.
+   - Resposta vazia vira um hífen (`-`).
    - Tabelas longas quebram em várias páginas **repetindo o cabeçalho**.
 4. **Rodapé** com a mesma contagem da tela na página do slide
    (`responseSummary`) e o total de participantes na página da tabela.
@@ -3297,35 +3786,187 @@ como `.json` e usar **Importar**, opção "Apresentação (.json)".
 
 - O slide livre é descrito só com caixas de texto (imagens dependem de
   `assets`, que a IA não consegue gerar).
+- Descreve `allowDownload` entre as opções globais e o deixa de fora das
+  sobrescritas por slide (junto de `askName` e `slideAspect`).
 - Instrui a IA a **não** gerar slides `answer` (a plataforma os cria a partir
   de `revealAnswer`).
 - Ao mexer em `utils/validation.ts`, o prompt precisa ser atualizado: ele é a
   documentação que a IA lê.
 
-### 11.8 Encurtador do link da sala (`lib/shortUrl.ts`, `ShareRoom`)
+### 11.8 Código da sala e link curto (`RoomCodeDialog`, `lib/shortUrl.ts`)
 
-1. Ao abrir o modal do QR, a aplicação encurta o link de entrada
-   (`GET https://tinyurl.com/api-create.php?url=<url codificada>`, tempo
-   limite de 8 s com `AbortController`). A resposta precisa começar com
-   `http(s)://`.
-2. O resultado vai para o `localStorage` (`ip-short-urls`), indexado pela URL
-   longa: reabrir o modal não cria um link novo.
-3. O texto exibido perde `https://` e `www.` (ex.: `tinyurl.com/2xoh2ngp`).
-4. Falhou: o modal mostra o link completo e **"Tentar de novo"**.
+**Modal "Código da sala"** (`Modal` de tamanho `sm`, com a descrição "Os
+participantes entram com este código em "Entrar em uma sala", na página
+inicial."): o código em fonte mono, o QR Code (168 px, `QR_FG` sobre `QR_BG`),
+uma linha com o link curto (ou o completo, enquanto não há curto) e o botão
+de copiar, "Encurtando o link..." enquanto encurta, e, se falhar, "Não foi
+possível encurtar o link agora." com **Tentar de novo**. Embaixo, **Copiar
+código** e **Projetar em tela cheia**. Copiar mostra a confirmação por 2 s.
+
+**Projeção em tela cheia**: o modal fecha antes (o foco preso dele engoliria
+o primeiro clique) e uma camada em portal (`fixed inset-0 z-[100]`,
+`role="dialog"`, "Código da sala em tela cheia") cobre a página, pedindo tela
+cheia ao `documentElement` (se o navegador recusar, a camada ocupa a janela
+igual). Conteúdo, em tamanhos com `clamp()` para servir do celular ao
+projetor: "1. Acesse:" e o link curto em letra grande (sem link curto, o
+endereço do site, `host + pathname`); "2. Use o código da sala:" e o código
+numa caixa; o QR ao lado ("Toque no QR Code para ampliar"); "3. Responda pelo
+celular enquanto a apresentação estiver no ar.". No canto, alternar o tema e
+sair da tela cheia. A projeção tem **tema próprio** (começa no tema da página
+e alterna ali mesmo), com classes sem `dark:`, que seguiriam o `<html>`.
+
+| Ação | Efeito |
+| --- | --- |
+| Clicar no QR projetado | QR ampliado (`z-[110]`, `min(92vw, 92vh)`), com "Voltar ao código" |
+| Esc | Fecha o QR ampliado; sem ele, fecha a projeção |
+| Outras teclas | Param na projeção: o ouvinte de teclado fica na fase de **captura** e chama `stopPropagation`, para o passador de slides não trocar o slide escondido atrás |
+| Sair da tela cheia pelo navegador | Fecha a projeção (`fullscreenchange`) |
+
+**Link curto** (`lib/shortUrl.ts`):
+
+```ts
+const CACHE_KEY = 'ip-short-urls'
+const TIMEOUT_MS = 8000
+
+// Para acrescentar um serviço: precisa responder com
+// `Access-Control-Allow-Origin: *` e devolver o link em texto puro.
+const PROVIDERS = [
+  { host: 'da.gd', endpoint: (url: string) => `https://da.gd/s?url=${encodeURIComponent(url)}` },
+]
+
+/** https, com caminho e (quando informado) do próprio serviço. */
+function validShortUrl(text: string, host?: string): string | null {
+  try {
+    const parsed = new URL(text.trim().replace(/^http:\/\//i, 'https://'))
+    if (parsed.protocol !== 'https:' || parsed.pathname.length <= 1) return null
+    if (host && parsed.hostname !== host) return null
+    return parsed.href
+  } catch {
+    return null
+  }
+}
+
+export async function shortenUrl(url: string): Promise<string> {
+  const cached = getCachedShortUrl(url)
+  if (cached) return cached
+  for (const provider of PROVIDERS) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+    try {
+      const res = await fetch(provider.endpoint(url), { signal: controller.signal })
+      if (!res.ok) continue
+      const short = validShortUrl(await res.text(), provider.host)
+      if (!short) continue
+      writeCache(url, short)
+      return short
+    } catch {
+      // fora do ar, sem internet ou tempo esgotado: tenta o próximo
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+  throw new Error('Nenhum encurtador respondeu.')
+}
+```
+
+1. O link curto é pedido **sob demanda**, quando o modal ou a projeção abre.
+2. A resposta só vale se for `https`, do próprio `da.gd` e com caminho: uma
+   página de erro em texto não vira "link curto".
+3. O resultado vai para o `localStorage` (`ip-short-urls`), indexado pela URL
+   longa: reabrir não cria um link novo. A leitura do cache **descarta
+   entradas inválidas** (por exemplo, links de um serviço usado antes) e
+   regrava o cache limpo.
+4. `displayShortUrl` tira `https://` e `www.` (ex.: `da.gd/e0SS8g`).
 
 Decisões:
 
 - **O QR sempre codifica a URL completa**: se o encurtador sair do ar, a
   câmera continua funcionando.
-- **TinyURL** porque, sendo um site estático, a chamada sai do navegador e o
-  serviço precisa responder com CORS liberado. Entre os testados (is.gd,
-  cleanuri, spoo.me, ulvis), só o TinyURL envia
-  `Access-Control-Allow-Origin`. O redirecionamento preserva o fragmento
-  `#/room/<código>`.
-- **Só sob demanda**: a URL da sala só vai para o serviço externo quando o
-  apresentador abre o QR.
-- **Em `localhost` falha** (o serviço recusa endereços locais): esperado em
-  desenvolvimento.
+- **da.gd** porque, sendo um site estático, a chamada sai do navegador e o
+  serviço precisa responder com CORS liberado para qualquer origem. O TinyURL,
+  usado antes, passou a responder `Access-Control-Allow-Origin:
+  https://tinyurl.com`, e o navegador descarta a resposta mesmo com status
+  200; o is.gd não libera CORS. O da.gd responde com
+  `Access-Control-Allow-Origin: *`, é gratuito, de código aberto, não pede
+  chave, aceita `localhost` e **preserva o fragmento** `#/room/<código>` no
+  redirecionamento (302).
+- **Sem servidor**: encurtar numa função de servidor (por exemplo, Cloud
+  Functions chamando o TinyURL, com o da.gd de reserva) funcionaria sem CORS,
+  mas exigiria o plano pago e tiraria o projeto do modelo 100% estático.
+- **Serviço lento**: o da.gd costuma responder em menos de um segundo, mas
+  numa rede com proxy pode levar vários segundos; passando de 8 s, a
+  interface mostra o link completo e "Tentar de novo".
+
+### 11.9 Baixar os slides no fim (`useSlideDownload`, `exportSlidesPdf`, `toStaticSlides`)
+
+Com `settings.allowDownload`, a tela final do celular mostra o bloco
+`DownloadSlides` ("Baixar slides") com dois botões, **PDF dos slides** e
+**PowerPoint (.pptx)** (cada um mostra "Gerando…" enquanto trabalha). Os arquivos levam **só os slides**, sem a
+resposta de ninguém e sem as instruções de participação, no tema da página de
+quem baixa.
+
+```ts
+// utils/staticSlides.ts: todos os slides como slides livres estáticos
+export function toStaticSlides(presentation, { theme = 'light', skipAnswerSlides = false, ...options } = {}): FreeSlide[] {
+  const settings = withDefaults(presentation.settings)
+  const frame = SLIDE_FRAMES[settings.slideAspect]
+  return presentation.slides
+    .filter((slide) => !(skipAnswerSlides && slide.type === 'answer'))
+    .map((slide) => slide.type === 'free'
+      ? fitFreeSlideToFrame(slide, frame)
+      : standardSlideToFree(slide, presentation.slides, presentation.settings, frame, theme, options))
+}
+
+// utils/exportSlidesPdf.ts: uma página por slide
+export async function exportSlidesPdf(presentation, { theme = 'light' } = {}) {
+  const slides = toStaticSlides(presentation, { theme, hints: false })
+  const { jsPDF } = await import('jspdf')
+  const width = 960, height = Math.round(width * slides[0].height / slides[0].width)
+  const doc = new jsPDF({ unit: 'pt', format: [width, height], orientation: 'landscape' })
+  for (const [i, slide] of slides.entries()) {
+    if (i > 0) doc.addPage([width, height], 'landscape')
+    const canvas = await renderFreeSlide(slide, presentation.assets ?? {}, 1)
+    doc.addImage(canvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, width, height)
+  }
+  doc.save(presentationFileName(presentation.title, 'pdf'))
+}
+
+// hooks/useSlideDownload.ts
+export function useSlideDownload(loadPresentation: () => Promise<Presentation>) {
+  // download('pdf'): registerFonts (o canvas usa as fontes do documento) e exportSlidesPdf
+  // download('pptx'): exportPptx(presentation, { theme, hints: false }) e downloadBlob
+  // os dois geradores entram por import() dinâmico; devolve { download, working, error }
+}
+```
+
+No celular, `loadPresentation` é `loadRoomPresentation(code, room,
+withRevealedAnswers(room))`: a apresentação como a plateia a vê, com imagens
+e fontes. Os slides de gabarito saem com a correta destacada **só nas
+perguntas reveladas** durante a apresentação. Falhas mostram "Não foi
+possível gerar o arquivo: ...".
+
+### 11.10 Modo leitura (`pages/ViewPage.tsx`)
+
+| Rota | Fonte | Download |
+| --- | --- | --- |
+| `/view` | Um `.json` exportado (ou gerado pelo prompt de IA), escolhido ou arrastado para a página, lido e validado no navegador, sem Firebase. A tela inicial tem o botão "Ler uma apresentação (.json)" | Sempre (o arquivo já é de quem lê) |
+| `/view/:code` | A sala (`useRoom`), com `withRevealedAnswers`, imagens (`useRoomAssets`) e fontes (`useRoomFonts`). Só com `status === 'ended'`; antes disso, "A leitura fica disponível quando a apresentação terminar." | Só com `allowDownload` |
+
+O leitor (`Reader`):
+
+- **Rolagem** (todos os slides, um embaixo do outro) ou **Um por vez**
+  (`SegmentedControl`). No modo "um por vez": setas do teclado e
+  `PageUp`/`PageDown`, deslize horizontal (pelo menos 50 px e 1,5 vez maior
+  que o vertical), botões e contador, e tela cheia no palco (`requestFullscreen`
+  no elemento do slide). A caixa do slide mede `min(100%, calc(65vh * proporção))`.
+- **Mostrar respostas certas** (`Checkbox`, só quando há perguntas): marca a
+  correta na própria pergunta (`revealQuiz`). Numa sala, só as corretas
+  publicadas existem para marcar.
+- Menu **Baixar** (`Menu` com "PDF dos slides" e "PowerPoint (.pptx)", pelo
+  `useSlideDownload`) quando o download é permitido, e o botão de tema.
+- Os slides passam por `toStaticSlides(presentation, { hints: false,
+  revealQuiz: mostrarRespostas, skipAnswerSlides: true })` e são desenhados
+  com `FreeSlideView`.
 
 ---
 
@@ -3337,11 +3978,14 @@ Firestore. Sala de exemplo: código `K7MP2Q`, token `aZ3...` (24 caracteres).
 ### 12.1 Da criação ao início
 
 1. O apresentador abre `/` e clica em **Criar sala** (`/create`). O editor
-   abre vazio com o título "Minha apresentação". `useParticipant` já faz o
-   login anônimo em segundo plano (uid `P1`).
-2. Adiciona slides pelo menu, configura na coluna do meio e confere na
-   prévia. Opcionalmente ajusta **Opções**, importa um JSON (por exemplo, o
-   gerado pelo prompt de IA) ou um PowerPoint.
+   abre vazio com o título "Minha apresentação" (ou com o rascunho deixado
+   neste navegador). `useParticipant` já faz o login anônimo em segundo plano
+   (uid `P1`).
+2. Adiciona slides pelo menu "Adicionar slide", ordena arrastando,
+   configura na coluna do meio e confere na prévia (no celular, nas seções
+   empilhadas). Cada mudança vai para o rascunho 600 ms depois ("Rascunho
+   salvo neste navegador"). Opcionalmente ajusta **Opções**, importa um JSON
+   (por exemplo, o gerado pelo prompt de IA) ou um PowerPoint.
 3. Clica em **Iniciar apresentação**:
    - sem uid: "Conectando ao Firebase… aguarde um instante e tente
      novamente." (ou a mensagem de falha da autenticação anônima);
@@ -3351,16 +3995,23 @@ Firestore. Sala de exemplo: código `K7MP2Q`, token `aZ3...` (24 caracteres).
 4. `createRoom` sorteia `K7MP2Q`, confirma que não existe (`getDoc`), mede o
    JSON (abaixo de 1.000.000 bytes) e grava em lote:
    - `rooms/K7MP2Q` com `creatorUid: P1`, `currentSlideIndex: 0`,
-     `status: 'live'`, `timers: {}`, `revealedSlideIds: []` e `settings`
-     completo;
-   - `rooms/K7MP2Q/private/presenter` com `{ token, ownerUid: P1, createdAt }`.
+     `status: 'live'`, `timers: {}`, `revealedSlideIds: []`,
+     `answersHidden: true`, `revealedAnswers: {}`, `settings` completo e os
+     quizzes com `correctOptionIds: []`;
+   - `rooms/K7MP2Q/private/presenter` com `{ token, ownerUid: P1, createdAt }`;
+   - `rooms/K7MP2Q/secret/answers` com os gabaritos (`{ q1: ['b'] }`).
    Depois envia as imagens e fontes para `assets` e `fonts`.
 5. `savePresenterSession({ code: 'K7MP2Q', token, title })` e navegação para
    `/present/K7MP2Q/<token>`.
 6. O projetor assina a sala; `usePresenterAccess` vê `creatorUid === P1` e
-   concede o acesso. Se o primeiro slide for um `quiz` com tempo, o efeito de
-   "cronômetro ausente" grava `timers.<id> = { endsAt: agora + 20000,
-   remainingMs: 20000 }`.
+   concede o acesso; `useRoomAnswers` passa a assinar `secret/answers`. Se o
+   primeiro slide for um `quiz` com tempo, o efeito de "cronômetro ausente"
+   grava `timers.<id> = { endsAt: agora + 20000, remainingMs: 20000 }`.
+7. Para mostrar o código, o apresentador clica nele no cabeçalho: o modal
+   "Código da sala" pede o link curto ao da.gd ("Encurtando o link..."),
+   guarda em `ip-short-urls` e mostra `da.gd/xxxxxx`. **Projetar em tela
+   cheia** leva código, QR e link curto para a tela inteira do projetor; Esc
+   volta.
 
 ### 12.2 Entrada do participante
 
@@ -3371,12 +4022,14 @@ Firestore. Sala de exemplo: código `K7MP2Q`, token `aZ3...` (24 caracteres).
 3. Se `askName` estiver ligado e não houver nome salvo para `K7MP2Q`, aparece
    o `NamePrompt`. Ela digita "Ana Paula", que vai para
    `ip-participant-names` (`{ "K7MP2Q": "Ana Paula" }`).
-4. Presença: `joinRoom('K7MP2Q', 'A1', 'Ana Paula')` grava
-   `participants/A1` com `merge: true`. O contador do projetor (ícone de
-   pessoas) e o rodapé passam a contar a Ana.
+4. Presença: `joinRoom('K7MP2Q', 'A1', 'Ana Paula')` lê `participants/A1`
+   (não existe) e grava `{ uid, name, joinedAt, lastSeenAt }` com
+   `merge: true`. O contador do projetor (ícone de pessoas) e o rodapé passam
+   a contar a Ana. Se ela recarregar, a nova escrita leva só `lastSeenAt` e o
+   nome: `joinedAt` fica.
 5. O celular mostra o título da apresentação e o controle do slide atual. Se
-   o apresentador ainda estiver no slide final, aparece "Obrigado por
-   participar!".
+   a sala já estiver encerrada, aparece a tela final ("Obrigado por
+   participar!", "Rever os slides").
 
 ### 12.3 Pergunta com cronômetro e gabarito (linha do tempo)
 
@@ -3387,12 +4040,12 @@ frequente" (`c`), correta `b`, `revealAnswer: true`, 20 s; slide 4 é o
 
 | Tempo | Projetor | Firestore | Celulares |
 | --- | --- | --- | --- |
-| t = 0 | Apresentador aperta a seta para a direita no slide 2 | `currentSlideIndex: 2` e `timers.q1 = { endsAt: t0+20000, remainingMs: 20000 }` numa escrita | Trocam para a pergunta; mostram A, B e C, sem contagem |
+| t = 0 | Apresentador aperta a seta para a direita no slide 2 | `currentSlideIndex: 2` e `timers.q1 = { endsAt: t0+20000, remainingMs: 20000 }` numa escrita | Trocam para a pergunta; mostram A, B e C, sem contagem. O `q1` deles tem `correctOptionIds: []`: a resposta não está em nenhum documento que possam ler |
 | 0 a 15 s | Card "Tempo restante" com segundos e milissegundos; rodapé "30 participante(s) · N responderam" | Cada toque grava `responses/q1__<uid>` com `value: ['b']` etc. | "Voto registrado"; "Limpar resposta" se permitido |
 | 15 s | Card fica vermelho (últimos 5 s) | | |
 | 20 s | `useSlideTimer` dá `runOut`; o próximo slide é o `answer` de `q1`, então `goTo(3)` | `currentSlideIndex: 3` e `timers.q1 = { endsAt: null, remainingMs: 0 }` numa escrita | Trocam para o gabarito |
-| 20 a 23 s | "A resposta certa é." ".." "..." | | Mesmo suspense, contado localmente |
-| 23 s | Quadro com B em verde e "votos · %" em cada alternativa; rodapé com os números da pergunta | `revealedSlideIds: arrayUnion('r1')` | "Você acertou!" ou "Não foi dessa vez.", com "sua resposta" |
+| 20 a 23 s | "A resposta certa é." ".." "..." (o projetor já sabe a correta, por `secret/answers`) | | Mesmo suspense, contado localmente |
+| 23 s | Quadro com B em verde e "votos · %" em cada alternativa; rodapé com os números da pergunta | Numa escrita: `revealedSlideIds: arrayUnion('r1')` e `revealedAnswers.q1 = ['b']` | Assim que a escrita chega (o suspense local segura a tela até lá): "Você acertou!" ou "Não foi dessa vez.", com "sua resposta" |
 
 Variações:
 
@@ -3402,7 +4055,7 @@ Variações:
   respostas foram encerradas." e os botões travados (`closed`). Não há novo
   avanço automático.
 - **Volta ao gabarito**: aparece direto, sem suspense (`r1` está em
-  `revealedSlideIds`).
+  `revealedSlideIds` e `q1` em `revealedAnswers`).
 - **Sai da pergunta aos 12 s restantes** (avança antes de zerar): a escrita
   grava `timers.q1 = { endsAt: null, remainingMs: 12000 }` (pausa). Voltando,
   `timers.q1 = { endsAt: agora + 12000, remainingMs: 12000 }` (retoma).
@@ -3417,7 +4070,10 @@ Variações:
 - **Sai do gabarito antes dos 3 s e volta**: o suspense recomeça (nada foi
   registrado).
 - **Participante entra atrasado no gabarito já revelado**: vê a resposta na
-  hora.
+  hora (as corretas já estão em `revealedAnswers`).
+- **Alguém tenta ler o gabarito antes da revelação** (ferramentas do
+  navegador): a sala só tem `correctOptionIds: []`, e a leitura de
+  `secret/answers` é recusada pelas regras.
 - **Relógio do celular adiantado**: nada muda, porque o bloqueio só vem de
   `closed`, gravado pelo projetor.
 
@@ -3439,15 +4095,27 @@ Apresentação "Introdução à Análise de Dados" (a do exemplo do prompt de IA
 5. **Slide 6, `bar`** "Quais ferramentas você já usou?" (múltipla): barras
    com contadores; rodapé "30 participante(s) · 25 responderam · 58 voto(s)".
 6. **Slide 7, `text`** "Encerramento".
-7. **Seta para a direita no último slide**: `currentSlideIndex: 7` (igual a
-   `slides.length`). Projetor: slide final com miniaturas e **Baixar
-   resultados (PDF)**; celulares: "Obrigado por participar! A apresentação foi
-   encerrada.".
+7. **Seta para a direita no último slide**: numa escrita,
+   `currentSlideIndex: 7` (igual a `slides.length`) e `status: 'ended'`.
+   Projetor: slide final com miniaturas e **Baixar resultados (PDF)**,
+   navegação desativada e a faixa "A apresentação foi encerrada." com
+   **Apresentar de novo**; celulares: "Obrigado por participar! A
+   apresentação foi encerrada.", **Rever os slides** e, com `allowDownload`,
+   **Baixar slides**. Uma resposta que chegue agora é recusada pelas regras.
 8. **Baixar resultados (PDF)**: `getAllResponses`, `fetchAssets`,
    `loadRoomFonts` e `exportResultsPdf` geram
    `introducao-a-analise-de-dados-resultados.pdf` com capa, uma página por
    slide (o gabarito não vira página) e uma tabela depois de cada slide
    interativo com respostas.
+9. **Ana toca em Rever os slides**: `/view/K7MP2Q` mostra os slides em
+   rolagem, sem dicas e sem os slides de gabarito; com "Mostrar respostas
+   certas", a pergunta de mediana mostra "O valor central" marcada. Com
+   `allowDownload`, ela toca em **PDF dos slides** na tela final e baixa
+   `introducao-a-analise-de-dados.pdf`, uma página por slide.
+10. **Apresentar de novo** (outra turma): o projetor lê os gabaritos, monta a
+    apresentação com imagens e fontes, cria a sala `M4QX8T` (vazia de
+    respostas) e navega para ela. `K7MP2Q` continua encerrada, com o PDF e o
+    modo leitura disponíveis.
 
 ### 12.5 Edição de uma sala em andamento
 
@@ -3462,10 +4130,11 @@ Apresentação "Introdução à Análise de Dados" (a do exemplo do prompt de IA
    sala. Ao salvar, todos serão redirecionados para o início da apresentação,
    assim como você."
 4. Confirmando: envia imagens e fontes novas (nenhuma, neste caso) e grava
-   numa escrita `title`, `slides`, `settings` (completo), `currentSlideIndex:
-   0`, `timers: {}`, `revealedSlideIds: []`, `status: 'live'`, `updatedAt` e
-   `revision: increment(1)` (de 0 para 1). Depois apaga imagens e fontes sem
-   uso.
+   num lote, na sala, `title`, `slides` (sem gabarito), `settings`
+   (completo), `currentSlideIndex: 0`, `timers: {}`, `revealedSlideIds: []`,
+   `answersHidden: true`, `revealedAnswers: {}`, `status: 'live'`,
+   `updatedAt` e `revision: increment(1)` (de 0 para 1), e, em
+   `secret/answers`, os gabaritos. Depois apaga imagens e fontes sem uso.
 5. A tela navega para `/present/K7MP2Q/<token>`, que abre no slide 1.
 6. Cada celular recebe o snapshot: `currentSlideIndex: 0` e `revision: 1`
    maior que o visto (0): aparece o aviso "O apresentador atualizou a
@@ -3481,9 +4150,11 @@ projetor, ao reabrir, encerra a pergunta se o tempo já tiver acabado.
 ### 12.6 Retomar e reivindicar o controle
 
 - **Mesmo dispositivo**: a tela inicial lista "Continuar como apresentador
-  (neste dispositivo)" com o título e o código. **Retomar** abre
+  (neste dispositivo)" com o título, o código e a situação ("No ar",
+  "Encerrada" ou "Não existe mais"). **Retomar** (só nas salas no ar) abre
   `/present/<código>/<token>`; **Exportar PDF** gera o relatório sem reabrir a
-  apresentação (se a sala não existir mais: "A sala XXXXXX não existe mais.").
+  apresentação, com os gabaritos lidos por `fetchAnswers` (se a sala não
+  existir mais: "A sala XXXXXX não existe mais.").
 - **Outro navegador** (ou dados limpos): ao abrir a URL com o token, o uid
   novo `P2` é diferente de `creatorUid`. `claimPresenter` faz `update` em
   `private/presenter` com `{ ownerUid: P2, token }`; as regras aceitam porque o
@@ -3521,10 +4192,19 @@ projetor, ao reabrir, encerra a pergunta se o tempo já tiver acabado.
 | Apresentador recarrega a página | O token na URL reivindica o controle de volta |
 | Apresentação sem slides | "Esta apresentação ainda não tem slides." |
 | Firebase sem configuração | A interface carrega com aviso; só as chamadas de rede falham |
-| Encurtador indisponível (ou `localhost`) | Link completo e "Tentar de novo" |
+| Encurtador indisponível ou lento (mais de 8 s) | No modal, o link completo, "Não foi possível encurtar o link agora." e "Tentar de novo"; na projeção, o endereço do site no lugar do link curto |
 | Gabarito cuja pergunta foi removida | "A pergunta deste gabarito não existe mais." (o editor remove órfãos) |
 | Tempo esgotado sem gabarito depois | A pergunta continua no ar, travada; o apresentador avança |
 | Relógio do celular adiantado ou atrasado | Não muda nada |
+| Gabarito lido antes da revelação | Impossível pela sala (`correctOptionIds: []`); `secret/answers` recusa a leitura |
+| O suspense do celular termina antes de o gabarito ser publicado | O suspense continua até a escrita do projetor chegar |
+| Resposta enviada depois do fim da apresentação | Recusada pelas regras |
+| Navegar numa sala encerrada | Botões e teclado sem efeito; "Apresentar de novo" abre uma sala nova |
+| `/edit/<código>` de uma sala encerrada | "Esta apresentação foi encerrada e não pode mais ser editada." |
+| `/view/<código>` com a sala no ar | "A leitura fica disponível quando a apresentação terminar." |
+| Recarregar a tela de criação | O rascunho volta (texto na hora, imagens e fontes logo depois) |
+| Participante desmarca todas as opções de uma múltipla escolha | A resposta é apagada e ele deixa de contar em "responderam" |
+| Modal ou menu aberto no projetor | Setas, `PageUp`, `PageDown` e Espaço ficam com o modal ou o menu, sem trocar o slide |
 | Apresentador sai de uma pergunta no meio da contagem | Pausa; voltar retoma de onde parou |
 | Volta para uma pergunta que já zerou | Continua zerada, respostas congeladas, sem avanço automático |
 | Volta para um gabarito já revelado | Resposta na hora |
@@ -3639,11 +4319,10 @@ async function toggle(optionId: string) {
 }
 ```
 
-Observação: na múltipla escolha com troca permitida, desmarcar a última
-opção grava `value: []`. O documento continua existindo: não soma votos nem
-aparece em `namedResponses`, mas ainda conta em `answeredCount` (que olha só
-os uids). "Limpar resposta" apaga o documento. Numa reimplementação, vale
-apagar o documento quando a lista ficar vazia.
+Na múltipla escolha com troca permitida, desmarcar a última opção chama
+`saveResponse` com `[]`, que **apaga** o documento (`clearResponse`): uma
+resposta vazia contaria em `answeredCount` (que olha só os uids) sem ter
+voto. "Limpar resposta" apaga do mesmo jeito.
 
 ### 13.4 Layout da nuvem de palavras (`WordCloudView`)
 
@@ -3776,6 +4455,37 @@ function assertRoomFits(data: object) {
 }
 ```
 
+### 13.11 Arraste da lista de slides (`SlideList`)
+
+```tsx
+const key = slides.map((s) => s.id).join('|')
+const [order, setOrder] = useState<string[]>(() => slides.map((s) => s.id))
+const orderRef = useRef(order); orderRef.current = order
+const dragging = useRef(false)
+
+// Fora do arraste, a lista segue o editor (slide novo, removido, importado).
+useEffect(() => { if (!dragging.current) setOrder(key ? key.split('|') : []) }, [key])
+
+<Reorder.Group as="ol" axis="y" values={order} onReorder={setOrder} aria-label="Ordem dos slides">
+  {order.map((id) => (
+    <SlideRow key={id} /* ... */
+      onDragStart={() => { dragging.current = true }}
+      onDragEnd={() => { dragging.current = false; reorderSlides(orderRef.current) }}   // grava só ao soltar
+    />
+  ))}
+</Reorder.Group>
+
+// Em cada SlideRow (Reorder.Item com dragListener={false} e dragControls):
+// - mouse: onPointerDown no cartão chama controls.start(e) (exceto no gabarito e no menu);
+// - toque: só a alça (touch-none) chama controls.start(e);
+// - onDrag marca justDragged quando |offset.y| > 4; o clique que termina o arraste não seleciona.
+```
+
+A ordem muda **na tela** durante o gesto (estado local) e só vai para o
+editor ao soltar: gravar a cada troca faria `syncAnswerSlides` reposicionar o
+gabarito no meio do arraste. Ao soltar, `reorderSlides` aplica a ordem e o
+gabarito volta para logo depois da pergunta.
+
 ---
 
 ## 14. Desenvolvimento, configuração e deploy
@@ -3806,6 +4516,37 @@ exportar JSON; só as operações de sala falham.
 | `npm run lint` | ESLint |
 
 Rode typecheck e lint antes de commitar: o build do CI falha em erro de tipo.
+
+**Emuladores do Firebase.** Para desenvolver e testar as regras sem tocar no
+projeto real, o app pode usar os emuladores locais do Auth e do Firestore
+(precisa de Java, porque o emulador do Firestore roda na JVM). O
+`firebase.json` tem a seção `emulators` (Auth em `127.0.0.1:9099`, Firestore
+em `127.0.0.1:8080`, interface web desligada, `singleProjectMode: true`):
+
+```bash
+npx firebase-tools emulators:start --only auth,firestore --project demo-ip
+```
+
+Um id de projeto que começa com `demo-` diz à CLI que não há projeto real.
+Em seguida, um `.env.emulators.local` (o `.gitignore` já cobre `.env.*.local`)
+com chaves fictícias e a variável que liga os emuladores:
+
+```
+VITE_FIREBASE_API_KEY=demo-key
+VITE_FIREBASE_AUTH_DOMAIN=demo-ip.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=demo-ip
+VITE_FIREBASE_STORAGE_BUCKET=demo-ip.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=000000000000
+VITE_FIREBASE_APP_ID=1:000000000000:web:0000000000000000000000
+VITE_FIREBASE_EMULATORS=true
+```
+
+E o Vite nesse modo: `npx vite --mode emulators`. Com a variável ligada,
+`lib/firebase.ts` chama `connectAuthEmulator` e `connectFirestoreEmulator`
+(seção 8.1). As regras podem ser conferidas direto pela API REST do emulador
+(`http://127.0.0.1:8080/v1/projects/demo-ip/databases/(default)/documents`,
+com o token de um usuário do emulador no cabeçalho `Authorization`). Os dados
+somem quando os emuladores param.
 
 ### 14.2 Configuração do Firebase (uma vez)
 
@@ -3900,6 +4641,8 @@ dois (o banco é um só).
 | --- | --- |
 | `auth/configuration-not-found` ao iniciar | Autenticação Anônima desativada |
 | `permission-denied` ao criar sala ou votar | Regras não publicadas |
+| `permission-denied` ao avançar, encerrar ou votar numa sala encerrada | Esperado: sala `ended` não muda nem aceita respostas; "Apresentar de novo" abre outra |
+| Gabarito não aparece no projetor ou no PDF de uma sala nova | Regras antigas sem `secret/{doc}`: republicar |
 | `Missing or insufficient permissions` | Firestore Database não criado |
 | Página em branco após o deploy | `base` não bate com o caminho (confira `VITE_BASE`) |
 | Login recusado no domínio publicado | Adicionar o domínio em Domínios autorizados |
@@ -3907,7 +4650,8 @@ dois (o banco é um só).
 | `regras-firestore` falha com `PERMISSION_DENIED` | Faltam Firebase Rules Admin ou Firebase Viewer |
 | `regras-firestore` falha com erro de credencial | A secret não contém o JSON inteiro |
 | Aviso "Credenciais ausentes" | Falta `FIREBASE_SERVICE_ACCOUNT` |
-| Link curto não aparece em desenvolvimento | Esperado: o encurtador recusa `localhost` |
+| Link curto não aparece ("Não foi possível encurtar o link agora.") | O da.gd não respondeu em 8 s (rede lenta, proxy, serviço fora do ar): "Tentar de novo"; o QR e o código continuam valendo |
+| O editor da criação abre com uma apresentação antiga | É o rascunho do navegador: "Começar do zero" (menu "Mais") descarta |
 | `hosting-firebase` com `403` | Falta Firebase Hosting Admin |
 | `hosting-firebase` não encontra o site | Hosting não iniciado no console (passo 6) |
 | Site do Hosting em branco | O artefato veio do build do Pages |
@@ -3922,12 +4666,19 @@ dois (o banco é um só).
 
 | Quero... | Comece por (nesta ordem) |
 | --- | --- |
-| Criar um novo tipo de slide | `types/presentation.ts`, `utils/slideFactory.ts`, `utils/validation.ts`, `components/editor/`, `SlideDisplay`, `ParticipateView`, `exportPdf`, `aiPrompt` (e `pptxExport/standard.ts`) |
-| Adicionar uma opção global | `PresentationSettings`, `utils/settings.ts`, `utils/validation.ts`, `PresentationSettingsButton`, `SlideSettingsSection` |
+| Criar um novo tipo de slide | `types/presentation.ts`, `utils/slideFactory.ts`, `utils/validation.ts`, `components/editor/` (com a dica em `AddSlideMenu`), `SlideDisplay`, `ParticipateView`, `exportPdf`, `aiPrompt` (e `pptxExport/standard.ts`, que também alimenta o download e o modo leitura) |
+| Adicionar uma opção global | `PresentationSettings`, `utils/settings.ts`, `utils/validation.ts`, `PresentationSettingsButton`, `SlideSettingsSection` (ou, se for só global, `SlideOverrides` e `overridesSchema`), `aiPrompt` |
 | Mudar as cores dos gráficos | `components/charts/palette.ts` (vale para o PDF) |
 | Mudar o que a edição grava | `saveAndRestartRoom` em `lib/rooms.ts` |
 | Ajustar o relatório | `utils/exportPdf.ts` |
-| Mexer nas regras | `firestore.rules` |
+| Mexer nas regras | `firestore.rules`, testando com os emuladores (seção 14.1) |
+| Mudar o que a plateia sabe do gabarito | `lib/answers.ts`, `markAnswerRevealed` em `lib/rooms.ts`, regra `secret/{doc}` |
+| Mudar o fim da apresentação | `goTo` e `endRoom` (`PresentPage`, `lib/rooms.ts`), tela final da `RoomPage` |
+| Mudar o rascunho do editor | `store/editorDraft.ts` (quando restaura e grava) e `lib/draftStorage.ts` (onde guarda) |
+| Trocar ou acrescentar um encurtador | `PROVIDERS` em `lib/shortUrl.ts` |
+| Download dos slides e modo leitura | `utils/staticSlides.ts`, `utils/exportSlidesPdf.ts`, `hooks/useSlideDownload.ts`, `pages/ViewPage.tsx` |
+| Layout do editor no celular | `EditorWorkspace.tsx` (pilha abaixo de 1024 px) e `components/ui/StackSection.tsx` |
+| Ações da barra do editor ou do projetor | `EditorToolbar.tsx` e o `menuItems` do `PresentPage` (uma lista para os botões e o menu) |
 | Mudar a exibição de um elemento do slide livre | `components/free/layout.ts`, `FreeElementContent.tsx`, e para o PDF `utils/freeSlideRaster.ts` e `utils/canvasText.ts` |
 | Nova propriedade de texto no slide livre | `FreeTextStyle` ou `FreeTextParagraph`, `utils/validation.ts`, `utils/richText.ts`, `utils/richTextDom.ts`, `components/free/layout.ts`, `utils/canvasText.ts`, `FreeSlideConfig`, `utils/pptx/text.ts`, `utils/pptxExport/slide.ts` |
 | Compressão das imagens | `utils/images.ts` |
@@ -3951,7 +4702,7 @@ Exponha uma superfície pequena:
 
 ```tsx
 // features/interactive-presentations/index.ts
-export { InteractivePresentationsRoutes } from './routes'          // as 6 telas
+export { InteractivePresentationsRoutes } from './routes'          // as 7 telas
 export type { Presentation, Slide } from './types/presentation'    // para integrar dados
 export { exportPresentation, importPresentationFromFile } from './utils/importExport'
 ```
@@ -3974,6 +4725,7 @@ export const ipPaths = {
   edit: (code: string, token?: string) => `${BASE}/edit/${code}${token ? `/${token}` : ''}`,
   join: () => `${BASE}/join`,
   room: (code: string) => `${BASE}/room/${code}`,
+  view: (code?: string) => `${BASE}/view${code ? `/${code}` : ''}`,
 }
 ```
 
@@ -3982,7 +4734,11 @@ export const ipPaths = {
   `origin + basePath + '/apresentacoes/room/<código>'`, e o servidor do sistema
   precisa de fallback de SPA para essas rotas.
 - A rota do participante precisa ser **pública** (sem login do sistema maior),
-  senão a plateia não entra pelo QR.
+  senão a plateia não entra pelo QR. O mesmo vale para `/view/<código>`, que
+  o participante abre por "Rever os slides".
+- O encurtador recebe a URL de entrada inteira: com `BrowserRouter`, o da.gd
+  continua servindo (o redirecionamento leva o caminho); com `HashRouter`, ele
+  preserva o fragmento.
 - As rotas `/present` e `/edit` dependem do token na URL; se o sistema tiver
   login, pode exigir login além do token, mas mantenha o token para trocar de
   dispositivo.
@@ -4017,16 +4773,19 @@ preservando a semântica:
 
 | Função | Semântica que precisa ser mantida |
 | --- | --- |
-| `createRoom(uid, presentation)` | Código único; sala + token gravados de forma atômica; imagens e fontes só depois |
+| `createRoom(uid, presentation)` | Código único; sala (sem gabarito) + token + gabaritos gravados de forma atômica; imagens e fontes só depois |
 | `claimPresenter(code, uid, token)` | Troca de dono só com o token correto; token nunca legível |
-| `subscribeRoom(code, cb)` | Envia o documento inteiro a cada mudança |
-| `setCurrentSlide(code, index, timers)` | Índice e cronômetros na **mesma** escrita |
+| `subscribeRoom(code, cb)`, `getRoom(code)` | Envia o documento inteiro a cada mudança; leitura única |
+| `setCurrentSlide(code, index, timers, extra?)` | Índice e cronômetros (e, no fim, `status: 'ended'`) na **mesma** escrita |
+| `endRoom(code, slideCount, timers)` | Slide final e `status: 'ended'` numa escrita; depois disso, nada muda na sala nem entram respostas |
 | `saveSlideTimers(code, timers)` | Só cronômetros |
-| `markAnswerRevealed(code, id)` | União idempotente |
-| `saveAndRestartRoom(code, presentation, stored)` | Uma escrita com reinício + `revision` incrementado |
-| `saveResponse`, `clearResponse` | Upsert e exclusão por chave `slideId + uid` |
+| `markAnswerRevealed(code, answerSlideId, quizSlideId, correctOptionIds)` | União idempotente do registro e publicação do gabarito, na mesma escrita |
+| `subscribeAnswers`, `fetchAnswers` (`lib/answers.ts`) | Gabaritos legíveis só pelo dono |
+| `saveAndRestartRoom(code, presentation, stored)` | Sala e gabaritos num lote com reinício + `revision` incrementado |
+| `loadRoomPresentation(code, room, slides)` | A apresentação completa de uma sala (com imagens e fontes) |
+| `saveResponse`, `clearResponse` | Upsert e exclusão por chave `slideId + uid`; lista vazia apaga |
 | `subscribeResponses(code, slideId)`, `subscribeMyResponse`, `getAllResponses` | Filtro por slide; documento próprio; leitura total |
-| `joinRoom`, `subscribeParticipants` | Upsert por uid; lista inteira |
+| `joinRoom`, `subscribeParticipants` | Upsert por uid (com `joinedAt` só na criação); lista inteira |
 | `fetchAsset`, `uploadAssets`, `deleteAssets` | Imagens imutáveis por id de conteúdo |
 | `fetchRoomFonts`, `uploadFonts`, `deleteFontDocs` | Fontes por sala, relidas a cada revisão |
 
@@ -4055,18 +4814,20 @@ igual.
 
 ### 15.6 Estado, SSR e carregamento
 
-- Zustand: o editor padrão é criado no carregamento do módulo; a edição de
-  sala cria o seu. Para salvar rascunhos no sistema (o editor atual perde tudo
-  ao recarregar), persista `getPresentation()` no backend do sistema e use
-  `loadPresentation()` ao abrir.
+- Zustand: o editor padrão (`defaultEditorStore`) é criado no carregamento do
+  módulo; a edição de sala cria o seu. O rascunho fica no navegador
+  (`editorDraft.ts`, com `localStorage` e IndexedDB); para guardá-lo no
+  sistema (e abrir em outro aparelho), troque `lib/draftStorage.ts` por
+  chamadas ao backend do sistema, mantendo `startDraftPersistence` e
+  `discardDraft`.
 - **SSR** (Next.js, Remix): todas as telas usam `window`, `localStorage`,
   `crypto`, `FontFace`, canvas e `onSnapshot`. Marque como componentes de
   cliente e carregue as rotas sem renderização no servidor.
-- Mantenha os `import()` dinâmicos de `jspdf`, `utils/pptx` e
-  `utils/pptxExport` (são os maiores pedaços).
+- Mantenha os `import()` dinâmicos de `jspdf`, `utils/exportSlidesPdf`,
+  `utils/pptx` e `utils/pptxExport` (são os maiores pedaços).
 - Chaves do `localStorage` (`ip-theme`, `ip-presenter-sessions`,
-  `ip-participant-names`, `ip-short-urls`): mantenha o prefixo ou acrescente o
-  do sistema.
+  `ip-participant-names`, `ip-short-urls`, `ip-editor-draft`) e o banco
+  IndexedDB `ip-editor`: mantenha o prefixo ou acrescente o do sistema.
 
 ### 15.7 Integração com dados do sistema maior
 
@@ -4096,9 +4857,13 @@ match /responses/{responseId} {
 ```
 
   Nesse caso, o PDF só pode ser gerado pelo dono, o que já é o comportamento.
-- As regras atuais não validam o formato dos documentos (campos extras,
-  tamanhos); para um sistema maior, acrescente validações (`keys().hasOnly`,
-  tamanhos de lista e de texto).
+- As regras atuais já validam o formato de respostas e presença (chaves
+  permitidas, tamanhos de lista e de nome, id conferido) e recusam respostas
+  depois do fim; o gabarito só é legível pelo dono até a revelação. Ao
+  incorporar, mantenha esses blocos e acrescente as validações do sistema.
+- Qualquer usuário autenticado (inclusive anônimo) ainda pode criar salas:
+  em ambientes abertos, exija o login do sistema para criar (`allow create`
+  com o provedor do sistema).
 - Não há moderação: em ambientes abertos, considere filtrar a nuvem de
   palavras.
 - Não há expiração: agende uma limpeza (Cloud Function ou tarefa do sistema)
@@ -4128,31 +4893,40 @@ Ordem sugerida, com o critério de pronto de cada etapa:
    `utils/importExport.ts`. Pronto quando o JSON de exemplo importa e um
    arquivo com imagem ausente é recusado com o caminho.
 4. **Componentes `ui/`**: Button, Card, Input, Checkbox/Radio, Slider, Select,
-   ScrollArea, Modal, ConfirmDialog, Banner, ColorInput, SegmentedControl,
-   ToggleButton, e o `index.css` (seção 9.9).
-5. **Editor**: `editorStore` (com `syncAnswerSlides` e `applySlides`),
-   `EditorWorkspace`, `AddSlideMenu`, `SlideList`, formulários por tipo,
+   ScrollArea, Modal, Menu, StackSection, ConfirmDialog, Banner, ColorInput,
+   SegmentedControl, ToggleButton, e o `index.css` (seção 9.9); hooks
+   `useMediaQuery` e `useDialogControl`.
+5. **Editor**: `editorStore` (com `syncAnswerSlides`, `applySlides` e
+   `reorderSlides`), `EditorWorkspace` (colunas e pilha), `EditorToolbar`,
+   `AddSlideMenu`, `SlideList` com framer-motion, formulários por tipo,
    opções globais e por slide, `ScaledFrame`, `SlideDisplay` com respostas
-   vazias. Pronto quando ligar e desligar o gabarito insere e remove o slide no
-   lugar certo.
+   vazias, e o rascunho (`editorDraft.ts`, `draftStorage.ts`). Pronto quando
+   ligar e desligar o gabarito insere e remove o slide no lugar certo, o
+   arraste mantém o gabarito atrás da pergunta e recarregar a página traz o
+   rascunho de volta.
 6. **Gráficos**: paleta, barras, pizza, nuvem (seção 13.4), quadro de
    alternativas, cronômetro, suspense.
-7. **Firebase**: `lib/firebase.ts`, regras (Apêndice C), `useParticipant`,
-   `lib/rooms.ts`, `lib/responses.ts`, `lib/participants.ts`,
-   `lib/roomCode.ts`, hooks de assinatura. Pronto quando duas janelas
-   conversam (criar, entrar, votar, ver o voto no projetor).
-8. **Projetor**: `PresentPage` com acesso, navegação por teclado, cronômetro
-   (início, pausa, retomada, encerramento, avanço), gabarito com registro de
-   revelação, rodapé, QR, slide final. Pronto quando a linha do tempo da seção
-   12.3 se reproduz, inclusive as variações.
+7. **Firebase**: `lib/firebase.ts` (com a opção dos emuladores), regras
+   (Apêndice C), `useParticipant`, `lib/rooms.ts`, `lib/answers.ts`,
+   `lib/responses.ts`, `lib/participants.ts`, `lib/roomCode.ts`, hooks de
+   assinatura. Pronto quando duas janelas conversam (criar, entrar, votar, ver
+   o voto no projetor) e o gabarito não aparece no documento da sala.
+8. **Projetor**: `PresentPage` com acesso, cabeçalho em uma linha com o menu
+   "Mais ações", navegação por teclado, cronômetro (início, pausa, retomada,
+   encerramento, avanço), gabarito com registro de revelação e publicação,
+   rodapé, slide final, encerramento e "Apresentar de novo". Pronto quando a
+   linha do tempo da seção 12.3 se reproduz, inclusive as variações, e passar
+   do último slide encerra a sala.
 9. **Participante**: `JoinPage`, `RoomPage`, `ParticipateView`, `ChoiceInput`,
-   `WordCloudInput`, `AnswerReveal`, `NamePrompt`, aviso de reinício.
+   `WordCloudInput`, `AnswerReveal`, `NamePrompt`, aviso de reinício, tela
+   final.
 10. **Sessões e retomada**: `presenterSessions`, `HomePage`,
     `usePresenterAccess` com `claimPresenter`.
 11. **Edição em andamento**: `EditRoomPage`, `saveAndRestartRoom`. Pronto
     quando a seção 12.5 se reproduz.
 12. **PDF**: `exportPdf.ts` (seção 11.6).
-13. **Compartilhamento**: `ShareRoom` com QR e encurtador.
+13. **Compartilhamento**: `RoomCodeDialog` (modal, projeção, QR ampliado),
+    `ShareRoom` e o encurtador da.gd (seção 11.8).
 14. **Slide livre**: modelo, `layout.ts`, `FreeSlideView`, texto rico
     (`richText`, `richTextDom`, `freeTextFormat`), `FreeTextEditable`,
     `FreeSlideCanvas`, `FreeSlideConfig`, `useFreeSlideActions`, imagens
@@ -4161,7 +4935,11 @@ Ordem sugerida, com o critério de pronto de cada etapa:
 16. **Importar PowerPoint**: `utils/pptx/` com EOT/MTX/LZCOMP.
 17. **Exportar PowerPoint**: `utils/pptxExport/`.
 18. **Prompt de IA** (Apêndice E).
-19. **Deploy**: `vite.config.ts`, `firebase.json`, workflow (Apêndice D).
+19. **Download dos slides e modo leitura**: `staticSlides.ts`,
+    `exportSlidesPdf.ts`, `useSlideDownload`, `DownloadSlides`, `ViewPage`
+    (seções 11.9 e 11.10).
+20. **Deploy**: `vite.config.ts`, `firebase.json` (com os emuladores),
+    workflow (Apêndice D).
 
 Checklist de comportamento (para testes de aceitação):
 
@@ -4171,7 +4949,8 @@ Checklist de comportamento (para testes de aceitação):
       outro navegador.
 - [ ] Presença conta antes de qualquer resposta; o rodapé separa participantes
       e respondentes.
-- [ ] Uma resposta por pessoa por slide; reenvio sobrescreve.
+- [ ] Uma resposta por pessoa por slide; reenvio sobrescreve; desmarcar tudo
+      apaga.
 - [ ] Nuvem recusa repetição da mesma pessoa sem diferenciar maiúsculas.
 - [ ] Troca desligada: escolha única trava no primeiro toque; múltipla bloqueia
       só desmarcar; nuvem sem remover.
@@ -4185,8 +4964,15 @@ Checklist de comportamento (para testes de aceitação):
       estado da sala.
 - [ ] Ao zerar com gabarito em seguida, avança na mesma escrita que encerra.
 - [ ] Suspense de 3 s só na primeira revelação; chegar atrasado mostra direto.
+- [ ] O gabarito não está no documento público da sala antes da revelação;
+      `secret/answers` recusa a leitura de quem não é dono.
 - [ ] Identificação só com nome; no `quiz`, só com `showResponses`.
 - [ ] Slide final com miniaturas; PDF só quando pedido.
+- [ ] Passar do último slide (ou "Encerrar") grava `status: 'ended'` junto do
+      índice; depois disso, a navegação para e respostas são recusadas;
+      "Apresentar de novo" abre uma sala nova.
+- [ ] Com `allowDownload`, o celular baixa os slides em PDF e PowerPoint no
+      fim, sem respostas; `/view/<código>` só abre com a sala encerrada.
 - [ ] Edição salva leva todos ao início, com aviso de 10 s no celular; respostas
       preservadas.
 - [ ] JSON antigo importa; imagem ausente é recusada; cores validadas.
@@ -4195,6 +4981,15 @@ Checklist de comportamento (para testes de aceitação):
 - [ ] Trocar o formato reenquadra os slides livres da moldura antiga.
 - [ ] PowerPoint importado mantém textos editáveis e fontes embutidas.
 - [ ] PowerPoint exportado abre com textos e imagens editáveis.
+- [ ] Em 360 px, nenhuma tela rola na horizontal; o cabeçalho do projetor
+      fica numa linha; o editor vira pilha abaixo de 1024 px.
+- [ ] Arrastar um slide (mouse ou alça no toque) muda a ordem; o gabarito
+      acompanha a pergunta.
+- [ ] Recarregar a tela de criação traz o rascunho, com imagens e fontes.
+- [ ] O modal do código mostra o link curto (`da.gd/...`) e projeta em tela
+      cheia; Esc fecha o QR ampliado e depois a projeção, sem trocar o slide.
+- [ ] Reentrar na sala não muda `joinedAt`; respostas com campos extras ou
+      listas acima de 100 itens são recusadas.
 
 ---
 
@@ -4206,17 +5001,27 @@ reimplementação, decidir se mantém ou corrige):
 | Ponto | Situação | Sugestão |
 | --- | --- | --- |
 | `d3-cloud` | Declarado e nos chunks manuais, mas não importado | Omitir |
-| `status: 'ended'` e `setStatus` | Existem no modelo e em `lib/rooms.ts`, mas nada chama `setStatus`; a sala fica sempre `live` | Usar para encerrar salas, ou remover |
-| `lastSeenAt` | Gravado só na entrada (não há heartbeat), apesar do comentário de "atualizado periodicamente" | Tratar como "última entrada" |
-| `joinRoom` com `merge: true` | O payload inclui `joinedAt: now`, então reentradas **sobrescrevem** `joinedAt` (o comentário diz que preserva) | Gravar `joinedAt` só na criação |
 | Presença | Ninguém "sai": o número de participantes é de quem já abriu a sala | Aceito pelo requisito; se precisar de "conectados agora", usar heartbeat ou presença do Realtime Database |
-| Múltipla escolha esvaziada | Desmarcar tudo grava `value: []`, que ainda conta em `answeredCount` | Apagar o documento quando a lista ficar vazia |
-| Horários | `Date.now()` do cliente em `createdAt`, `updatedAt` e no cronômetro | `serverTimestamp()` onde a ordem importa |
-| Rascunho do editor | Só em memória; perde-se ao recarregar | Persistir (local ou no sistema maior) |
-| Regras | Não validam formato nem tamanho dos documentos; qualquer usuário autenticado cria salas | Endurecer num ambiente aberto |
+| `lastSeenAt` | Gravado a cada entrada, sem heartbeat: é a "última entrada" | Manter (um heartbeat multiplicaria as escritas) |
+| Horários | `Date.now()` do cliente em `createdAt`, `updatedAt` e no cronômetro; o desvio do relógio de cada aparelho **não é medido**, de propósito: só o projetor mostra a contagem, comparando o `endsAt` que ele mesmo gravou com o próprio relógio, e o bloqueio do voto vem do estado da sala (`closed`) | Manter; `serverTimestamp()` só se a ordem entre aparelhos passar a importar |
+| Validação de cada texto da nuvem | As regras limitam a lista a 100 itens, mas não o tamanho de cada texto (a linguagem de regras não percorre listas); o limite de 80 caracteres fica na interface | Aceito; num backend próprio, validar no servidor |
+| Criação de salas | Qualquer usuário autenticado (inclusive anônimo) cria salas | Exigir login do sistema num ambiente aberto (seção 15.8) |
 | Leitura pública das respostas | Decisão de projeto | Ver seção 15.8 |
-| Emojis na interface | O slide final e a tela do participante usam um emoji de comemoração no "Obrigado por participar!" | Opcional |
-| Traço em respostas vazias do PDF | A tabela usa um travessão para resposta vazia | Pode ser um hífen |
+
+Pendências resolvidas nesta versão (registradas para quem compara com uma
+cópia anterior do projeto):
+
+| Pendência antiga | Como ficou |
+| --- | --- |
+| `status: 'ended'` nunca gravado (`setStatus` sem uso) | O fim da apresentação encerra a sala: `status: 'ended'` vai na mesma escrita do índice final (seção 8.15); `setStatus` foi removido |
+| `joinRoom` sobrescrevia `joinedAt` | `joinRoom` lê o documento antes e grava `joinedAt` só na criação |
+| Múltipla escolha esvaziada contava em `answeredCount` | Lista vazia apaga a resposta (`saveResponse` chama `clearResponse`) |
+| Rascunho do editor só em memória | Rascunho no navegador (`editorDraft.ts`, seção 9.2) |
+| Regras sem validação de formato e tamanho | Respostas e presença com chaves permitidas, tamanhos e id conferidos; respostas só com a sala no ar; sala encerrada imutável; gabaritos legíveis só pelo dono (seção 8.13) |
+| Gabarito legível pela plateia no documento da sala | Gabarito em `secret/answers`, publicado na revelação (seção 8.16) |
+| Emoji no "Obrigado por participar!" | Ícone `PartyPopper` no celular; texto sem emoji no slide final |
+| Travessão para resposta vazia no PDF (e em textos da interface) | Hífen no PDF; dois-pontos nos avisos ("Tempo esgotado: as respostas foram encerradas.") |
+| Encurtador TinyURL bloqueado por CORS | da.gd, com validação da resposta e cache que descarta entradas inválidas (seção 11.8) |
 
 ---
 
@@ -4271,14 +5076,20 @@ export interface PresentationSettings {
    * slide livre novo. A tela do projetor continua ocupando a tela inteira.
    */
   slideAspect: SlideAspect
+  /**
+   * A plateia pode baixar os slides (PDF e PowerPoint) quando a apresentação
+   * termina. Os arquivos levam só os slides, sem a resposta de ninguém.
+   */
+  allowDownload: boolean
 }
 
 /**
  * Sobrescritas por slide. Campo ausente = herda a configuração global.
- * `askName` e `slideAspect` não aparecem aqui: o nome é pedido uma única vez,
- * antes de entrar na sala, e o formato vale para a apresentação inteira.
+ * `askName`, `slideAspect` e `allowDownload` não aparecem aqui: o nome é pedido
+ * uma única vez, antes de entrar na sala, e o formato e o download valem para
+ * a apresentação inteira.
  */
-export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect'>>
+export type SlideOverrides = Partial<Omit<PresentationSettings, 'askName' | 'slideAspect' | 'allowDownload'>>
 
 interface SlideBase {
   id: string
@@ -4581,6 +5392,17 @@ export interface Room extends Omit<Presentation, 'assets' | 'fonts'> {
    */
   revealedSlideIds?: string[]
   /**
+   * A sala guarda as perguntas SEM gabarito: os `correctOptionIds` ficam em
+   * `rooms/{code}/secret/answers`, que só o dono lê (ver `lib/answers.ts`).
+   * Ausente nas salas criadas antes dessa proteção.
+   */
+  answersHidden?: boolean
+  /**
+   * Gabaritos já revelados à plateia, pelo id do `quiz`. O projetor grava a
+   * pergunta aqui quando o suspense do gabarito dela termina.
+   */
+  revealedAnswers?: Record<string, string[]>
+  /**
    * Quantas vezes o apresentador editou a sala depois de iniciada. Cada edição
    * recomeça a apresentação do primeiro slide e soma 1 aqui; é por esse número
    * que a tela do participante percebe a mudança e avisa. Ausente = 0.
@@ -4606,8 +5428,9 @@ export interface ResponseDoc {
 export interface ParticipantDoc {
   uid: string
   name?: string
+  /** Primeira entrada na sala (reentrar não muda). */
   joinedAt: number
-  /** Atualizado periodicamente enquanto a aba fica aberta. */
+  /** Última entrada na sala (não há atualização periódica). */
   lastSeenAt: number
 }
 ```
@@ -4650,11 +5473,12 @@ export const settingsSchema = z
       .min(QUIZ_TIMER_RANGE.min)
       .max(QUIZ_TIMER_RANGE.max),
     slideAspect: z.enum(['16:9', '4:3']),
+    allowDownload: z.boolean(),
   })
   .partial()
 
-/** Sobrescritas por slide (mesmas opções, sem `askName` e `slideAspect`). */
-export const overridesSchema = settingsSchema.omit({ askName: true, slideAspect: true })
+/** Sobrescritas por slide (mesmas opções, sem `askName`, `slideAspect` e `allowDownload`). */
+export const overridesSchema = settingsSchema.omit({ askName: true, slideAspect: true, allowDownload: true })
 
 /* Slide livre ------------------------------------------------------------ */
 
@@ -4816,14 +5640,20 @@ export const slideSchema = z.discriminatedUnion('type', [
   }),
 ])
 
-export const presentationSchema = z
-  .object({
-    title: z.string(),
-    slides: z.array(slideSchema),
-    settings: settingsSchema.optional(),
-    assets: z.record(z.string(), assetSchema).optional(),
-    fonts: z.record(z.string(), fontSchema).optional(),
-  })
+/**
+ * Forma da apresentação, sem a conferência das imagens. Serve para o rascunho
+ * do editor, que pode voltar sem as imagens (guardadas à parte, no IndexedDB):
+ * a imagem que faltar aparece como espaço reservado.
+ */
+export const presentationShapeSchema = z.object({
+  title: z.string(),
+  slides: z.array(slideSchema),
+  settings: settingsSchema.optional(),
+  assets: z.record(z.string(), assetSchema).optional(),
+  fonts: z.record(z.string(), fontSchema).optional(),
+})
+
+export const presentationSchema = presentationShapeSchema
   .superRefine((presentation, ctx) => {
     // Toda imagem citada por um slide livre precisa vir no arquivo.
     const assets = presentation.assets ?? {}
@@ -4862,9 +5692,13 @@ rules_version = '2';
 //    clientes NÃO podem ler. Quem tem o token pode "reivindicar" a sala
 //    (recarregar a página / trocar de navegador) e vira o dono; a plateia,
 //    que só tem o código, não consegue apresentar.
-//  - Só o dono atual da sala altera/exclui a sala.
+//  - Só o dono atual da sala altera/exclui a sala, e só enquanto ela está no
+//    ar: uma sala encerrada (`status: 'ended'`) não muda mais.
+//  - Os gabaritos das perguntas ficam em rooms/{code}/secret/answers, que só o
+//    dono lê; a plateia recebe cada gabarito pela sala, quando ele é revelado.
 //  - Cada participante só pode criar/editar/excluir a PRÓPRIA resposta e o
-//    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}).
+//    PRÓPRIO registro de presença (rooms/{code}/participants/{uid}), com os
+//    campos e tamanhos esperados, e só responde enquanto a sala está no ar.
 //  - As imagens e as fontes dos slides livres (rooms/{code}/assets e
 //    rooms/{code}/fonts) são lidas por todos na sala e gravadas só pelo dono.
 service cloud.firestore {
@@ -4874,6 +5708,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function roomPath(code) {
+      return /databases/$(database)/documents/rooms/$(code);
+    }
+
     // Uid dono registrado no doc privado da sala (fonte da verdade do controle).
     function presenterOwner(code) {
       return get(/databases/$(database)/documents/rooms/$(code)/private/presenter).data.ownerUid;
@@ -4881,16 +5719,28 @@ service cloud.firestore {
 
     // Dono atual da sala: o mesmo critério que autoriza alterar o documento dela.
     function isRoomOwner(code) {
-      return get(/databases/$(database)/documents/rooms/$(code)).data.creatorUid == request.auth.uid
+      return get(roomPath(code)).data.creatorUid == request.auth.uid
         || presenterOwner(code) == request.auth.uid;
+    }
+
+    // A sala ainda está no ar (aceita respostas).
+    function isRoomLive(code) {
+      return get(roomPath(code)).data.status == 'live';
     }
 
     match /rooms/{code} {
       allow read: if true;
       allow create: if isSignedIn()
-        && request.resource.data.creatorUid == request.auth.uid;
-      // Dono atual (uid) OU quem acabou de reivindicar via token (doc privado).
-      allow update, delete: if isSignedIn()
+        && request.resource.data.creatorUid == request.auth.uid
+        && request.resource.data.status == 'live';
+      // Dono atual (uid) OU quem acabou de reivindicar via token (doc privado),
+      // e só com a sala no ar: encerrada, ela não muda mais (nem índice, nem
+      // cronômetro, nem dono). Apresentar de novo abre uma sala nova.
+      allow update: if isSignedIn()
+        && (resource.data.creatorUid == request.auth.uid
+            || presenterOwner(code) == request.auth.uid)
+        && resource.data.status == 'live';
+      allow delete: if isSignedIn()
         && (resource.data.creatorUid == request.auth.uid
             || presenterOwner(code) == request.auth.uid);
 
@@ -4907,13 +5757,27 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Gabaritos das perguntas, só para o dono. São gravados no mesmo lote
+      // que cria (ou reinicia) a sala, por isso a regra olha a sala DEPOIS da
+      // escrita (`getAfter`): na criação, a sala ainda não existia antes.
+      match /secret/{doc} {
+        allow read: if isSignedIn() && isRoomOwner(code);
+        allow create, update: if isSignedIn()
+          && (getAfter(roomPath(code)).data.creatorUid == request.auth.uid
+              || presenterOwner(code) == request.auth.uid);
+        allow delete: if false;
+      }
+
       // Presença: um doc por participante (id = uid). Serve para o apresentador
       // saber quantas pessoas estão na sala, mesmo antes de qualquer resposta.
       match /participants/{participantUid} {
         allow read: if true;
         allow create, update: if isSignedIn()
           && participantUid == request.auth.uid
-          && request.resource.data.uid == request.auth.uid;
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'joinedAt', 'lastSeenAt'])
+          && (!('name' in request.resource.data)
+              || (request.resource.data.name is string && request.resource.data.name.size() <= 40));
         allow delete: if isSignedIn() && participantUid == request.auth.uid;
       }
 
@@ -4930,10 +5794,25 @@ service cloud.firestore {
         allow create, update, delete: if isSignedIn() && isRoomOwner(code);
       }
 
+      // Respostas: id `{slideId}__{uid}`, só os campos esperados, listas e
+      // nomes com tamanho limitado, e só com a sala no ar (custa uma leitura
+      // da sala por escrita). Apagar a própria resposta é sempre permitido.
       match /responses/{responseId} {
         allow read: if true;
         allow create, update: if isSignedIn()
-          && request.resource.data.participantUid == request.auth.uid;
+          && request.resource.data.participantUid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['slideId', 'participantUid', 'type', 'value', 'participantName', 'createdAt'])
+          && request.resource.data.slideId is string
+          && request.resource.data.slideId.size() <= 200
+          && responseId == request.resource.data.slideId + '__' + request.auth.uid
+          && request.resource.data.type in ['word', 'choice']
+          && request.resource.data.value is list
+          && request.resource.data.value.size() <= 100
+          && request.resource.data.createdAt is number
+          && (!('participantName' in request.resource.data)
+              || (request.resource.data.participantName is string
+                  && request.resource.data.participantName.size() <= 40))
+          && isRoomLive(code);
         allow delete: if isSignedIn()
           && resource.data.participantUid == request.auth.uid;
       }
@@ -4952,6 +5831,12 @@ service cloud.firestore {
 {
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "emulators": {
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "firestore": { "host": "127.0.0.1", "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
   },
   "hosting": {
     "public": "dist-firebase",
@@ -4990,6 +5875,11 @@ VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
+
+# Desenvolvimento com os emuladores locais do Auth e do Firestore (ver
+# docs/11-desenvolvimento.md). Use num `.env.emulators.local`, com
+# `npx vite --mode emulators`.
+# VITE_FIREBASE_EMULATORS=true
 ```
 
 ### `tsconfig.json`
@@ -5391,7 +6281,8 @@ CAMPOS COMUNS A TODO SLIDE
 - "type": um de "wordcloud", "bar", "pie", "quiz", "answer", "text", "free".
 - "title": título exibido no slide e para os participantes.
 - "overrides": opcional. Objeto com as mesmas chaves de "settings" (menos
-  "askName" e "slideAspect") para valer só neste slide. Omita se não precisar.
+  "askName", "slideAspect" e "allowDownload") para valer só neste slide. Omita
+  se não precisar.
 
 TIPOS DE SLIDE
 
@@ -5570,6 +6461,9 @@ Todas opcionais; inclua apenas as que quiser mudar.
 - "slideAspect": "16:9" (padrão) ou "4:3". Formato dos slides: define o
   tamanho dos slides "free" e a prévia no editor. Vale para a apresentação
   inteira (não use em "overrides").
+- "allowDownload": booleano. true deixa os participantes baixarem os slides
+  (PDF e PowerPoint) quando a apresentação termina. Padrão false. Vale para a
+  apresentação inteira (não use em "overrides").
 
   "settings": {
     "allowChangeAnswer": true,
@@ -5579,7 +6473,8 @@ Todas opcionais; inclua apenas as que quiser mudar.
     "labelFontSize": 16,
     "bodyFontSize": 24,
     "quizTimerSeconds": 20,
-    "slideAspect": "16:9"
+    "slideAspect": "16:9",
+    "allowDownload": false
   }
 
 REGRAS
